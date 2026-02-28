@@ -18,10 +18,17 @@ const db = getFirestore(app);
 
 // 4) Pega o slug da URL: /r/pizzaria-do-ze
 function getSlugFromUrl() {
-  // Exemplo de pathname: "/r/pizzaria-do-ze"
-  const parts = window.location.pathname.split("/").filter(Boolean); // remove vazios
-  // parts = ["r","pizzaria-do-ze"]
-  if (parts.length >= 2 && parts[0] === "r") return parts[1];
+
+  // 1) tenta pegar por query (?r=slug)
+  const params = new URLSearchParams(window.location.search);
+  const querySlug = params.get("r");
+  if (querySlug) return querySlug;
+
+  // 2) tenta pegar por path (/r/slug) — Vercel
+  const path = window.location.pathname || "/";
+  const parts = path.split("/").filter(Boolean);
+  if (parts[0] === "r" && parts[1]) return parts[1];
+
   return null;
 }
 
