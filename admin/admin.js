@@ -22,6 +22,49 @@ const db = Firestore.getFirestore(app);
  */
 const RESTAURANT_ID = "r_001";
 
+// ====== DIAGNÓSTICO DE PERMISSÃO (ADMIN) ======
+let ADMIN_UID = "";
+let ADMIN_OK = false;
+
+async function checkAdminAccess() {
+  try {
+    const u = auth.currentUser;
+    ADMIN_UID = u?.uid || "";
+    if (!RESTAURANT_ID || !ADMIN_UID) {
+      ADMIN_OK = false;
+      return;
+    }
+
+    // ✅ Seu modelo de permissão usa /users/{uid} { restaurantId, role }
+    const uref = Firestore.doc(db, "users", ADMIN_UID);
+    const usnap = await Firestore.getDoc(uref);
+    const udata = usnap.exists() ? usnap.data() : null;
+
+    ADMIN_OK =
+      !!udata &&
+      udata.restaurantId === RESTAURANT_ID &&
+      (udata.role === "owner" || udata.role === "admin");
+
+    const el = document.getElementById("permDiag");
+    if (el) {
+      el.innerHTML = ADMIN_OK
+        ? `<div style="padding:10px;border:1px solid #dcfce7;background:#f0fdf4;border-radius:12px">
+            <strong style="color:#166534">Admin OK</strong>
+            <div style="margin-top:4px;color:#14532d;font-size:12px">RID: <code>${RESTAURANT_ID}</code> · UID: <code>${ADMIN_UID}</code></div>
+          </div>`
+        : `<div style="padding:10px;border:1px solid #fee2e2;background:#fff1f2;border-radius:12px">
+            <strong style="color:#991b1b">Sem permissão de admin</strong>
+            <div style="margin-top:4px;color:#7f1d1d;font-size:12px">
+              Verifique se existe <code>users/${ADMIN_UID}</code> com <code>restaurantId="${RESTAURANT_ID}"</code> e <code>role="owner"</code>.
+            </div>
+          </div>`;
+    }
+  } catch (e) {
+    ADMIN_OK = false;
+    console.warn("Falha ao checar admin:", e?.code || e, e?.message || "");
+  }
+}
+
 /** UI refs */
 const emailEl = document.getElementById("email");
 const passEl = document.getElementById("password");
@@ -85,26 +128,94 @@ document.getElementById("logoutBtn").onclick = async () => {
 
 /** Carrega nome do restaurante */
 async function loadRestaurantHeader() {
-  const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID);
-  const snap = await Firestore.getDoc(ref);
-  restNameEl.textContent = snap.exists() ? (snap.data().name || "Restaurante") : "Restaurante";
+  try {
+    const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID);
+    const snap = await Firestore.getDoc(ref);
+    restNameEl.textContent = snap.exists() ? (snap.data().name || "Restaurante") : "Restaurante";
+  } catch (e) {
+    console.warn("Sem permissão para ler /restaurants:", e?.code || e, e?.message || "");
+    restNameEl.textContent = "Restaurante";
+  }
 }
 
 /** Atualiza status do pedido */
 async function setOrderStatus(orderId, newStatus) {
-  const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders", orderId);
-  await Firestore.updateDoc(ref, {
+  if (!ADMIN_OK) {
+    console.warn("Usuário não é admin deste restaurante (RID/UID).");
+    await checkAdminAccess();
+    if (!ADMIN_OK) {
+      alert("Sem permissão de admin. Confira o RID/UID no topo.");
+      return;
+    }
+  }
+
+  // ✅ Admin atualiza SEMPRE o tracking público (cliente acompanha)
+  const privateRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders", orderId);
+  const publicRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
+
+  const payload = {
     status: newStatus,
     updatedAt: Firestore.serverTimestamp()
-  });
+  };
+
+  // 1) Atualiza o público (se o doc existir)
+  let publicOk = false;
+  try {
+    await Firestore.updateDoc(publicRef, payload);
+    publicOk = true;
+  } catch (e) {
+    // Se não existir ainda, cria
+    if (e?.code === "not-found") {
+      try {
+        await Firestore.setDoc(
+          publicRef,
+          {
+            ...payload,
+            createdAt: Firestore.serverTimestamp()
+          },
+          { merge: true }
+        );
+        publicOk = true;
+      } catch (e2) {
+        console.warn("Falha ao criar orders_public:", e2?.code || e2, e2?.message || "");
+      }
+    } else {
+      console.warn("Sem permissão para atualizar orders_public:", e?.code || e, e?.message || "");
+    }
+  }
+
+  // 2) Atualiza o privado (admin/relatórios)
+  try {
+    await Firestore.updateDoc(privateRef, payload);
+  } catch (e) {
+    console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
+  }
+
+  // 3) Feedback/consistência: se não atualizou o público, avisa
+  if (!publicOk) {
+    console.warn("ATENÇÃO: status não foi gravado em orders_public; o cliente não vai ver a mudança.");
+  }
 }
 
 /** Renderiza pedidos */
 function renderOrders(list) {
+  // Limpa
   ordersWrap.innerHTML = "";
 
-  if (list.length === 0) {
-    ordersWrap.innerHTML = `<p style="color:#666">Nenhum pedido ainda.</p>`;
+  // Diag sempre no topo (não pode sumir ao limpar)
+  const diag = document.createElement("div");
+  diag.id = "permDiag";
+  diag.style.margin = "10px 0";
+  ordersWrap.appendChild(diag);
+
+  // Preenche o diag com o estado atual
+  checkAdminAccess();
+
+  if (!list || list.length === 0) {
+    const p = document.createElement("p");
+    p.style.color = "#666";
+    p.textContent = "Nenhum pedido ainda.";
+    ordersWrap.appendChild(p);
     return;
   }
 
@@ -125,7 +236,7 @@ function renderOrders(list) {
         <div>
           <strong>Pedido ${o.id}</strong>
           <div style="margin-top:4px;color:#555"><strong>Status:</strong> ${statusLabel(o.status)}</div>
-          <div style="margin-top:4px;color:#555"><strong>Cliente:</strong> ${o.customer?.name || "-"}</div>
+          <div style="margin-top:4px;color:#555"><strong>Cliente:</strong> ${o.customer?.name || o.customerName || "-"}</div>
           <div style="margin-top:4px;color:#555"><strong>Whats:</strong> ${o.customer?.phone || "-"}</div>
           <div style="margin-top:4px;color:#555"><strong>Endereço:</strong> ${o.customer?.address || "-"}</div>
           <div style="margin-top:6px;color:#555">${mins !== null ? `há ${mins} min` : ""}</div>
@@ -170,14 +281,30 @@ function renderOrders(list) {
 
 /** Listener realtime */
 function startOrdersListener() {
-  const ref = Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders");
-
+  const ref = Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_public");
   const q = Firestore.query(ref, Firestore.orderBy("createdAt", "desc"));
 
-  unsubOrders = Firestore.onSnapshot(q, (snap) => {
-    const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
-    renderOrders(list);
-  });
+  unsubOrders = Firestore.onSnapshot(
+    q,
+    (snap) => {
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      renderOrders(list);
+    },
+    (err) => {
+      console.error("Erro no listener de pedidos (snapshot):", err?.code || err, err?.message || "");
+      if (err?.code === "permission-denied") {
+        ordersWrap.innerHTML = `
+          <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
+            <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
+            <div style="margin-top:6px;color:#555">
+              Ajuste as regras do Firestore para permitir leitura em
+              <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
+            </div>
+          </div>
+        `;
+      }
+    }
+  );
 }
 
 /** Auth state */
@@ -187,6 +314,7 @@ Auth.onAuthStateChanged(auth, async (user) => {
   loginScreenEl.classList.add("hidden");
   panelEl.classList.remove("hidden");
 
-  await loadRestaurantHeader();
+  await checkAdminAccess();
+  loadRestaurantHeader();
   startOrdersListener();
 });

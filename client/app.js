@@ -302,8 +302,26 @@ async function createOrder() {
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
   const newDoc = await Firestore.addDoc(ordersRef, orderData);
 
-  return newDoc.id;
-}
+  // ✅ Tracking público (evita permission-denied no cliente quando rules bloqueiam /orders)
+  // Tenta criar/atualizar um doc espelho em /orders_public com dados mínimos.
+  try {
+    const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
+    await Firestore.setDoc(
+      publicRef,
+      {
+        status: orderData.status,
+        createdAt: orderData.createdAt,
+        updatedAt: orderData.updatedAt,
+        totals: orderData.totals,
+        customerName: orderData.customer?.name || ""
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Não foi possível gravar orders_public (rules):", e?.code || e, e?.message || "");
+  }
+
+  return newDoc.id;}
 
 /* =========================
    Tracking (tempo real)
@@ -325,9 +343,11 @@ function startTrackingOrder(orderId) {
     state.unsubTrack = null;
   }
 
-  const orderRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders", orderId);
+  const orderRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", orderId);
 
-  state.unsubTrack = Firestore.onSnapshot(orderRef, (snap) => {
+  state.unsubTrack = Firestore.onSnapshot(
+    orderRef,
+    (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
 
@@ -336,7 +356,16 @@ function startTrackingOrder(orderId) {
     const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : null;
     document.getElementById("trackUpdated").textContent =
       updated ? `Atualizado: ${updated.toLocaleString("pt-BR")}` : "";
-  });
+  },
+  (err) => {
+    console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
+    if (err?.code === "permission-denied") {
+      document.getElementById("trackStatus").textContent = "Sem permissão para acompanhar";
+      document.getElementById("trackUpdated").textContent =
+        "Ajuste as regras do Firestore para permitir leitura em orders_public.";
+    }
+  }
+);
 }
 
 /* =========================
