@@ -109,6 +109,22 @@ const restNameEl = document.getElementById("restName");
 
 let unsubOrders = null;
 
+
+
+/** UI host helpers (kanban/legacy) */
+function getOrdersHosts() {
+  return {
+    prep: document.getElementById("orders-prep"),
+    out: document.getElementById("orders-out"),
+    done: document.getElementById("orders-done"),
+    legacy: document.getElementById("orders")
+  };
+}
+function getOrdersErrorHost() {
+  const h = getOrdersHosts();
+  return h.prep || h.legacy || document.querySelector("#page-orders") || document.body;
+}
+
 /** Helpers */
 function brl(v) {
   return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -273,9 +289,9 @@ async function checkSubscriptionGate() {
 function guardIfSubscriptionBlocked() {
   if (SUBSCRIPTION_OK) return false;
 
-  // trava ações e lista
-  if (ordersWrap) {
-    ordersWrap.innerHTML = `
+  const host = getOrdersErrorHost();
+  if (host) {
+    host.innerHTML = `
       <div style="padding:12px;border:1px solid #eee;border-radius:16px;background:#fff">
         <strong style="color:#991b1b">Painel bloqueado</strong>
         <div style="margin-top:6px;color:#555">Ative um plano para voltar a receber e gerenciar pedidos.</div>
@@ -352,24 +368,60 @@ if (!ADMIN_OK) {
 
 /** Renderiza pedidos */
 function renderOrders(list) {
-  // Limpa
-  ordersWrap.innerHTML = "";
+  // containers das 3 colunas
+  const prepEl = document.getElementById("orders-prep");
+  const outEl = document.getElementById("orders-out");
+  const doneEl = document.getElementById("orders-done");
 
-  // Diag sempre no topo (não pode sumir ao limpar)
-  const diag = document.createElement("div");
-  diag.id = "permDiag";
-  diag.style.margin = "10px 0";
-  ordersWrap.appendChild(diag);
+  // fallback antigo (caso o HTML ainda esteja no formato antigo)
+  const legacyWrap = document.getElementById("orders");
 
-  // Preenche o diag com o estado atual
-  checkAdminAccess();
+  const clear = (el) => { if (el) el.innerHTML = ""; };
+
+  clear(prepEl); clear(outEl); clear(doneEl);
+  if (legacyWrap && !prepEl && !outEl && !doneEl) legacyWrap.innerHTML = "";
+
+  // Diag de permissão no topo (sem atrapalhar)
+  const attachDiag = (host) => {
+    if (!host) return;
+    let diag = host.querySelector("#permDiag");
+    if (!diag) {
+      diag = document.createElement("div");
+      diag.id = "permDiag";
+      diag.style.margin = "10px 0";
+      host.prepend(diag);
+    }
+  };
+
+  // coloca o diag só na primeira coluna (ou no legacy)
+  attachDiag(prepEl || legacyWrap);
+  try { checkAdminAccess(); } catch (_) {}
 
   if (!list || list.length === 0) {
-    const p = document.createElement("p");
-    p.style.color = "#666";
-    p.textContent = "Nenhum pedido ainda.";
-    ordersWrap.appendChild(p);
+    const target = prepEl || legacyWrap;
+    if (target) {
+      const p = document.createElement("p");
+      p.style.color = "#666";
+      p.textContent = "Nenhum pedido ainda.";
+      target.appendChild(p);
+    }
     return;
+  }
+
+  // helper para escolher coluna
+  function bucketStatus(s) {
+    // pedido novo pode vir "recebido" (ou vazio) => em_preparo
+    if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
+    if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
+    if (s === "entregue") return "entregue";
+    return "em_preparo";
+  }
+
+  function hostFor(status) {
+    if (!prepEl && !outEl && !doneEl) return legacyWrap;
+    if (status === "saiu_pra_entrega") return outEl;
+    if (status === "entregue") return doneEl;
+    return prepEl;
   }
 
   for (const o of list) {
@@ -384,11 +436,34 @@ function renderOrders(list) {
     div.className = "order";
     div.style.borderLeftColor = border;
 
+    const col = bucketStatus(o.status);
+
+    // botões por coluna (pedido novo vai pra em_preparo)
+    let actions = "";
+    if (col === "em_preparo") {
+      actions = `
+        <button class="btn small" data-act="saiu_pra_entrega" data-id="${o.id}">Despachar</button>
+        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
+      `;
+    } else if (col === "saiu_pra_entrega") {
+      actions = `
+        <button class="btn small" data-act="entregue" data-id="${o.id}">Entregue</button>
+        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
+      `;
+    } else {
+      // entregue
+      actions = `
+        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
+      `;
+    }
+
     div.innerHTML = `
       <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
         <div>
-          <strong>Pedido ${o.id}</strong>
-          <div style="margin-top:4px;color:#555"><strong>Status:</strong> ${statusLabel(o.status)}</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
+            <strong>Pedido ${o.id}</strong>
+            <span class="badge"><span class="badgeDot" style="background:${statusColor(o.status)}"></span>${statusLabel(o.status)}</span>
+          </div>
           <div style="margin-top:4px;color:#555"><strong>Cliente:</strong> ${o.customer?.name || o.customerName || "-"}</div>
           <div style="margin-top:4px;color:#555"><strong>Whats:</strong> ${o.customer?.phone || "-"}</div>
           <div style="margin-top:4px;color:#555"><strong>Endereço:</strong> ${o.customer?.address || "-"}</div>
@@ -406,32 +481,14 @@ function renderOrders(list) {
       </div>
 
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-        <button class="btn small" data-act="em_preparo" data-id="${o.id}">Em preparo</button>
-        <button class="btn small" data-act="saiu_pra_entrega" data-id="${o.id}">Saiu</button>
-        <button class="btn small" data-act="entregue" data-id="${o.id}">Entregue</button>
-        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
+        ${actions}
       </div>
     `;
 
-    ordersWrap.appendChild(div);
+    const host = hostFor(col);
+    if (host) host.appendChild(div);
   }
-
-  // ligar eventos dos botões
-  ordersWrap.querySelectorAll("[data-act][data-id]").forEach(btn => {
-    btn.addEventListener("click", async () => {
-      const orderId = btn.getAttribute("data-id");
-      const act = btn.getAttribute("data-act");
-
-      try {
-        await setOrderStatus(orderId, act);
-      } catch (e) {
-        console.error(e);
-        alert("Erro ao mudar status. Veja o console (F12).");
-      }
-    });
-  });
 }
-
 /** Listener realtime */
 function startOrdersListener() {
   if (!RESTAURANT_ID) {
@@ -450,16 +507,19 @@ function startOrdersListener() {
     (err) => {
       console.error("Erro no listener de pedidos (snapshot):", err?.code || err, err?.message || "");
       if (err?.code === "permission-denied") {
-        ordersWrap.innerHTML = `
-          <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
-            <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
-            <div style="margin-top:6px;color:#555">
-              Ajuste as regras do Firestore para permitir leitura em
-              <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
-            </div>
-          </div>
-        `;
-      }
+  const host = getOrdersErrorHost();
+  if (host) {
+    host.innerHTML = `
+      <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
+        <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
+        <div style="margin-top:6px;color:#555">
+          Ajuste as regras do Firestore para permitir leitura em
+          <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
+        </div>
+      </div>
+    `;
+  }
+}
     }
   );
 }
@@ -486,3 +546,47 @@ Auth.onAuthStateChanged(auth, async (user) => {
 
   if (unsubOrders) unsubOrders();
   startOrdersListener();});
+
+/* ===== Clique global: ações de pedido (evita perder handler com re-render do onSnapshot) ===== */
+document.addEventListener("click", async (e) => {
+  const btn = e.target.closest("[data-act][data-id]");
+  if (!btn) return;
+
+  // não interfere em outros cliques do layout
+  e.preventDefault();
+
+  const orderId = btn.getAttribute("data-id");
+  const act = btn.getAttribute("data-act");
+
+  try {
+    await setOrderStatus(orderId, act);
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao mudar status. Veja o console (F12).");
+  }
+});
+
+/* ===== Menu lateral (telas) ===== */
+(function(){
+  const buttons = Array.from(document.querySelectorAll(".menuItem"));
+  if (!buttons.length) return;
+
+  const pages = Array.from(document.querySelectorAll(".page"));
+  const titleEl = document.getElementById("pageTitle");
+
+  function show(page){
+    buttons.forEach(b => b.classList.toggle("active", b.dataset.page === page));
+    pages.forEach(p => p.classList.remove("active"));
+    const target = document.getElementById("page-" + page);
+    if (target) target.classList.add("active");
+    if (titleEl) {
+      const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", settings:"Configurações" };
+      titleEl.textContent = map[page] || "Pedidos";
+    }
+  }
+
+  buttons.forEach(btn => btn.addEventListener("click", () => show(btn.dataset.page)));
+  // padrão
+  const first = buttons.find(b => b.dataset.page === "orders") || buttons[0];
+  if (first) show(first.dataset.page);
+})();

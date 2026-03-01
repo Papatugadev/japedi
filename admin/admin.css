@@ -67,3 +67,272 @@ main{
   color:red;
   font-size:13px;
 }
+
+/* ===== Admin layout + Sidebar (Ã­cones) ===== */
+.adminLayout{
+  display:flex;
+  min-height:calc(100vh - 58px); /* header .top ~ */
+}
+
+.sidebar{
+  width:72px;
+  background:#0f172a;
+  border-right:1px solid rgba(255,255,255,.08);
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  padding:12px 0;
+  gap:10px;
+}
+
+.menuItem{
+  width:44px;
+  height:44px;
+  border:0;
+  background:transparent;
+  border-radius:14px;
+  cursor:pointer;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  transition:transform .08s ease, background .12s ease;
+}
+
+.menuItem:hover{
+  background:rgba(255,255,255,.08);
+}
+
+.menuItem:active{
+  transform:scale(.98);
+}
+
+.menuItem.active{
+  background:#16a34a;
+}
+
+.menuItem svg{
+  width:22px;
+  height:22px;
+  stroke:#fff;
+  fill:none;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.contentArea{
+  flex:1;
+  padding:16px;
+}
+
+.page{
+  display:none;
+}
+
+.page.active{
+  display:block;
+}
+
+.pageTitle{
+  margin:0 0 12px 0;
+  font-size:16px;
+}
+
+.placeholderCard{
+  height:160px;
+  background:#fff;
+  border-radius:14px;
+  border:1px solid #eee;
+}
+
+/* ===== Pedidos: 3 colunas (kanban) ===== */
+.kanban{
+  display:grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap:14px;
+}
+
+.kanCol{
+  background:#f8fafc;
+  border:1px solid #e5e7eb;
+  border-radius:16px;
+  padding:12px;
+  min-height: calc(100vh - 58px - 32px - 24px); /* header - padding */
+  display:flex;
+  flex-direction:column;
+}
+
+.kanHead{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-bottom:10px;
+  padding-bottom:10px;
+  border-bottom:1px solid #e5e7eb;
+}
+
+.kanDot{
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  display:inline-block;
+}
+
+.dotPrep{ background:#f59e0b; }
+.dotOut{ background:#3b82f6; }
+.dotDone{ background:#10b981; }
+
+.kanTitle::after{
+  content: attr(aria-label);
+  font-size:12px;
+  color:#0f172a;
+  font-weight:600;
+  letter-spacing:.2px;
+}
+
+/* lista com scroll interno */
+.kanList{
+  overflow:auto;
+  padding-right:4px;
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+/* card do pedido (reusa .order se jÃ¡ existir, mas garante bom visual) */
+.order{
+  background:#fff;
+  border:1px solid #eee;
+  border-left:5px solid #16a34a;
+  border-radius:14px;
+  padding:12px;
+}
+
+/* BotÃµes compactos */
+.btn.small, .ghost.small{
+  padding:8px 10px;
+  border-radius:12px;
+  font-size:12px;
+}
+
+@media (max-width: 980px){
+  .kanban{ grid-template-columns: 1fr; }
+  .kanCol{ min-height:auto; }
+}
+
+/* ===== Visual upgrade: Pedidos (kanban) ===== */
+.contentArea{
+  background:#f4f6f8;
+}
+
+.kanCol{
+  background:rgba(255,255,255,.65);
+  backdrop-filter: blur(6px);
+  border:1px solid rgba(15,23,42,.08);
+  box-shadow: 0 10px 30px rgba(0,0,0,.04);
+}
+
+.kanHead{
+  position:sticky;
+  top:0;
+  background:rgba(248,250,252,.85);
+  backdrop-filter: blur(6px);
+  border-bottom:1px solid rgba(15,23,42,.08);
+  padding:10px 10px;
+  margin:-12px -12px 10px -12px;
+  border-top-left-radius:16px;
+  border-top-right-radius:16px;
+}
+
+.kanTitle::after{
+  font-size:12px;
+  color:#0f172a;
+  font-weight:700;
+}
+
+.order{
+  border:1px solid rgba(15,23,42,.08);
+  box-shadow: 0 6px 16px rgba(0,0,0,.04);
+  transition: transform .08s ease, box-shadow .12s ease;
+}
+
+.order:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 22px rgba(0,0,0,.06);
+}
+
+.order .metaRow{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+
+.badge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  color:#0f172a;
+  font-weight:600;
+}
+
+.badgeDot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  display:inline-block;
+}
+
+.btn.small{
+  border:0;
+  background:#16a34a;
+  color:#052e16;
+  font-weight:700;
+}
+
+.btn.small:hover{
+  filter: brightness(0.98);
+}
+
+.ghost.small{
+  border:1px solid rgba(15,23,42,.14);
+  background:transparent;
+  color:#0f172a;
+  font-weight:700;
+}
+
+.ghost.small.danger{
+  border-color: rgba(239,68,68,.35);
+  color:#991b1b;
+}
+
+.ghost.small.danger:hover{
+  background: rgba(239,68,68,.08);
+}
+
+/* ===== Ajustes finos: kanban ocupa a tela e listas rolam ===== */
+.kanban{
+  align-items:stretch;
+}
+
+.kanCol{
+  max-height: calc(100vh - 58px - 32px - 24px);
+}
+
+.kanList{
+  flex:1;
+  min-height:0;
+}
+
+/* Header do painel fica mais "app" */
+.top{
+  position:sticky;
+  top:0;
+  z-index:10;
+  backdrop-filter: blur(6px);
+}
