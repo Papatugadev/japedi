@@ -62,7 +62,6 @@ function normalizePhone(v) {
 }
 
 function genRestaurantId() {
-  // id amigável e curto
   const rnd = Math.random().toString(36).slice(2, 8);
   return `r_${Date.now().toString(36)}_${rnd}`;
 }
@@ -77,8 +76,7 @@ function planInfo(tier) {
 }
 
 goLoginBtn.addEventListener("click", () => {
-  // ajuste se seu painel de login for outro arquivo
-  window.location.href = "./admin.html";
+  window.location.href = "./admin/index.html";
 });
 
 form.addEventListener("submit", async (e) => {
@@ -119,42 +117,45 @@ form.addEventListener("submit", async (e) => {
         tier: plan.tier,
         name: plan.name,
         priceBRL: plan.priceBRL,
-        status: "active",
+        status: "trial",
+        trialDays: 7,
+        trialEndsAt: Firestore.Timestamp.fromDate(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)),
         createdAt: Firestore.serverTimestamp()
       }
     };
 
     await Firestore.setDoc(Firestore.doc(db, "restaurants", rid), restaurantDoc);
 
-// 3) cria user profile (multi-tenant) — precisa vir ANTES do config, porque as rules do config usam isOwner()
-await Firestore.setDoc(
-  Firestore.doc(db, "users", uid),
-  {
-    email,
-    role: "owner",
-    restaurantId: rid,
-    planTier: plan.tier,
-    createdAt: Firestore.serverTimestamp()
-  },
-  { merge: true }
-);
+    // 3) cria user profile (multi-tenant) — precisa vir ANTES do config, porque as rules do config usam isOwner()
+    await Firestore.setDoc(
+      Firestore.doc(db, "users", uid),
+      {
+        email,
+        role: "owner",
+        restaurantId: rid,
+        planTier: plan.tier,
+        createdAt: Firestore.serverTimestamp()
+      },
+      { merge: true }
+    );
 
-// 4) cria config inicial
-await Firestore.setDoc(
-  Firestore.doc(db, "restaurants", rid, "config", "main"),
-  {
-    isOpen: true,
-    createdAt: Firestore.serverTimestamp(),
-    updatedAt: Firestore.serverTimestamp()
-  },
-  { merge: true }
-);
-    showMsg("Restaurante criado! Entrando no painel...", "ok");
+    // 4) cria config inicial
+    await Firestore.setDoc(
+      Firestore.doc(db, "restaurants", rid, "config", "main"),
+      {
+        isOpen: true,
+        createdAt: Firestore.serverTimestamp(),
+        updatedAt: Firestore.serverTimestamp()
+      },
+      { merge: true }
+    );
 
-    // 5) vai pro painel (ajuste se sua rota for diferente)
+    showMsg("Restaurante criado! Trial de 7 dias ativado. Entrando no painel...", "ok");
+
     setTimeout(() => {
-      window.location.href = "./admin.html";
+      window.location.href = "./admin/index.html";
     }, 600);
+
   } catch (err) {
     console.error(err);
     const code = err?.code || "";

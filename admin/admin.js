@@ -172,9 +172,128 @@ async function loadRestaurantHeader() {
   }
 }
 
+/** ===== Assinatura / Trial (Básico/Gold/Diamante) =====
+ * Regras:
+ * - plan.status: "trial" | "active" | "expired"
+ * - trialEndsAt: timestamp
+ * Se expirado e não active -> trava o painel
+ */
+let SUBSCRIPTION_OK = true;
+let SUBSCRIPTION_INFO = null;
+
+function tsToMillis(ts) {
+  try { return ts?.toDate ? ts.toDate().getTime() : (typeof ts === "number" ? ts : null); } catch (_) { return null; }
+}
+
+function ensureSubGateEl() {
+  let el = document.getElementById("subGate");
+  if (!el) {
+    el = document.createElement("div");
+    el.id = "subGate";
+    el.style.margin = "10px 0";
+    // Coloca acima dos pedidos
+    const host = document.getElementById("panel") || document.body;
+    host.prepend(el);
+  }
+  return el;
+}
+
+async function checkSubscriptionGate() {
+  SUBSCRIPTION_OK = true;
+  SUBSCRIPTION_INFO = null;
+
+  if (!RESTAURANT_ID) return;
+
+  try {
+    const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID);
+    const snap = await Firestore.getDoc(ref);
+    if (!snap.exists()) return;
+
+    const data = snap.data() || {};
+    const plan = data.plan || {};
+    const status = plan.status || "active";
+    const tier = plan.tier || "basic";
+    const trialEndsAtMs = tsToMillis(plan.trialEndsAt);
+
+    let expired = false;
+    if (status === "trial" && trialEndsAtMs) {
+      expired = Date.now() > trialEndsAtMs;
+    } else if (status === "expired") {
+      expired = true;
+    }
+
+    SUBSCRIPTION_INFO = { status, tier, trialEndsAtMs, expired, priceBRL: plan.priceBRL || null };
+
+    // Se expirou e não é active -> bloqueia
+    if (expired && status !== "active") {
+      SUBSCRIPTION_OK = false;
+    }
+
+    const el = ensureSubGateEl();
+    if (SUBSCRIPTION_OK) {
+      el.innerHTML = "";
+      el.style.display = "none";
+      return;
+    }
+
+    el.style.display = "block";
+    const ends = trialEndsAtMs ? new Date(trialEndsAtMs).toLocaleDateString("pt-BR") : "-";
+    el.innerHTML = `
+      <div style="padding:12px;border:1px solid #fee2e2;background:#fff1f2;border-radius:16px">
+        <strong style="color:#991b1b">Assinatura expirada</strong>
+        <div style="margin-top:6px;color:#7f1d1d">
+          Seu trial terminou em <strong>${ends}</strong>. Para continuar usando o painel, ative um plano.
+        </div>
+        <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap">
+          <button id="btnPlanBasic" class="btn small">Ativar Básico</button>
+          <button id="btnPlanGold" class="btn small">Ativar Gold</button>
+          <button id="btnPlanDiamond" class="btn small">Ativar Diamante</button>
+        </div>
+        <div style="margin-top:8px;color:#7f1d1d;font-size:12px">
+          (MVP) Aqui você pode redirecionar para WhatsApp/checkout.
+        </div>
+      </div>
+    `;
+
+    // Botões (MVP): abre WhatsApp do suporte (troque o número)
+    const support = "5511999999999";
+    const msg = encodeURIComponent(`Olá! Meu restaurante (${RESTAURANT_ID}) expirou. Quero ativar um plano.`);
+    const url = `https://wa.me/${support}?text=${msg}`;
+
+    ["btnPlanBasic","btnPlanGold","btnPlanDiamond"].forEach(id => {
+      const b = document.getElementById(id);
+      if (b) b.onclick = () => window.open(url, "_blank");
+    });
+
+  } catch (e) {
+    console.warn("Falha ao checar assinatura:", e?.code || e, e?.message || "");
+  }
+}
+
+function guardIfSubscriptionBlocked() {
+  if (SUBSCRIPTION_OK) return false;
+
+  // trava ações e lista
+  if (ordersWrap) {
+    ordersWrap.innerHTML = `
+      <div style="padding:12px;border:1px solid #eee;border-radius:16px;background:#fff">
+        <strong style="color:#991b1b">Painel bloqueado</strong>
+        <div style="margin-top:6px;color:#555">Ative um plano para voltar a receber e gerenciar pedidos.</div>
+      </div>
+    `;
+  }
+  return true;
+}
+
+
+
 /** Atualiza status do pedido */
 async function setOrderStatus(orderId, newStatus) {
-  if (!ADMIN_OK) {
+  if (!SUBSCRIPTION_OK) {
+    alert("Assinatura expirada. Ative um plano para mudar status.");
+    return;
+  }
+if (!ADMIN_OK) {
     console.warn("Usuário não é admin deste restaurante (RID/UID).");
     await checkAdminAccess();
     if (!ADMIN_OK) {
@@ -361,6 +480,9 @@ Auth.onAuthStateChanged(auth, async (user) => {
 
   await checkAdminAccess();
   await loadRestaurantHeader();
+
+  await checkSubscriptionGate();
+  if (guardIfSubscriptionBlocked()) return;
+
   if (unsubOrders) unsubOrders();
-  startOrdersListener();
-});
+  startOrdersListener();});
