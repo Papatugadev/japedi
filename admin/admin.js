@@ -20,18 +20,48 @@ const db = Firestore.getFirestore(app);
  * ✅ MVP: fixo por enquanto
  * Depois vamos buscar do users/{uid}.restaurantId (multi-tenant real).
  */
-const RESTAURANT_ID = "r_001";
-
+let RESTAURANT_ID = null;
 // ====== DIAGNÓSTICO DE PERMISSÃO (ADMIN) ======
 let ADMIN_UID = "";
 let ADMIN_OK = false;
+
+
+async function loadRestaurantIdFromUser() {
+  const u = auth.currentUser;
+  if (!u?.uid) return null;
+
+  // users/{uid} -> { restaurantId, role }
+  const uref = Firestore.doc(db, "users", u.uid);
+  const usnap = await Firestore.getDoc(uref);
+  if (!usnap.exists()) return null;
+
+  const data = usnap.data() || {};
+  return data.restaurantId || null;
+}
 
 async function checkAdminAccess() {
   try {
     const u = auth.currentUser;
     ADMIN_UID = u?.uid || "";
-    if (!RESTAURANT_ID || !ADMIN_UID) {
+    if (!ADMIN_UID) {
       ADMIN_OK = false;
+      return;
+    }
+    if (!RESTAURANT_ID) {
+      // tenta descobrir automaticamente
+      try { RESTAURANT_ID = await loadRestaurantIdFromUser(); } catch (_) {}
+    }
+    if (!RESTAURANT_ID) {
+      ADMIN_OK = false;
+      const el0 = document.getElementById("permDiag");
+      if (el0) {
+        el0.innerHTML = `<div style="padding:10px;border:1px solid #fee2e2;background:#fff1f2;border-radius:12px">
+          <strong style="color:#991b1b">Sem restaurantId</strong>
+          <div style="margin-top:4px;color:#7f1d1d;font-size:12px">
+            Crie/ajuste <code>users/${ADMIN_UID}</code> com o campo <code>restaurantId</code>.
+          </div>
+        </div>`;
+      }
       return;
     }
 
@@ -128,6 +158,10 @@ document.getElementById("logoutBtn").onclick = async () => {
 
 /** Carrega nome do restaurante */
 async function loadRestaurantHeader() {
+  if (!RESTAURANT_ID) {
+    restNameEl.textContent = "Restaurante";
+    return;
+  }
   try {
     const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID);
     const snap = await Firestore.getDoc(ref);
@@ -281,6 +315,10 @@ function renderOrders(list) {
 
 /** Listener realtime */
 function startOrdersListener() {
+  if (!RESTAURANT_ID) {
+    console.warn("RESTAURANT_ID vazio; não iniciou listener.");
+    return;
+  }
   const ref = Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_public");
   const q = Firestore.query(ref, Firestore.orderBy("createdAt", "desc"));
 
@@ -314,7 +352,15 @@ Auth.onAuthStateChanged(auth, async (user) => {
   loginScreenEl.classList.add("hidden");
   panelEl.classList.remove("hidden");
 
+  // 🔥 Multi-tenant: descobre o restaurante pelo users/{uid}.restaurantId
+  try {
+    RESTAURANT_ID = await loadRestaurantIdFromUser();
+  } catch (e) {
+    console.warn("Falha ao carregar restaurantId do usuário:", e?.code || e, e?.message || "");
+  }
+
   await checkAdminAccess();
-  loadRestaurantHeader();
+  await loadRestaurantHeader();
+  if (unsubOrders) unsubOrders();
   startOrdersListener();
 });
