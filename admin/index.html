@@ -65,10 +65,21 @@
   </div>
 </section>
 
+      
       <section id="page-products" class="page">
         <h3 class="pageTitle">Produtos</h3>
-        <div class="placeholderCard"></div>
+
+        <div class="prodTop">
+          <div class="prodSearch">
+            <input id="prodSearch" class="input" placeholder="Buscar produto..." />
+          </div>
+          <button id="btnNewProduct" class="btn small" type="button">+ Novo</button>
+        </div>
+
+        <div id="productsList" class="prodGrid"></div>
+        <p id="productsEmpty" class="muted hidden">Nenhum produto cadastrado ainda.</p>
       </section>
+
 
       <section id="page-finance" class="page">
         <h3 class="pageTitle">Financeiro</h3>

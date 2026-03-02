@@ -91,6 +91,8 @@ const state = {
   customerUid: null,
   unsubTrack: null,
   unsubChat: null,
+  selectedCategory: "Todos",
+categories: [],
 
   // (adicionado) Chat unread / notificações
   chatUnread: 0,
@@ -254,7 +256,39 @@ function cartTotals() {
 /* =========================
    UI (RENDER)
    ========================= */
+function buildCategories(){
+  const set = new Set();
 
+  state.products.forEach(p=>{
+    if(p.category) set.add(p.category);
+  });
+
+  state.categories = ["Todos", ...Array.from(set).sort()];
+
+  const bar = document.getElementById("categoryBar");
+  const list = document.getElementById("categoryList");
+
+  if(!list) return;
+
+  bar.classList.remove("hidden");
+  list.innerHTML="";
+
+  state.categories.forEach(cat=>{
+    const chip=document.createElement("div");
+    chip.className="categoryChip";
+    if(cat===state.selectedCategory) chip.classList.add("active");
+
+    chip.textContent=cat;
+
+    chip.onclick=()=>{
+      state.selectedCategory=cat;
+      buildCategories();
+      renderProducts();
+    };
+
+    list.appendChild(chip);
+  });
+}
 function renderProducts() {
   const titleEl = document.getElementById("title");
   const descEl = document.getElementById("desc");
@@ -272,28 +306,44 @@ function renderProducts() {
 
   wrap.innerHTML = "";
 
-  const activeProducts = state.products
-    .filter(p => p.active !== false)
-    .sort((a, b) => (a.name || "").localeCompare(b.name || ""));
+let activeProducts = state.products
+  .filter(p => p.active !== false);
 
-  if (activeProducts.length === 0) {
-    wrap.innerHTML = `<p>Nenhum produto disponível.</p>`;
-    return;
-  }
+if(state.selectedCategory !== "Todos"){
+  activeProducts = activeProducts.filter(
+    p => (p.category || "Outros") === state.selectedCategory
+  );
+}
 
-  for (const p of activeProducts) {
+activeProducts = activeProducts.sort(
+  (a,b)=> (a.name||"").localeCompare(b.name||"")
+);
+
+  
+  for (const p of activeProducts){
+    const img = (p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
     const div = document.createElement("div");
-    div.className = "box";
-    div.innerHTML = `
-      <div><strong>${p.name || "Produto"}</strong></div>
-      <div class="muted" style="margin-top:6px">${p.desc || ""}</div>
-      <div class="price">${moneyBRL(p.price)}</div>
-      <button class="btn" data-add="${p.id}">Adicionar</button>
-    `;
-    wrap.appendChild(div);
-  }
+    div.className = "productCard";
 
-  wrap.querySelectorAll("[data-add]").forEach(btn => {
+    div.innerHTML = `
+      <img class="productImg" src="${img}" alt="${p.name || 'Produto'}" loading="lazy" decoding="async">
+
+      <div class="productContent">
+        <div class="productTitle">${p.name || "Produto"}</div>
+
+        <div class="productDesc">
+          ${(p.desc || "Delicioso prato preparado na hora").toString()}
+        </div>
+
+        <div class="productFooter">
+          <div class="productPrice">${moneyBRL(p.price)}</div>
+          <button class="addButton" type="button" data-add="${p.id}">+</button>
+        </div>
+      </div>
+    `;
+
+    wrap.appendChild(div);
+  }wrap.querySelectorAll("[data-add]").forEach(btn => {
     btn.addEventListener("click", () => addToCart(btn.getAttribute("data-add")));
   });
 }
@@ -1000,6 +1050,7 @@ async function boot() {
   }
 
   state.products = await fetchProducts(state.restaurant.id);
+  buildCategories();
 
   // Retomar último pedido
   const last = loadLastOrder();

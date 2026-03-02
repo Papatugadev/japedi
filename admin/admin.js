@@ -197,6 +197,7 @@ loginBtn.onclick = async () => {
 
 document.getElementById("logoutBtn").onclick = async () => {
   if (unsubOrders) unsubOrders();
+  try { _stopProductsListener(); } catch (_) {}
   await Auth.signOut(auth);
   location.reload();
 };
@@ -842,6 +843,11 @@ Auth.onAuthStateChanged(auth, async (user) => {
       const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", settings:"Configurações" };
       titleEl.textContent = map[page] || "Pedidos";
     }
+
+    // ✅ Inicia o CRUD de produtos só quando abre a tela
+    if (page === "products") {
+      try { _startProductsListener(); } catch (_) {}
+    }
   }
 
   buttons.forEach(btn => btn.addEventListener("click", () => show(btn.dataset.page)));
@@ -851,6 +857,324 @@ Auth.onAuthStateChanged(auth, async (user) => {
 })();
 
 // segurança: inicia o ticker mesmo se o render demorar
+
+/* ===== Produtos: CRUD (criar/editar) ===== */
+let unsubProducts = null;
+let __JPED_PRODUCTS_CACHE = [];
+let __JPED_PRODUCTS_READY = false;
+
+function _num(v){
+  const n = Number(String(v ?? "").replace(",", ".").trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function _productsCol(){
+  return Firestore.collection(db, "restaurants", RESTAURANT_ID, "products");
+}
+
+function _prodCanWrite(){
+  if (!SUBSCRIPTION_OK) {
+    alert("Assinatura expirada. Ative um plano para editar produtos.");
+    return false;
+  }
+  if (!ADMIN_OK) return false;
+  return true;
+}
+
+async function _ensureAdminForProducts(){
+  if (ADMIN_OK) return true;
+  try { await checkAdminAccess(); } catch(_) {}
+  if (!ADMIN_OK) {
+    alert("Sem permissão de admin para editar produtos.");
+    return false;
+  }
+  return true;
+}
+
+function _renderProducts(list){
+  const host = document.getElementById("productsList");
+  const empty = document.getElementById("productsEmpty");
+  if (!host) return;
+
+  host.innerHTML = "";
+
+  const q = (document.getElementById("prodSearch")?.value || "").trim().toLowerCase();
+  const filtered = (list || []).filter(p => {
+    if (!q) return true;
+    const hay = `${p.name||""} ${p.category||""} ${p.desc||""}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (!filtered.length) {
+    if (empty) empty.classList.remove("hidden");
+    return;
+  }
+  if (empty) empty.classList.add("hidden");
+
+  for (const p of filtered) {
+    const div = document.createElement("div");
+    div.className = "prodCard";
+    const active = p.active !== false; // default true
+    div.innerHTML = `
+      <div class="prodCardTop">
+        <div>
+          <div class="prodName">${(p.name || "Sem nome")}</div>
+          <div class="prodMeta">
+            <span class="badge small ${active ? "good" : "off"}">
+              <span class="badgeDot" style="background:${active ? "#22c55e" : "#94a3b8"}"></span>
+              ${active ? "Ativo" : "Inativo"}
+            </span>
+            ${p.category ? `<span class="badge small">${p.category}</span>` : ""}
+          </div>
+        </div>
+        <div class="prodPrice">${brl(p.price ?? 0)}</div>
+      </div>
+
+      ${p.desc ? `<div class="muted">${String(p.desc).slice(0, 120)}${String(p.desc).length > 120 ? "…" : ""}</div>` : ""}
+
+      <div class="prodActions">
+        <button class="ghost small" type="button" data-prod-act="toggle" data-id="${p.id}">
+          ${active ? "Desativar" : "Ativar"}
+        </button>
+        <button class="btn small" type="button" data-prod-act="edit" data-id="${p.id}">Editar</button>
+        <button class="ghost small danger" type="button" data-prod-act="del" data-id="${p.id}">Excluir</button>
+      </div>
+    `;
+    host.appendChild(div);
+  }
+}
+
+function _startProductsListener(){
+  if (__JPED_PRODUCTS_READY) return;
+  __JPED_PRODUCTS_READY = true;
+
+  const search = document.getElementById("prodSearch");
+  const btnNew = document.getElementById("btnNewProduct");
+
+  if (search) {
+    search.addEventListener("input", () => _renderProducts(__JPED_PRODUCTS_CACHE));
+  }
+  if (btnNew) {
+    btnNew.addEventListener("click", async () => {
+      if (!await _ensureAdminForProducts()) return;
+      openProductModal(null);
+    });
+  }
+
+  // Delegação: botões nos cards
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-prod-act][data-id]");
+    if (!btn) return;
+
+    const act = btn.getAttribute("data-prod-act");
+    const id = btn.getAttribute("data-id");
+    const item = __JPED_PRODUCTS_CACHE.find(x => x.id === id) || null;
+
+    if (!await _ensureAdminForProducts()) return;
+
+    if (act === "edit") {
+      openProductModal(item);
+      return;
+    }
+
+    if (act === "del") {
+      if (!item) return;
+      const ok = confirm(`Excluir o produto "${item.name || "Sem nome"}"?`);
+      if (!ok) return;
+      if (!_prodCanWrite()) return;
+
+      try{
+        await Firestore.deleteDoc(Firestore.doc(db,"restaurants",RESTAURANT_ID,"products",id));
+      }catch(err){
+        console.warn("Falha ao excluir produto:", err?.code || err, err?.message || "");
+        alert("Não foi possível excluir. Veja o console (F12).");
+      }
+      return;
+    }
+
+    if (act === "toggle") {
+      if (!item) return;
+      if (!_prodCanWrite()) return;
+
+      try{
+        await Firestore.updateDoc(
+          Firestore.doc(db,"restaurants",RESTAURANT_ID,"products",id),
+          { active: !(item.active !== false), updatedAt: Firestore.serverTimestamp() }
+        );
+      }catch(err){
+        console.warn("Falha ao ativar/desativar:", err?.code || err, err?.message || "");
+        alert("Não foi possível atualizar. Veja o console (F12).");
+      }
+      return;
+    }
+  });
+
+  // Realtime
+  if (!RESTAURANT_ID) return;
+
+  const ref = _productsCol();
+  const q = Firestore.query(ref, Firestore.orderBy("name","asc"));
+
+  unsubProducts = Firestore.onSnapshot(q, (snap) => {
+    __JPED_PRODUCTS_CACHE = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    _renderProducts(__JPED_PRODUCTS_CACHE);
+  }, (err) => {
+    console.warn("Erro ao ouvir produtos:", err?.code || err, err?.message || "");
+  });
+}
+
+function _stopProductsListener(){
+  if (unsubProducts) {
+    try { unsubProducts(); } catch(_) {}
+    unsubProducts = null;
+  }
+  __JPED_PRODUCTS_READY = false;
+}
+
+/* ===== Modal: criar/editar produto ===== */
+function _ensureProductModal(){
+  let modal = document.getElementById("prodModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "prodModal";
+  modal.className = "prodModal hidden";
+  modal.innerHTML = `
+    <div class="prodModalContent" role="dialog" aria-modal="true">
+      <button type="button" class="modalClose" id="prodModalClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+
+      <div class="modalHeader">
+        <div class="modalOrderNum" id="prodModalTitle">Novo produto</div>
+        <div class="modalMeta" id="prodModalSub">Preencha os dados abaixo.</div>
+      </div>
+
+      <div class="modalSection">
+        <div class="formGrid">
+          <div class="formRow">
+            <div class="label">Nome</div>
+            <input id="pName" class="input" placeholder="Ex: X-Salada" />
+          </div>
+
+          <div class="formRow">
+            <div class="label">Preço (R$)</div>
+            <input id="pPrice" class="input" inputmode="decimal" placeholder="Ex: 25,90" />
+          </div>
+
+          <div class="formRow">
+            <div class="label">Categoria</div>
+            <input id="pCategory" class="input" placeholder="Ex: Lanches" />
+          </div>
+
+          <div class="formRow">
+            <div class="label">Imagem (URL) (opcional)</div>
+            <input id="pImage" class="input" placeholder="https://..." />
+          </div>
+        </div>
+
+        <div class="formRow" style="margin-top:10px">
+          <div class="label">Descrição (opcional)</div>
+          <textarea id="pDesc" class="input textarea" placeholder="Ex: pão, hamburguer, queijo..."></textarea>
+        </div>
+
+        <div class="toggleRow" style="margin-top:10px">
+          <input id="pActive" type="checkbox" />
+          <div>
+            <div style="font-weight:900;color:#0f172a">Ativo</div>
+            <div class="muted">Se desativar, some do cardápio do cliente.</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button type="button" class="ghost small" id="prodCancel">Cancelar</button>
+        <button type="button" class="btn small" id="prodSave">Salvar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => closeProductModal();
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  modal.querySelector("#prodModalClose").addEventListener("click", close);
+  modal.querySelector("#prodCancel").addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  return modal;
+}
+
+let __JPED_EDIT_PROD_ID = null;
+
+function closeProductModal(){
+  const modal = document.getElementById("prodModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  __JPED_EDIT_PROD_ID = null;
+}
+
+function openProductModal(prod){
+  const modal = _ensureProductModal();
+  __JPED_EDIT_PROD_ID = prod?.id || null;
+
+  const title = modal.querySelector("#prodModalTitle");
+  const sub = modal.querySelector("#prodModalSub");
+  title.textContent = __JPED_EDIT_PROD_ID ? "Editar produto" : "Novo produto";
+  sub.textContent = __JPED_EDIT_PROD_ID ? `ID: ${__JPED_EDIT_PROD_ID}` : "Preencha os dados abaixo.";
+
+  modal.querySelector("#pName").value = prod?.name || "";
+  modal.querySelector("#pPrice").value = (prod?.price ?? "") === "" ? "" : String(prod?.price ?? "");
+  modal.querySelector("#pCategory").value = prod?.category || "";
+  modal.querySelector("#pImage").value = prod?.imageUrl || "";
+  modal.querySelector("#pDesc").value = prod?.desc || "";
+  modal.querySelector("#pActive").checked = (prod?.active !== false);
+
+  const saveBtn = modal.querySelector("#prodSave");
+  saveBtn.onclick = async () => {
+    if (!await _ensureAdminForProducts()) return;
+    if (!_prodCanWrite()) return;
+
+    const payload = {
+      name: (modal.querySelector("#pName").value || "").trim(),
+      price: _num(modal.querySelector("#pPrice").value),
+      category: (modal.querySelector("#pCategory").value || "").trim(),
+      imageUrl: (modal.querySelector("#pImage").value || "").trim(),
+      desc: (modal.querySelector("#pDesc").value || "").trim(),
+      active: !!modal.querySelector("#pActive").checked,
+      updatedAt: Firestore.serverTimestamp()
+    };
+
+    if (!payload.name) {
+      alert("Coloque um nome para o produto.");
+      return;
+    }
+
+    saveBtn.disabled = true;
+    try{
+      if (__JPED_EDIT_PROD_ID) {
+        await Firestore.updateDoc(
+          Firestore.doc(db,"restaurants",RESTAURANT_ID,"products",__JPED_EDIT_PROD_ID),
+          payload
+        );
+      } else {
+        await Firestore.addDoc(_productsCol(), {
+          ...payload,
+          createdAt: Firestore.serverTimestamp()
+        });
+      }
+      closeProductModal();
+    }catch(err){
+      console.warn("Falha ao salvar produto:", err?.code || err, err?.message || "");
+      alert("Não foi possível salvar. Veja o console (F12).");
+    }finally{
+      saveBtn.disabled = false;
+    }
+  };
+
+  modal.classList.remove("hidden");
+}
+
+
 document.addEventListener("DOMContentLoaded", () => {
   try { _startTimeBadges(); } catch (_) {}
 });
