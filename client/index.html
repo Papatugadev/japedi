@@ -106,7 +106,16 @@
 
 
       <div style="display:flex; gap:10px; margin-top:14px;">
-        <button id="openChatBtn" class="btn" type="button" style="flex:1">Abrir chat</button>
+        <button id="openChatBtn" class="btn chatFab" type="button" style="flex:1" aria-label="Abrir chat">
+          <span class="chatFab__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M7 8h10M7 12h6m-1 9-4-3H7a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h10a5 5 0 0 1 5 5v5a5 5 0 0 1-5 5h-1l-4 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          <span class="chatFab__sr">Abrir chat</span>
+          <span id="chatUnreadBadge" class="chatUnreadBadge hidden" aria-hidden="true">0</span>
+          <div id="chatToast" class="chatToast hidden" role="status" aria-live="polite">Nova mensagem</div>
+        </button>
         <button id="forgetOrderBtn" class="ghost" type="button" style="white-space:nowrap;">Esquecer</button>
       </div>
     </div>

@@ -90,13 +90,88 @@ const state = {
   currentOrderNumber: null,
   customerUid: null,
   unsubTrack: null,
-  unsubChat: null
+  unsubChat: null,
+
+  // (adicionado) Chat unread / notificações
+  chatUnread: 0,
+  chatInitialized: false,
+  chatLastSeenRestaurantMs: 0,
+  chatToastTimer: null
 };
 
 /** Util: formatar BRL */
 function moneyBRL(value) {
   const v = Number(value || 0);
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+
+// ============================
+// Chat FAB: badge + popup + som (adicionado sem remover nada)
+// ============================
+function isChatDrawerOpen() {
+  const d = document.getElementById("chatDrawer");
+  return !!(d && !d.classList.contains("hidden"));
+}
+
+function setChatUnread(n) {
+  state.chatUnread = Math.max(0, Number(n || 0));
+  const badge = document.getElementById("chatUnreadBadge");
+  if (!badge) return;
+  if (state.chatUnread > 0) {
+    badge.textContent = String(state.chatUnread);
+    badge.classList.remove("hidden");
+  } else {
+    badge.textContent = "0";
+    badge.classList.add("hidden");
+  }
+}
+
+function showChatToast(text) {
+  const toast = document.getElementById("chatToast");
+  if (!toast) return;
+  toast.textContent = text || "Nova mensagem";
+  toast.classList.remove("hidden");
+  // pequena animação
+  requestAnimationFrame(() => toast.classList.add("show"));
+  if (state.chatToastTimer) clearTimeout(state.chatToastTimer);
+  state.chatToastTimer = setTimeout(() => {
+    try { toast.classList.remove("show"); } catch(_) {}
+    setTimeout(() => { try { toast.classList.add("hidden"); } catch(_) {} }, 180);
+  }, 2400);
+}
+
+function resetChatUnread() {
+  setChatUnread(0);
+  const toast = document.getElementById("chatToast");
+  if (toast) {
+    try { toast.classList.remove("show"); } catch(_) {}
+    try { toast.classList.add("hidden"); } catch(_) {}
+  }
+}
+
+function playChatPing() {
+  // Beep simples via WebAudio (sem arquivo externo).
+  // Pode ser bloqueado até o usuário interagir (normal do navegador).
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "sine";
+    o.frequency.value = 880;
+    g.gain.value = 0.0001;
+    o.connect(g);
+    g.connect(ctx.destination);
+    const now = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, now);
+    g.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+    o.start(now);
+    o.stop(now + 0.25);
+    o.onended = () => { try { ctx.close(); } catch(_) {} };
+  } catch(_) {}
 }
 
 /** Util: gera número de pedido (4 dígitos) para exibir como #1234 */
@@ -701,6 +776,58 @@ function startChat(orderId) {
         box.appendChild(div);
       });
       box.scrollTop = box.scrollHeight;
+      // (adicionado) Notificação de nova mensagem (som + badge + popup)
+      try {
+        // Se o chat estiver aberto, considera como "lido"
+        if (isChatDrawerOpen()) {
+          // tenta atualizar lastSeen com o último msg do restaurante presente no snapshot
+          let lastR = 0;
+          snap.forEach((d) => {
+            const m2 = d.data() || {};
+            if (m2.from !== "customer") {
+              const ms = (m2.createdAt && m2.createdAt.toDate) ? m2.createdAt.toDate().getTime() : 0;
+              if (ms > lastR) lastR = ms;
+            }
+          });
+          if (lastR) state.chatLastSeenRestaurantMs = lastR;
+          setChatUnread(0);
+          state.chatInitialized = true;
+        } else {
+          // Primeira carga não notifica
+          if (!state.chatInitialized) {
+            let lastR0 = 0;
+            snap.forEach((d) => {
+              const m2 = d.data() || {};
+              if (m2.from !== "customer") {
+                const ms = (m2.createdAt && m2.createdAt.toDate) ? m2.createdAt.toDate().getTime() : 0;
+                if (ms > lastR0) lastR0 = ms;
+              }
+            });
+            state.chatInitialized = true;
+            state.chatLastSeenRestaurantMs = lastR0 || state.chatLastSeenRestaurantMs || 0;
+          } else {
+            // Mudanças novas
+            const changes = (snap.docChanges ? snap.docChanges() : []);
+            let newCount = 0;
+            let newestMs = state.chatLastSeenRestaurantMs || 0;
+            for (const ch of changes) {
+              if (ch.type !== "added") continue;
+              const m2 = (ch.doc && ch.doc.data) ? (ch.doc.data() || {}) : {};
+              if (m2.from === "customer") continue;
+              const ms = (m2.createdAt && m2.createdAt.toDate) ? m2.createdAt.toDate().getTime() : Date.now();
+              if (ms <= (state.chatLastSeenRestaurantMs || 0)) continue;
+              newCount += 1;
+              if (ms > newestMs) newestMs = ms;
+            }
+            if (newCount > 0) {
+              state.chatLastSeenRestaurantMs = newestMs;
+              setChatUnread((state.chatUnread || 0) + newCount);
+              showChatToast("Nova mensagem no chat");
+              playChatPing();
+            }
+          }
+        }
+      } catch(_) {}
     },
     (err) => {
       console.error("Erro no chat (snapshot):", err?.code || err, err?.message || "");
@@ -776,6 +903,7 @@ async function boot() {
 
   const openChatBtn = document.getElementById("openChatBtn");
   if (openChatBtn) openChatBtn.addEventListener("click", () => {
+    resetChatUnread();
     if (!state.currentOrderId) return;
     const lbl = document.getElementById("chatOrderLabel");
     if (lbl) lbl.textContent =

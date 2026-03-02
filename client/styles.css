@@ -657,3 +657,90 @@ textarea:-webkit-autofill{
 main, .view{
   padding-bottom: 180px !important;
 }
+
+/* =========================
+   Chat FAB (bolinha) + badge + popup
+   (adicionado sem remover nada)
+   ========================= */
+.chatFab{
+  flex: 0 0 auto !important;
+  width: 52px !important;
+  height: 52px !important;
+  padding: 0 !important;
+  border-radius: 999px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  line-height: 1 !important;
+}
+
+.chatFab__sr{
+  position:absolute !important;
+  width:1px !important;
+  height:1px !important;
+  padding:0 !important;
+  margin:-1px !important;
+  overflow:hidden !important;
+  clip:rect(0,0,0,0) !important;
+  white-space:nowrap !important;
+  border:0 !important;
+}
+
+.chatFab__icon{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+}
+
+.chatUnreadBadge{
+  position:absolute;
+  top:-6px;
+  right:-6px;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size: 12px;
+  font-weight: 700;
+  background: #ef4444;
+  color: #fff;
+  border: 2px solid #fff;
+  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  pointer-events:none;
+}
+
+.chatToast{
+  position:absolute;
+  bottom: calc(100% + 10px);
+  right: 0;
+  max-width: 220px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: #111827;
+  color: #fff;
+  font-size: 13px;
+  box-shadow: 0 14px 30px rgba(0,0,0,.22);
+  transform: translateY(6px);
+  opacity: 0;
+  pointer-events:none;
+}
+
+.chatToast::after{
+  content:"";
+  position:absolute;
+  top:100%;
+  right: 16px;
+  width: 10px;
+  height: 10px;
+  background:#111827;
+  transform: rotate(45deg) translateY(-3px);
+}
+
+.chatToast.show{
+  opacity: 1;
+  transform: translateY(0);
+}
