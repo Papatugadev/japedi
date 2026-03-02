@@ -21,7 +21,7 @@ main{
   padding:16px;
   max-width:720px;
   margin:0 auto;
-  padding-bottom:120px; /* espaço pra barra do carrinho */
+  padding-bottom:120px; /* espaÃƒÂ§o pra barra do carrinho */
 }
 
 .topbar{
@@ -275,4 +275,193 @@ main{
 .track__panel{
   max-width:720px;
   margin:0 auto;
+}
+/* =========================
+   Bottom nav (pÃ­lula)
+   ========================= */
+.view{ max-width:720px; margin:0 auto; padding:16px; padding-bottom:150px; }
+.sectionTitle{ max-width:720px; margin:0 auto; padding:0 16px; }
+
+.bottomnav{
+  position:fixed;
+  left:0; right:0; bottom:0;
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  z-index:80;
+  display:flex;
+  justify-content:center;
+  pointer-events:none; /* sÃ³ a pÃ­lula recebe clique */
+}
+.bottomnav__pill{
+  pointer-events:auto;
+  position:relative;
+  background:rgba(255,255,255,.92);
+  border:1px solid rgba(15,23,42,.10);
+  box-shadow:0 12px 30px rgba(0,0,0,.12);
+  border-radius:999px;
+  padding:6px;
+  width:min(520px, 92vw);
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:6px;
+  backdrop-filter:saturate(140%) blur(10px);
+  -webkit-backdrop-filter:saturate(140%) blur(10px);
+}
+.tabbtn{
+  appearance:none;
+  border:0;
+  background:transparent;
+  border-radius:999px;
+  padding:10px 12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  font-weight:900;
+  cursor:pointer;
+  position:relative;
+  z-index:2;
+}
+.tabbtn.is-active{ color:var(--text); }
+.tabicon{ font-size:18px; }
+.tabtext{ font-size:13px; }
+
+.tabdot{
+  position:absolute;
+  top:8px;
+  right:14px;
+  width:10px;
+  height:10px;
+  border-radius:999px;
+  background:var(--primary);
+  box-shadow:0 0 0 4px rgba(22,163,74,.18);
+}
+
+/* indicador animado */
+.tabIndicator{
+  position:absolute;
+  top:6px; bottom:6px;
+  width:calc(50% - 6px);
+  border-radius:999px;
+  background:rgba(22,163,74,.14);
+  border:1px solid rgba(22,163,74,.22);
+  transform:translateX(0%);
+  transition:transform .28s cubic-bezier(.2,.9,.2,1);
+  z-index:1;
+}
+.bottomnav__pill[data-active="orders"] .tabIndicator{ transform:translateX(100%); }
+
+/* =========================
+   Side chat drawer (lateral)
+   ========================= */
+.sideDrawer{
+  position:fixed;
+  inset:0;
+  z-index:90;
+}
+.sideDrawer__backdrop{
+  position:absolute;
+  inset:0;
+  background:rgba(0,0,0,.35);
+}
+.sideDrawer__panel{
+  position:absolute;
+  top:0;
+  right:0;
+  height:100%;
+  width:min(420px, 92vw);
+  background:var(--card);
+  box-shadow:var(--shadow);
+  border-left:1px solid rgba(15,23,42,.10);
+  display:flex;
+  flex-direction:column;
+  transform:translateX(100%);
+  transition:transform .22s ease;
+}
+.sideDrawer.is-open .sideDrawer__panel{ transform:translateX(0); }
+.sideDrawer__panel.dragging{ transition:none !important; }
+
+.sideDrawer__header{
+  padding:14px 14px;
+  border-bottom:1px solid rgba(15,23,42,.10);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+}
+.sideDrawer__content{
+  padding:12px 14px 14px;
+  overflow:hidden;
+  flex:1;
+}
+
+/* FIX: input do chat nÃ£o mostrar o texto */
+.input, input, textarea{
+  color: var(--text);
+  background: #fff;
+  -webkit-text-fill-color: var(--text);
+  caret-color: var(--text);
+}
+/* =========================
+   FIX DEFINITIVO: texto do input do chat invisível
+   ========================= */
+
+#chatText,
+.chatInput input,
+.input,
+input,
+textarea{
+  color: #111 !important;
+  background: #fff !important;
+  -webkit-text-fill-color: #111 !important; /* iOS/Safari */
+  caret-color: #111 !important;
+  opacity: 1 !important;
+}
+
+/* placeholder visível */
+#chatText::placeholder,
+.chatInput input::placeholder,
+.input::placeholder,
+input::placeholder,
+textarea::placeholder{
+  color: #6b7280 !important;
+  opacity: 1 !important;
+}
+
+/* iOS/Chrome autofill (às vezes “pinta” o texto estranho) */
+input:-webkit-autofill,
+textarea:-webkit-autofill{
+  -webkit-text-fill-color: #111 !important;
+  box-shadow: 0 0 0px 1000px #fff inset !important;
+}
+
+/* evita zoom do iPhone ao focar input */
+#chatText{ font-size: 16px !important; }
+/* =========================
+   FIX CHAT: não deixar o botão esmagar o input
+   ========================= */
+
+.chatInput{
+  display:flex !important;
+  gap:8px !important;
+  margin-top:10px !important;
+  align-items:center !important;
+}
+
+#chatText{
+  flex:1 !important;
+  min-width:0 !important;            /* permite encolher corretamente */
+  width:auto !important;
+  margin:0 !important;
+  font-size:16px !important;
+  color:#111 !important;
+  background:#fff !important;
+  -webkit-text-fill-color:#111 !important;
+  caret-color:#111 !important;
+}
+
+#sendChatBtn{
+  width:auto !important;             /* <- ESSENCIAL */
+  margin-top:0 !important;           /* <- ESSENCIAL */
+  padding:10px 14px !important;
+  white-space:nowrap !important;
 }

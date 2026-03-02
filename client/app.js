@@ -21,12 +21,6 @@ const app = FirebaseApp.initializeApp(firebaseConfig);
 const db = Firestore.getFirestore(app);
 const auth = Auth.getAuth(app);
 
-/**
- * STATE = tudo que muda no app.
- * - restaurant/products vem do Firestore
- * - cart é local (por enquanto)
- */
-
 /* =========================
    AUTH ANÔNIMO (cliente)
    ========================= */
@@ -49,7 +43,6 @@ Auth.onAuthStateChanged(auth, async (user) => {
 });
 
 async function ensureAnonAuth() {
-  // garante que state.customerUid esteja pronto
   await authReady;
   return state.customerUid;
 }
@@ -59,7 +52,6 @@ async function ensureAnonAuth() {
    ========================= */
 
 function lastOrderKey() {
-  // por restaurante/slug, pra não misturar
   return `japed:lastOrder:${state.restaurant?.id || state.slug || "unknown"}`;
 }
 
@@ -78,7 +70,6 @@ function loadLastOrder() {
     if (!raw) return null;
     const obj = JSON.parse(raw);
     if (!obj?.orderId) return null;
-    // opcional: expira em 48h
     if (obj.ts && Date.now() - obj.ts > 48 * 60 * 60 * 1000) return null;
     return obj;
   } catch (_) {
@@ -150,19 +141,14 @@ async function fetchProducts(restaurantId) {
    CARRINHO (LÓGICA)
    ========================= */
 
-/**
- * Adiciona um produto no carrinho.
- * Guarda só {id,name,price,qty} = mínimo necessário pro pedido.
- */
 function addToCart(productId) {
   const p = state.products.find(x => x.id === productId);
   if (!p) return;
 
   const existing = state.cart.find(i => i.id === productId);
 
-  if (existing) {
-    existing.qty += 1;
-  } else {
+  if (existing) existing.qty += 1;
+  else {
     state.cart.push({
       id: p.id,
       name: p.name || "Produto",
@@ -174,22 +160,16 @@ function addToCart(productId) {
   renderCartUI();
 }
 
-/** Aumenta/diminui quantidade */
 function changeQty(productId, delta) {
   const item = state.cart.find(i => i.id === productId);
   if (!item) return;
 
   item.qty += delta;
-
-  // Se ficou 0, remove
-  if (item.qty <= 0) {
-    state.cart = state.cart.filter(i => i.id !== productId);
-  }
+  if (item.qty <= 0) state.cart = state.cart.filter(i => i.id !== productId);
 
   renderCartUI();
 }
 
-/** Calcula totais */
 function cartTotals() {
   const qty = state.cart.reduce((acc, i) => acc + i.qty, 0);
   const subtotal = state.cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
@@ -243,9 +223,6 @@ function renderProducts() {
   });
 }
 
-/**
- * Renderiza tudo do carrinho: badge, barra inferior, drawer.
- */
 function renderCartUI() {
   const badge = document.getElementById("cartBadge");
   const cartBar = document.getElementById("cartBar");
@@ -256,7 +233,6 @@ function renderCartUI() {
 
   const { qty, subtotal } = cartTotals();
 
-  // Badge no topo
   if (qty > 0) {
     badge.classList.remove("hidden");
     badge.textContent = String(qty);
@@ -265,7 +241,6 @@ function renderCartUI() {
     badge.textContent = "0";
   }
 
-  // Barra fixa
   if (qty > 0) {
     cartBar.classList.remove("hidden");
     cartBarQty.textContent = qty === 1 ? "1 item" : `${qty} itens`;
@@ -274,7 +249,6 @@ function renderCartUI() {
     cartBar.classList.add("hidden");
   }
 
-  // Drawer itens
   cartItems.innerHTML = "";
 
   if (state.cart.length === 0) {
@@ -358,22 +332,15 @@ async function createOrder() {
     status: "recebido",
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
-
-    
     orderNumber: genOrderNumber4(),
-customer: { name, phone, address },
-
+    customer: { name, phone, address },
     items: state.cart.map(i => ({
       id: i.id,
       name: i.name,
       price: i.price,
       qty: i.qty
     })),
-
-    totals: {
-      qty,
-      subtotal
-    }
+    totals: { qty, subtotal }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
@@ -396,14 +363,11 @@ customer: { name, phone, address },
     console.warn("Não foi possível criar chat (rules):", e?.code || e, e?.message || "");
   }
 
-  // guarda número humano do pedido para UI
-
   state.currentOrderNumber = orderData.orderNumber;
-  // salva último pedido para retomar depois
+
   try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
-;
-// ✅ Tracking público (evita permission-denied no cliente quando rules bloqueiam /orders)
-  // Tenta criar/atualizar um doc espelho em /orders_public com dados mínimos.
+
+  // tracking público
   try {
     const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
     await Firestore.setDoc(
@@ -412,8 +376,8 @@ customer: { name, phone, address },
         status: orderData.status,
         createdAt: orderData.createdAt,
         updatedAt: orderData.updatedAt,
-            orderNumber: orderData.orderNumber,
-totals: orderData.totals,
+        orderNumber: orderData.orderNumber,
+        totals: orderData.totals,
         customerName: orderData.customer?.name || ""
       },
       { merge: true }
@@ -422,28 +386,124 @@ totals: orderData.totals,
     console.warn("Não foi possível gravar orders_public (rules):", e?.code || e, e?.message || "");
   }
 
-  return newDoc.id;}
-
-/* =========================
-   Tracking (tempo real)
-   ========================= */
-
-function openTrackScreen(orderId) {
-  document.getElementById("trackScreen").classList.remove("hidden");
-  document.getElementById("trackOrderId").textContent = (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : orderId);
-  // inicia chat do pedido
-  try { startChat(orderId); } catch (_) {}
+  return newDoc.id;
 }
 
+/* =========================
+   Tabs + Chat Drawer + Tracking
+   ========================= */
 
-function closeTrackScreen() {
-  document.getElementById("trackScreen").classList.add("hidden");
-  // economiza listener
-  try { stopChat(); } catch (_) {}
+function showTab(name){
+  const menuView = document.getElementById("menuView");
+  const ordersView = document.getElementById("ordersView");
+  const pill = document.querySelector(".bottomnav__pill");
+
+  const tabMenu = document.getElementById("tabMenu");
+  const tabOrders = document.getElementById("tabOrders");
+
+  const isMenu = name === "menu";
+  menuView?.classList?.toggle("hidden", !isMenu);
+  ordersView?.classList?.toggle("hidden", isMenu);
+
+  tabMenu?.classList?.toggle("is-active", isMenu);
+  tabOrders?.classList?.toggle("is-active", !isMenu);
+
+  if (pill){
+    pill.setAttribute("data-active", isMenu ? "menu" : "orders");
+  }
+}
+
+function setOrdersUI(hasOrder){
+  document.getElementById("ordersEmpty")?.classList?.toggle("hidden", !!hasOrder);
+  document.getElementById("orderCard")?.classList?.toggle("hidden", !hasOrder);
+
+  const dot = document.getElementById("ordersDot");
+  if (dot) dot.classList.toggle("hidden", !hasOrder);
+}
+
+function openChatDrawer(){
+  const root = document.getElementById("chatDrawer");
+  if (!root) return;
+  root.classList.remove("hidden");
+  root.offsetHeight;
+  root.classList.add("is-open");
+}
+
+function closeChatDrawer(){
+  const root = document.getElementById("chatDrawer");
+  if (!root) return;
+  root.classList.remove("is-open");
+  window.setTimeout(() => root.classList.add("hidden"), 220);
+}
+
+function setupChatSwipe(){
+  const panel = document.getElementById("chatPanel");
+  const root = document.getElementById("chatDrawer");
+  if (!panel || !root) return;
+
+  let startX = 0;
+  let current = 0;
+  let dragging = false;
+
+  const onStart = (e) => {
+    if (!root.classList.contains("is-open")) return;
+
+    // ✅ NÃO iniciar swipe se tocou em botão/input (isso quebrava o "Fechar")
+    try {
+      const t = e.target;
+      if (t && t.closest && t.closest("button,input,textarea,label,select,a")) return;
+    } catch(_) {}
+
+    dragging = true;
+    panel.classList.add("dragging");
+    startX = (e.touches ? e.touches[0].clientX : e.clientX);
+    current = 0;
+  };
+
+  const onMove = (e) => {
+    if (!dragging) return;
+    const x = (e.touches ? e.touches[0].clientX : e.clientX);
+    const delta = Math.max(0, x - startX);
+    current = delta;
+    panel.style.transform = `translateX(${delta}px)`;
+  };
+
+  const onEnd = () => {
+    if (!dragging) return;
+    dragging = false;
+    panel.classList.remove("dragging");
+
+    const threshold = Math.min(120, panel.clientWidth * 0.25);
+    if (current > threshold){
+      panel.style.transform = "";
+      closeChatDrawer();
+      return;
+    }
+    panel.style.transform = "";
+  };
+
+  panel.addEventListener("touchstart", onStart, { passive:true });
+  panel.addEventListener("touchmove", onMove, { passive:true });
+  panel.addEventListener("touchend", onEnd);
+
+  panel.addEventListener("mousedown", onStart);
+  window.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onEnd);
+}
+
+function openTrackScreen(orderId) {
+  showTab("orders");
+  setOrdersUI(true);
+
+  document.getElementById("trackOrderId").textContent =
+    (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + (orderId || "-")));
+
+  const lbl = document.getElementById("chatOrderLabel");
+  if (lbl) lbl.textContent =
+    (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + (orderId || "-")));
 }
 
 function startTrackingOrder(orderId) {
-  // se já tinha listener, desliga
   if (state.unsubTrack) {
     state.unsubTrack();
     state.unsubTrack = null;
@@ -454,32 +514,30 @@ function startTrackingOrder(orderId) {
   state.unsubTrack = Firestore.onSnapshot(
     orderRef,
     (snap) => {
-    if (!snap.exists()) return;
-    const data = snap.data();
+      if (!snap.exists()) return;
+      const data = snap.data();
 
-    // mostra número humano se existir
-    if (data.orderNumber) {
-      state.currentOrderNumber = data.orderNumber;
-      document.getElementById("trackOrderId").textContent = "#" + data.orderNumber;
-    }
+      if (data.orderNumber) {
+        state.currentOrderNumber = data.orderNumber;
+        document.getElementById("trackOrderId").textContent = "#" + data.orderNumber;
+      }
 
-    document.getElementById("trackStatus").textContent = data.status || "-";
+      document.getElementById("trackStatus").textContent = data.status || "-";
 
-    const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : null;
-    document.getElementById("trackUpdated").textContent =
-      updated ? `Atualizado: ${updated.toLocaleString("pt-BR")}` : "";
-  },
-  (err) => {
-    console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
-    if (err?.code === "permission-denied") {
-      document.getElementById("trackStatus").textContent = "Sem permissão para acompanhar";
+      const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : null;
       document.getElementById("trackUpdated").textContent =
-        "Ajuste as regras do Firestore para permitir leitura em orders_public.";
+        updated ? `Atualizado: ${updated.toLocaleString("pt-BR")}` : "";
+    },
+    (err) => {
+      console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
+      if (err?.code === "permission-denied") {
+        document.getElementById("trackStatus").textContent = "Sem permissão para acompanhar";
+        document.getElementById("trackUpdated").textContent =
+          "Ajuste as regras do Firestore para permitir leitura em orders_public.";
+      }
     }
-  }
-);
+  );
 }
-
 
 /* =========================
    Chat (tempo real) - por pedido
@@ -528,8 +586,12 @@ function startChat(orderId) {
       snap.forEach((doc) => {
         const m = doc.data() || {};
         const div = document.createElement("div");
-        div.className = "chatMsg " + ((m.from === "customer") ? "me" : "them");
-        div.textContent = m.text || "";
+        div.className = "msg " + ((m.from === "customer") ? "me" : "them");
+        const safe = String(m.text || "").replace(/[<>&]/g, s => ({"<":"&lt;",">":"&gt;","&":"&amp;"}[s]));
+        const t = (m.createdAt && m.createdAt.toDate)
+          ? m.createdAt.toDate().toLocaleTimeString("pt-BR",{hour:"2-digit",minute:"2-digit"})
+          : "";
+        div.innerHTML = `<div>${safe}</div>${t ? `<div class="msgMeta">${t}</div>` : ""}`;
         box.appendChild(div);
       });
       box.scrollTop = box.scrollHeight;
@@ -560,7 +622,6 @@ async function sendChatMessage(text) {
       createdAt: Firestore.serverTimestamp()
     });
 
-    // atualiza updatedAt no chat (ajuda a ordenar/mostrar badge no admin)
     try {
       const chatRef = Firestore.doc(db, "restaurants", state.restaurant.id, "chats", state.currentOrderId);
       await Firestore.setDoc(chatRef, { updatedAt: Firestore.serverTimestamp() }, { merge: true });
@@ -571,14 +632,53 @@ async function sendChatMessage(text) {
   }
 }
 
-
 /* =========================
    Boot
    ========================= */
 
 async function boot() {
-  
-  // Chat (acompanhar pedido)
+  // Fecha chat com ESC (desktop)
+  window.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { try { closeChatDrawer(); } catch(_) {} }
+  });
+
+  // ✅ Tabs (navbar pílula)
+  const tabMenu = document.getElementById("tabMenu");
+  const tabOrders = document.getElementById("tabOrders");
+  if (tabMenu) tabMenu.addEventListener("click", () => showTab("menu"));
+  if (tabOrders) tabOrders.addEventListener("click", () => {
+    if (!state.currentOrderId) return showTab("menu");
+    showTab("orders");
+  });
+
+  const goMenuBtn = document.getElementById("goMenuBtn");
+  if (goMenuBtn) goMenuBtn.addEventListener("click", () => showTab("menu"));
+
+  // ✅ Chat: fechar / backdrop / swipe / abrir
+  const closeChatBtn = document.getElementById("closeChatBtn");
+  const chatBackdrop = document.getElementById("chatBackdrop");
+  // iOS/Safari às vezes não dispara click em overlays como esperado; use touchend também
+  if (closeChatBtn) {
+    closeChatBtn.addEventListener("click", closeChatDrawer);
+    closeChatBtn.addEventListener("touchend", (e) => { e.preventDefault(); closeChatDrawer(); }, { passive:false });
+  }
+  if (chatBackdrop) {
+    chatBackdrop.addEventListener("click", closeChatDrawer);
+    chatBackdrop.addEventListener("touchend", (e) => { e.preventDefault(); closeChatDrawer(); }, { passive:false });
+  }
+  try { setupChatSwipe(); } catch(_) {}
+
+  const openChatBtn = document.getElementById("openChatBtn");
+  if (openChatBtn) openChatBtn.addEventListener("click", () => {
+    if (!state.currentOrderId) return;
+    const lbl = document.getElementById("chatOrderLabel");
+    if (lbl) lbl.textContent =
+      (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + state.currentOrderId));
+    try { startChat(state.currentOrderId); } catch(_){}
+    openChatDrawer();
+  });
+
+  // Chat (enviar)
   const sendBtn = document.getElementById("sendChatBtn");
   const chatText = document.getElementById("chatText");
   if (sendBtn && chatText) {
@@ -599,51 +699,52 @@ async function boot() {
     });
   }
 
-  // Esquecer último pedido (opcional)
+  // Esquecer último pedido
   const forgetBtn = document.getElementById("forgetOrderBtn");
   if (forgetBtn) {
     forgetBtn.addEventListener("click", () => {
       forgetLastOrder();
-      closeTrackScreen();
       state.currentOrderId = null;
       state.currentOrderNumber = null;
       stopChat();
       if (state.unsubTrack) { state.unsubTrack(); state.unsubTrack = null; }
+      setOrdersUI(false);
+      showTab("menu");
+      try { closeChatDrawer(); } catch(_) {}
       alert("Pedido removido deste aparelho.");
     });
   }
 
-  // Eventos carrinho
-  document.getElementById("openCartBtn").addEventListener("click", openCartDrawer);
-  document.getElementById("cartBarBtn").addEventListener("click", openCartDrawer);
-  document.getElementById("closeDrawerBtn").addEventListener("click", closeCartDrawer);
-  document.getElementById("closeDrawerBackdrop").addEventListener("click", closeCartDrawer);
+  // Carrinho
+  document.getElementById("openCartBtn")?.addEventListener("click", openCartDrawer);
+  document.getElementById("cartBarBtn")?.addEventListener("click", openCartDrawer);
+  document.getElementById("closeDrawerBtn")?.addEventListener("click", closeCartDrawer);
+  document.getElementById("closeDrawerBackdrop")?.addEventListener("click", closeCartDrawer);
 
   // Checkout abre
-  document.getElementById("checkoutBtn").addEventListener("click", () => {
+  document.getElementById("checkoutBtn")?.addEventListener("click", () => {
     if (state.cart.length === 0) return alert("Carrinho vazio.");
     closeCartDrawer();
     openCheckout();
   });
 
   // Checkout fecha
-  document.getElementById("closeCheckoutBtn").addEventListener("click", closeCheckout);
-  document.getElementById("closeCheckoutBackdrop").addEventListener("click", closeCheckout);
+  document.getElementById("closeCheckoutBtn")?.addEventListener("click", closeCheckout);
+  document.getElementById("closeCheckoutBackdrop")?.addEventListener("click", closeCheckout);
 
   // Confirmar pedido
-  document.getElementById("confirmOrderBtn").addEventListener("click", async () => {
+  document.getElementById("confirmOrderBtn")?.addEventListener("click", async () => {
     try {
       const orderId = await createOrder();
 
-      // limpa carrinho
       state.cart = [];
       renderCartUI();
 
       closeCheckout();
       clearCheckoutInputs();
 
-      // abre tracking
       state.currentOrderId = orderId;
+      setOrdersUI(true);
       openTrackScreen(orderId);
       startTrackingOrder(orderId);
 
@@ -651,11 +752,6 @@ async function boot() {
       console.error(err);
       alert("Erro ao criar pedido. Veja o console (F12).");
     }
-  });
-
-  // Voltar ao cardápio
-  document.getElementById("backToMenuBtn").addEventListener("click", () => {
-    closeTrackScreen();
   });
 
   // Carregar dados do restaurante
@@ -673,20 +769,35 @@ async function boot() {
 
   state.products = await fetchProducts(state.restaurant.id);
 
-  // Se o cliente já tem um pedido salvo (voltou pro site), abre tracking + chat automaticamente
+  // Retomar último pedido
   const last = loadLastOrder();
   if (last?.orderId) {
     state.currentOrderId = last.orderId;
     if (last.orderNumber) state.currentOrderNumber = last.orderNumber;
-
+    setOrdersUI(true);
     openTrackScreen(last.orderId);
     startTrackingOrder(last.orderId);
-    try { startChat(last.orderId); } catch (_) {}
+  } else {
+    setOrdersUI(false);
   }
 
-  // Render inicial
   renderProducts();
   renderCartUI();
+  showTab("menu");
 }
 
 boot();
+
+/* =========================
+   PWA: Service Worker
+   ========================= */
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", async () => {
+    try {
+      await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+      console.log("SW registrado ✅");
+    } catch (e) {
+      console.warn("SW falhou:", e);
+    }
+  });
+}

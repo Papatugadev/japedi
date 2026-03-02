@@ -2,9 +2,29 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
   <title>Cardápio</title>
+
+  <!-- PWA (funciona só em HTTPS) -->
+  <link rel="manifest" href="./manifest.webmanifest">
+  <meta name="theme-color" content="#16a34a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Cardápio">
+
   <link rel="stylesheet" href="./styles.css">
+
+  <style>
+    /* Chat bubbles (cliente x restaurante) */
+    .chatbox { margin-top:12px; }
+    .chatMessages { display:flex; flex-direction:column; gap:8px; }
+    .msg { max-width:82%; padding:10px 12px; border-radius:16px; font-size:14px; line-height:1.25; word-break:break-word; }
+    .msg.me { align-self:flex-end; background:#16a34a; color:#fff; border-bottom-right-radius:6px; }
+    .msg.them { align-self:flex-start; background:#f1f5f9; color:#0f172a; border:1px solid rgba(15,23,42,.08); border-bottom-left-radius:6px; }
+    .msgMeta { font-size:11px; opacity:.8; margin-top:6px; }
+    .chatInput { display:flex; gap:8px; margin-top:10px; }
+    .chatInput input { flex:1; }
+  </style>
 </head>
 
 <body>
@@ -21,8 +41,42 @@
     </div>
   </header>
 
-  <main>
+  <!-- Abas -->
+  <main id="menuView" class="view">
     <div id="products"></div>
+  </main>
+
+  <main id="ordersView" class="view hidden">
+    <div class="sectionTitle">
+      <h2 style="margin:0">Pedidos</h2>
+      <p class="muted" style="margin:6px 0 0">Acompanhe seu último pedido e fale com o restaurante.</p>
+    </div>
+
+    <div id="ordersEmpty" class="box">
+      <strong>Nenhum pedido ainda</strong>
+      <div class="muted" style="margin-top:6px">Faça um pedido no cardápio e ele aparece aqui.</div>
+      <button id="goMenuBtn" class="btn" type="button" style="margin-top:12px">Ir para o cardápio</button>
+    </div>
+
+    <div id="orderCard" class="box hidden">
+      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
+        <div>
+          <div class="muted" style="font-size:12px;font-weight:800;">PEDIDO</div>
+          <div style="font-size:22px;font-weight:900;" id="trackOrderId">-</div>
+        </div>
+        <div class="statusPill" id="trackStatusPill">
+          <span class="dot"></span>
+          <span id="trackStatus">-</span>
+        </div>
+      </div>
+
+      <div class="muted" id="trackUpdated" style="margin-top:10px">-</div>
+
+      <div style="display:flex; gap:10px; margin-top:14px;">
+        <button id="openChatBtn" class="btn" type="button" style="flex:1">Abrir chat</button>
+        <button id="forgetOrderBtn" class="ghost" type="button" style="white-space:nowrap;">Esquecer</button>
+      </div>
+    </div>
   </main>
 
   <!-- Barra fixa do carrinho (aparece quando tem item) -->
@@ -59,59 +113,82 @@
       </div>
     </div>
   </div>
-<!-- Checkout (modal simples) -->
-<div id="checkoutModal" class="modal hidden" role="dialog" aria-modal="true">
-  <div class="modal__backdrop" id="closeCheckoutBackdrop"></div>
 
-  <div class="modal__panel">
-    <div class="modal__header">
-      <strong>Finalizar pedido</strong>
-      <button id="closeCheckoutBtn" class="ghost" type="button">Fechar</button>
-    </div>
+  <!-- Checkout (modal simples) -->
+  <div id="checkoutModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal__backdrop" id="closeCheckoutBackdrop"></div>
 
-    <div class="modal__content">
-      <label class="label">Seu nome</label>
-      <input id="custName" class="input" placeholder="Ex: Jorge" />
-
-      <label class="label">WhatsApp</label>
-      <input id="custPhone" class="input" placeholder="Ex: 11999999999" />
-
-      <label class="label">Endereço / Observação</label>
-      <textarea id="custAddr" class="input" rows="3" placeholder="Rua, número, bairro..."></textarea>
-    </div>
-
-    <div class="modal__footer">
-      <button id="confirmOrderBtn" class="btn" type="button">Confirmar pedido</button>
-    </div>
-  </div>
-</div>
-
-<!-- Tela de acompanhar pedido -->
-<div id="trackScreen" class="track hidden">
-  <div class="track__panel">
-    <h2 style="margin:0 0 10px">Acompanhar pedido</h2>
-    <div class="box">
-      <div><strong>Pedido:</strong> <span id="trackOrderId">-</span></div>
-      <div style="margin-top:8px"><strong>Status:</strong> <span id="trackStatus">-</span></div>
-      <div style="margin-top:8px" class="muted" id="trackUpdated">-</div>
-    </div>
-    
-    <!-- Chat do pedido (tempo real) -->
-    <div id="chatBox" class="chatbox" style="margin-top:12px;display:none">
-      <div style="font-weight:700;margin:0 0 8px;">Chat com o restaurante</div>
-      <div id="chatMessages" class="chatMessages" style="height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:12px;padding:10px;background:#fff"></div>
-
-      <div class="chatInput" style="display:flex;gap:8px;margin-top:10px;">
-        <input id="chatText" class="input" placeholder="Escreva uma mensagem..." style="flex:1" />
-        <button id="sendChatBtn" class="btn" type="button" style="padding:10px 12px;">Enviar</button>
+    <div class="modal__panel">
+      <div class="modal__header">
+        <strong>Finalizar pedido</strong>
+        <button id="closeCheckoutBtn" class="ghost" type="button">Fechar</button>
       </div>
 
-      <button id="forgetOrderBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">Esquecer pedido neste celular</button>
-    </div>
+      <div class="modal__content">
+        <label class="label">Seu nome</label>
+        <input id="custName" class="input" placeholder="Ex: Jorge" />
 
-<button id="backToMenuBtn" class="ghost" type="button">Voltar ao cardápio</button>
+        <label class="label">WhatsApp</label>
+        <input id="custPhone" class="input" placeholder="Ex: 11999999999" />
+
+        <label class="label">Endereço / Observação</label>
+        <textarea id="custAddr" class="input" rows="3" placeholder="Rua, número, bairro..."></textarea>
+      </div>
+
+      <div class="modal__footer">
+        <button id="confirmOrderBtn" class="btn" type="button">Confirmar pedido</button>
+      </div>
+    </div>
   </div>
-</div>
-<script type="module" src="./app.js"></script>
+
+  <!-- Chat lateral (swipe) -->
+  <div id="chatDrawer" class="sideDrawer hidden" role="dialog" aria-modal="true" aria-label="Chat do pedido">
+    <div id="chatBackdrop" class="sideDrawer__backdrop"></div>
+
+    <div id="chatPanel" class="sideDrawer__panel">
+      <div class="sideDrawer__header">
+        <div style="display:flex; flex-direction:column;">
+          <strong>Chat</strong>
+          <span class="muted" style="font-size:12px">Pedido <span id="chatOrderLabel">-</span></span>
+        </div>
+        <button id="closeChatBtn" class="ghost" type="button">Fechar</button>
+      </div>
+
+      <div class="sideDrawer__content">
+        <div id="chatBox" class="chatbox" style="display:block;">
+          <div id="chatMessages" class="chatMessages" style="height:calc(100vh - 220px);overflow:auto;border:1px solid rgba(15,23,42,.10);border-radius:16px;padding:10px;background:#fff;"></div>
+
+          <div class="chatInput" style="display:flex;gap:8px;margin-top:10px;">
+            <input id="chatText" class="input" placeholder="Escreva uma mensagem…" style="flex:1" />
+            <button id="sendChatBtn" class="btn" type="button" style="padding:10px 14px;">Enviar</button>
+          </div>
+
+          <div class="muted" style="font-size:12px;margin-top:10px;">
+            Dica: deslize para a direita para fechar.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Bottom nav (pílula) -->
+  <nav class="bottomnav" role="navigation" aria-label="Navegação inferior">
+    <div class="bottomnav__pill" data-active="menu">
+      <button id="tabMenu" class="tabbtn is-active" type="button" aria-label="Cardápio">
+        <span class="tabicon">🍔</span>
+        <span class="tabtext">Cardápio</span>
+      </button>
+
+      <button id="tabOrders" class="tabbtn" type="button" aria-label="Pedidos">
+        <span class="tabicon">🧾</span>
+        <span class="tabtext">Pedidos</span>
+        <span id="ordersDot" class="tabdot hidden"></span>
+      </button>
+
+      <span class="tabIndicator" aria-hidden="true"></span>
+    </div>
+  </nav>
+
+  <script type="module" src="./app.js"></script>
 </body>
 </html>
