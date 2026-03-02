@@ -288,11 +288,13 @@ function renderCartUI() {
    ========================= */
 
 function openCartDrawer() {
-  document.getElementById("cartDrawer").classList.remove("hidden");
+  // compat: antes era drawer, agora é tela
+  showTab("cart");
 }
 
 function closeCartDrawer() {
-  document.getElementById("cartDrawer").classList.add("hidden");
+  // compat
+  showTab("menu");
 }
 
 /* =========================
@@ -378,7 +380,10 @@ async function createOrder() {
         updatedAt: orderData.updatedAt,
         orderNumber: orderData.orderNumber,
         totals: orderData.totals,
-        customerName: orderData.customer?.name || ""
+        customerName: orderData.customer?.name || "",
+        // ✅ Para o cliente conseguir ver os itens na aba Pedidos
+        // (sem precisar de permissão de leitura no /orders)
+        items: orderData.items
       },
       { merge: true }
     );
@@ -396,20 +401,35 @@ async function createOrder() {
 function showTab(name){
   const menuView = document.getElementById("menuView");
   const ordersView = document.getElementById("ordersView");
+  const cartView = document.getElementById("cartView");
   const pill = document.querySelector(".bottomnav__pill");
 
   const tabMenu = document.getElementById("tabMenu");
   const tabOrders = document.getElementById("tabOrders");
+  const tabCart = document.getElementById("openCartBtn");
 
-  const isMenu = name === "menu";
+  // fallback seguro
+  const safeName = (name === "orders" && !state.currentOrderId) ? "menu" : name;
+
+  const isMenu = safeName === "menu";
+  const isOrders = safeName === "orders";
+  const isCart = safeName === "cart";
+
   menuView?.classList?.toggle("hidden", !isMenu);
-  ordersView?.classList?.toggle("hidden", isMenu);
+  ordersView?.classList?.toggle("hidden", !isOrders);
+  cartView?.classList?.toggle("hidden", !isCart);
 
   tabMenu?.classList?.toggle("is-active", isMenu);
-  tabOrders?.classList?.toggle("is-active", !isMenu);
+  tabOrders?.classList?.toggle("is-active", isOrders);
+  tabCart?.classList?.toggle("is-active", isCart);
 
   if (pill){
-    pill.setAttribute("data-active", isMenu ? "menu" : "orders");
+    pill.setAttribute("data-active", isCart ? "cart" : (isOrders ? "orders" : "menu"));
+  }
+
+  // quando entrar no carrinho, garante render atualizado
+  if (isCart) {
+    try { renderCart(); } catch(_) {}
   }
 }
 
@@ -501,6 +521,87 @@ function openTrackScreen(orderId) {
   const lbl = document.getElementById("chatOrderLabel");
   if (lbl) lbl.textContent =
     (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + (orderId || "-")));
+
+  const codeEl = document.getElementById("orderCode");
+  if (codeEl) codeEl.textContent = orderId || "-";
+}
+
+function normalizeOrderStatus(raw){
+  const s = String(raw || "").toLowerCase();
+  if (!s) return "em_preparo";
+  if (s === "pronto") return "saiu_pra_entrega";
+  if (s.includes("saiu")) return "saiu_pra_entrega";
+  if (s.includes("entreg")) return "entregue";
+  if (s.includes("preparo") || s.includes("receb")) return "em_preparo";
+  if (s.includes("cancel")) return "cancelado";
+  return s;
+}
+
+function statusLabel(status){
+  const s = normalizeOrderStatus(status);
+  if (s === "em_preparo") return "Em preparo";
+  if (s === "saiu_pra_entrega") return "Saiu pra entrega";
+  if (s === "entregue") return "Entregue";
+  if (s === "cancelado") return "Cancelado";
+  return String(status || "-");
+}
+
+function renderStatusTimeline(status){
+  const s = normalizeOrderStatus(status);
+  const steps = ["em_preparo", "saiu_pra_entrega", "entregue"];
+  let idx = steps.indexOf(s);
+  if (idx < 0) idx = 0;
+
+  const root = document.getElementById("statusTimeline");
+  if (!root) return;
+
+  root.querySelectorAll(".statusStep").forEach((el) => {
+    const step = el.getAttribute("data-step");
+    const sidx = steps.indexOf(step);
+    el.classList.remove("is-done","is-active");
+    if (sidx < idx) el.classList.add("is-done");
+    if (sidx === idx) el.classList.add("is-active");
+  });
+
+  const fill1 = document.getElementById("statusLineFill");
+  const fill2 = document.getElementById("statusLineFill2");
+  if (fill1) fill1.style.width = (idx >= 1 ? "100%" : "0%");
+  if (fill2) fill2.style.width = (idx >= 2 ? "100%" : "0%");
+}
+
+function renderOrderItems(items){
+  const box = document.getElementById("orderItemsList");
+  if (!box) return;
+  box.innerHTML = "";
+
+  const arr = Array.isArray(items) ? items : [];
+  if (arr.length === 0){
+    box.innerHTML = `<div class="muted">Itens não disponíveis neste pedido.</div>`;
+    return;
+  }
+
+  for (const it of arr){
+    const name = it?.name || "Item";
+    const qty = Number(it?.qty || 0) || 0;
+    const price = Number(it?.price || 0) || 0;
+    const row = document.createElement("div");
+    row.className = "orderItemRow";
+    row.innerHTML = `
+      <div>
+        <strong>${name}</strong>
+        <div class="orderItemMeta">${moneyBRL(price)} cada</div>
+      </div>
+      <div class="orderItemQty">x${qty}</div>
+    `;
+    box.appendChild(row);
+  }
+}
+
+function renderOrderTotal(totals){
+  const el = document.getElementById("orderTotal");
+  if (!el) return;
+  const sub = Number(totals?.subtotal ?? totals?.total ?? 0);
+  el.textContent = sub ? moneyBRL(sub) : "-";
 }
 
 function startTrackingOrder(orderId) {
@@ -522,11 +623,16 @@ function startTrackingOrder(orderId) {
         document.getElementById("trackOrderId").textContent = "#" + data.orderNumber;
       }
 
-      document.getElementById("trackStatus").textContent = data.status || "-";
+      const friendly = statusLabel(data.status);
+      document.getElementById("trackStatus").textContent = friendly;
+      renderStatusTimeline(data.status);
 
       const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : null;
       document.getElementById("trackUpdated").textContent =
         updated ? `Atualizado: ${updated.toLocaleString("pt-BR")}` : "";
+
+      renderOrderTotal(data.totals);
+      renderOrderItems(data.items);
     },
     (err) => {
       console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
@@ -715,16 +821,14 @@ async function boot() {
     });
   }
 
-  // Carrinho
-  document.getElementById("openCartBtn")?.addEventListener("click", openCartDrawer);
-  document.getElementById("cartBarBtn")?.addEventListener("click", openCartDrawer);
-  document.getElementById("closeDrawerBtn")?.addEventListener("click", closeCartDrawer);
-  document.getElementById("closeDrawerBackdrop")?.addEventListener("click", closeCartDrawer);
+  // Carrinho (agora é TELA)
+  document.getElementById("openCartBtn")?.addEventListener("click", () => showTab("cart"));
+  document.getElementById("cartBarBtn")?.addEventListener("click", () => showTab("cart"));
+  document.getElementById("closeCartViewBtn")?.addEventListener("click", () => showTab("menu"));
 
   // Checkout abre
   document.getElementById("checkoutBtn")?.addEventListener("click", () => {
     if (state.cart.length === 0) return alert("Carrinho vazio.");
-    closeCartDrawer();
     openCheckout();
   });
 

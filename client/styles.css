@@ -276,6 +276,169 @@ main{
   max-width:720px;
   margin:0 auto;
 }
+
+/* =========================
+   Pedidos (card bonito + timeline)
+   ========================= */
+.orderCardPro{
+  position:relative;
+  overflow:hidden;
+}
+
+/* “animação lateral” (brilho correndo na esquerda) */
+.orderCardPro::before{
+  content:"";
+  position:absolute;
+  left:0; top:0; bottom:0;
+  width:6px;
+  background:linear-gradient(180deg, rgba(22,163,74,.15), rgba(22,163,74,.85), rgba(22,163,74,.15));
+}
+.orderCardPro::after{
+  content:"";
+  position:absolute;
+  left:0; top:-40%;
+  width:6px;
+  height:60%;
+  background:linear-gradient(180deg, transparent, rgba(255,255,255,.65), transparent);
+  animation: orderShine 1.8s linear infinite;
+  opacity:.8;
+}
+@keyframes orderShine{
+  0%{ transform:translateY(0); }
+  100%{ transform:translateY(240%); }
+}
+
+.orderHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding-left:4px; /* respiro do "before" */
+}
+
+.statusPill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:999px;
+  background:rgba(22,163,74,.10);
+  border:1px solid rgba(22,163,74,.22);
+  font-weight:900;
+  font-size:12px;
+  white-space:nowrap;
+}
+.statusPill .dot{
+  width:10px; height:10px;
+  border-radius:999px;
+  background:var(--primary);
+  box-shadow:0 0 0 4px rgba(22,163,74,.16);
+}
+
+.statusTimeline{
+  margin-top:14px;
+  display:flex;
+  align-items:center;
+  gap:10px;
+  padding-left:4px;
+}
+
+.statusStep{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:6px;
+  min-width:78px;
+}
+
+.stepDot{
+  width:14px; height:14px;
+  border-radius:999px;
+  border:2px solid rgba(15,23,42,.18);
+  background:#fff;
+  position:relative;
+}
+
+.stepLabel{
+  font-size:11px;
+  font-weight:900;
+  color:rgba(15,23,42,.55);
+  text-align:center;
+}
+
+.statusLine{
+  flex:1;
+  height:6px;
+  border-radius:999px;
+  background:rgba(15,23,42,.08);
+  overflow:hidden;
+  position:relative;
+}
+.statusLineFill{
+  position:absolute;
+  inset:0;
+  width:0%;
+  background:rgba(22,163,74,.75);
+  transition:width .35s cubic-bezier(.2,.9,.2,1);
+}
+
+/* estados */
+.statusStep.is-done .stepDot{
+  background:rgba(22,163,74,.15);
+  border-color:rgba(22,163,74,.55);
+}
+.statusStep.is-done .stepLabel{ color:rgba(15,23,42,.72); }
+
+.statusStep.is-active .stepDot{
+  background:var(--primary);
+  border-color:rgba(22,163,74,.55);
+}
+.statusStep.is-active .stepDot::after{
+  content:"";
+  position:absolute;
+  inset:-8px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(22,163,74,.22), transparent 60%);
+  animation:pulseDot 1.2s ease-in-out infinite;
+}
+@keyframes pulseDot{
+  0%,100%{ transform:scale(.85); opacity:.7; }
+  50%{ transform:scale(1); opacity:1; }
+}
+.statusStep.is-active .stepLabel{ color:rgba(15,23,42,.92); }
+
+.orderMeta{
+  margin-top:12px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  padding-left:4px;
+}
+.orderTotal{ font-weight:900; }
+
+.orderItems{ margin-top:12px; padding-left:4px; }
+.orderItemsList{ margin-top:8px; display:flex; flex-direction:column; gap:8px; }
+.orderItemRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  border:1px solid rgba(15,23,42,.08);
+  background:#fff;
+  border-radius:14px;
+  padding:10px 12px;
+}
+.orderItemRow strong{ font-weight:900; }
+.orderItemMeta{ color:var(--muted); font-size:12px; margin-top:4px; }
+.orderItemQty{
+  font-weight:900;
+  border:1px solid rgba(15,23,42,.10);
+  background:rgba(15,23,42,.03);
+  padding:6px 10px;
+  border-radius:999px;
+  white-space:nowrap;
+}
 /* =========================
    Bottom nav (pÃ­lula)
    ========================= */
@@ -464,4 +627,33 @@ textarea:-webkit-autofill{
   margin-top:0 !important;           /* <- ESSENCIAL */
   padding:10px 14px !important;
   white-space:nowrap !important;
+}
+
+/* =========================
+   HOTFIX: Bottom nav com 3 abas + cartbar acima da nav
+   (mantém seu visual original)
+   ========================= */
+.bottomnav__pill{
+  grid-template-columns: 1fr 1fr 1fr !important;
+}
+
+.tabIndicator{
+  width: calc(33.333% - 6px) !important;
+}
+
+.bottomnav__pill[data-active="orders"] .tabIndicator{
+  transform: translateX(100%) !important;
+}
+.bottomnav__pill[data-active="cart"] .tabIndicator{
+  transform: translateX(200%) !important;
+}
+
+/* Carrinho fixo (barra) fica acima da nav */
+.cartbar{
+  bottom: calc(86px + env(safe-area-inset-bottom)) !important;
+}
+
+/* garante espaço pro conteúdo não ficar atrás da nav */
+main, .view{
+  padding-bottom: 180px !important;
 }

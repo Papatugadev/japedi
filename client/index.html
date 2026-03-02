@@ -34,11 +34,7 @@
         <h1 id="title">Carregando...</h1>
         <p id="desc"></p>
       </div>
-
-      <button id="openCartBtn" class="iconbtn" type="button" aria-label="Abrir carrinho">
-        🛒 <span id="cartBadge" class="badge hidden">0</span>
-      </button>
-    </div>
+</div>
   </header>
 
   <!-- Abas -->
@@ -58,7 +54,7 @@
       <button id="goMenuBtn" class="btn" type="button" style="margin-top:12px">Ir para o cardápio</button>
     </div>
 
-    <div id="orderCard" class="box hidden">
+    <div id="orderCard" class="box orderCardPro hidden">
       <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
         <div>
           <div class="muted" style="font-size:12px;font-weight:800;">PEDIDO</div>
@@ -71,6 +67,43 @@
       </div>
 
       <div class="muted" id="trackUpdated" style="margin-top:10px">-</div>
+
+      <div class="muted" style="margin-top:6px">
+        Código: <strong id="orderCode">-</strong>
+      </div>
+
+      <!-- Timeline animada -->
+      <div id="statusTimeline" class="statusTimeline" aria-label="Status do pedido">
+        <div class="statusStep" data-step="em_preparo">
+          <div class="stepDot"></div>
+          <div class="stepLabel">Em preparo</div>
+        </div>
+
+        <div class="statusLine" aria-hidden="true"><div id="statusLineFill" class="statusLineFill"></div></div>
+
+        <div class="statusStep" data-step="saiu_pra_entrega">
+          <div class="stepDot"></div>
+          <div class="stepLabel">Saiu pra entrega</div>
+        </div>
+
+        <div class="statusLine" aria-hidden="true"><div id="statusLineFill2" class="statusLineFill"></div></div>
+
+        <div class="statusStep" data-step="entregue">
+          <div class="stepDot"></div>
+          <div class="stepLabel">Entregue</div>
+        </div>
+      </div>
+
+      <div class="orderMeta">
+        <div class="muted" style="font-weight:800;">Total</div>
+        <div id="orderTotal" class="orderTotal">-</div>
+      </div>
+
+      <div class="orderItems">
+        <div class="muted" style="font-weight:800;">Itens</div>
+        <div id="orderItemsList" class="orderItemsList"></div>
+      </div>
+
 
       <div style="display:flex; gap:10px; margin-top:14px;">
         <button id="openChatBtn" class="btn" type="button" style="flex:1">Abrir chat</button>
@@ -91,30 +124,31 @@
     <button id="cartBarBtn" class="btn" type="button">Ver carrinho</button>
   </div>
 
-  <!-- Drawer do carrinho -->
-  <div id="cartDrawer" class="drawer hidden" role="dialog" aria-modal="true">
-    <div class="drawer__backdrop" id="closeDrawerBackdrop"></div>
-
-    <div class="drawer__panel">
-      <div class="drawer__header">
-        <strong>Seu carrinho</strong>
-        <button id="closeDrawerBtn" class="ghost" type="button">Fechar</button>
+    <!-- Tela do carrinho (aba) -->
+  <main id="cartView" class="view hidden">
+    <div class="sectionTitle" style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+      <div>
+        <h2 style="margin:0">Carrinho</h2>
+        <p class="muted" style="margin:6px 0 0">Revise seus itens e finalize o pedido.</p>
       </div>
-
-      <div id="cartItems" class="drawer__content"></div>
-
-      <div class="drawer__footer">
-        <div class="drawer__totals">
-          <span class="muted">Subtotal</span>
-          <strong id="cartSubtotal">R$ 0,00</strong>
-        </div>
-
-        <button id="checkoutBtn" class="btn" type="button">Finalizar pedido</button>
-      </div>
+      <button id="closeCartViewBtn" class="ghost" type="button" style="white-space:nowrap;">Voltar</button>
     </div>
-  </div>
 
-  <!-- Checkout (modal simples) -->
+    <div class="box">
+      <div id="cartItems"></div>
+
+      <div style="height:12px"></div>
+
+      <div class="drawer__totals" style="margin-top:8px">
+        <span class="muted">Subtotal</span>
+        <strong id="cartSubtotal">R$ 0,00</strong>
+      </div>
+
+      <button id="checkoutBtn" class="btn" type="button" style="margin-top:12px">Finalizar pedido</button>
+    </div>
+  </main>
+
+<!-- Checkout (modal simples) -->
   <div id="checkoutModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal__backdrop" id="closeCheckoutBackdrop"></div>
 
@@ -183,6 +217,13 @@
         <span class="tabicon">🧾</span>
         <span class="tabtext">Pedidos</span>
         <span id="ordersDot" class="tabdot hidden"></span>
+      </button>
+
+
+      <button id="openCartBtn" class="tabbtn tabbtn--cart" type="button" aria-label="Carrinho">
+        <span class="tabicon">🛒</span>
+        <span class="tabtext">Carrinho</span>
+        <span id="cartBadge" class="badge hidden">0</span>
       </button>
 
       <span class="tabIndicator" aria-hidden="true"></span>
