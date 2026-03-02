@@ -109,22 +109,6 @@ const restNameEl = document.getElementById("restName");
 
 let unsubOrders = null;
 
-
-
-/** UI host helpers (kanban/legacy) */
-function getOrdersHosts() {
-  return {
-    prep: document.getElementById("orders-prep"),
-    out: document.getElementById("orders-out"),
-    done: document.getElementById("orders-done"),
-    legacy: document.getElementById("orders")
-  };
-}
-function getOrdersErrorHost() {
-  const h = getOrdersHosts();
-  return h.prep || h.legacy || document.querySelector("#page-orders") || document.body;
-}
-
 /** Helpers */
 function brl(v) {
   return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -134,6 +118,51 @@ function minsSince(ts) {
   if (!ts?.toDate) return null;
   const ms = Date.now() - ts.toDate().getTime();
   return Math.max(0, Math.round(ms / 60000));
+}
+
+
+/** ===== Tempo ao vivo (badge) ===== */
+let __JPED_TIME_TICK = null;
+
+function _tsToMs(ts){
+  try { return ts?.toDate ? ts.toDate().getTime() : (typeof ts === "number" ? ts : null); } catch(_) { return null; }
+}
+
+function _formatAge(ms){
+  const sec = Math.max(0, Math.floor(ms/1000));
+  const m = Math.floor(sec/60);
+  const s = sec % 60;
+  if (m < 1) return `${s}s`;
+  if (m < 60) return `${m}min`;
+  const h = Math.floor(m/60);
+  const mm = m % 60;
+  return `${h}h ${mm}min`;
+}
+
+function _startTimeBadges(){
+  if (__JPED_TIME_TICK) return;
+  __JPED_TIME_TICK = setInterval(() => {
+    const now = Date.now();
+    document.querySelectorAll(".timePill[data-created-ms]").forEach((el) => {
+      const createdMs = Number(el.getAttribute("data-created-ms") || 0);
+      if (!createdMs) return;
+      const ageMs = now - createdMs;
+      const late = ageMs >= 20 * 60 * 1000;
+      const label = el.querySelector("[data-age]");
+      if (label) label.textContent = _formatAge(ageMs);
+      el.classList.toggle("late", late);
+
+      // animação a cada minuto
+      const lastMin = Number(el.getAttribute("data-last-min") || -1);
+      const curMin = Math.floor(ageMs / 60000);
+      if (curMin !== lastMin) {
+        el.setAttribute("data-last-min", String(curMin));
+        el.classList.remove("pulse");
+        void el.offsetWidth;
+        el.classList.add("pulse");
+      }
+    });
+  }, 1000);
 }
 
 function statusLabel(s) {
@@ -289,9 +318,9 @@ async function checkSubscriptionGate() {
 function guardIfSubscriptionBlocked() {
   if (SUBSCRIPTION_OK) return false;
 
-  const host = getOrdersErrorHost();
-  if (host) {
-    host.innerHTML = `
+  // trava ações e lista
+  if (ordersWrap) {
+    ordersWrap.innerHTML = `
       <div style="padding:12px;border:1px solid #eee;border-radius:16px;background:#fff">
         <strong style="color:#991b1b">Painel bloqueado</strong>
         <div style="margin-top:6px;color:#555">Ative um plano para voltar a receber e gerenciar pedidos.</div>
@@ -365,6 +394,32 @@ if (!ADMIN_OK) {
     console.warn("ATENÇÃO: status não foi gravado em orders_public; o cliente não vai ver a mudança.");
   }
 }
+
+
+/** ===== Ações dos botões (delegação) ===== */
+(function _wireOrderButtons(){
+  if (window.__JPED_WIRE_BTNS) return;
+  window.__JPED_WIRE_BTNS = true;
+
+  document.addEventListener("click", async (e) => {
+    const btn = e.target.closest("[data-act][data-id]");
+    if (!btn) return;
+
+    // não deixar o clique abrir o modal
+    e.preventDefault();
+    e.stopPropagation();
+
+    const orderId = btn.getAttribute("data-id");
+    const act = btn.getAttribute("data-act");
+
+    try {
+      await setOrderStatus(orderId, act);
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao mudar status. Veja o console (F12).");
+    }
+  });
+})();
 
 /** Renderiza pedidos */
 function renderOrders(list) {
@@ -457,38 +512,263 @@ function renderOrders(list) {
       `;
     }
 
-    div.innerHTML = `
-      <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
-        <div>
-          <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap">
-            <strong>Pedido ${o.id}</strong>
-            <span class="badge"><span class="badgeDot" style="background:${statusColor(o.status)}"></span>${statusLabel(o.status)}</span>
-          </div>
-          <div style="margin-top:4px;color:#555"><strong>Cliente:</strong> ${o.customer?.name || o.customerName || "-"}</div>
-          <div style="margin-top:4px;color:#555"><strong>Whats:</strong> ${o.customer?.phone || "-"}</div>
-          <div style="margin-top:4px;color:#555"><strong>Endereço:</strong> ${o.customer?.address || "-"}</div>
-          <div style="margin-top:6px;color:#555">${mins !== null ? `há ${mins} min` : ""}</div>
-        </div>
+    
+const createdMs = _tsToMs(o.createdAt) || Date.now();
+const ageMs = Date.now() - createdMs;
+const late = ageMs >= 20 * 60 * 1000;
 
-        <div style="text-align:right">
-          <div><strong>${brl(o.totals?.subtotal)}</strong></div>
-          <div style="color:#666">${o.totals?.qty || 0} itens</div>
-        </div>
-      </div>
+div.dataset.id = o.id;
 
-      <div style="margin-top:10px;padding-top:10px;border-top:1px solid #eee;color:#333">
-        ${itemsHtml || "<span style='color:#666'>Sem itens</span>"}
-      </div>
+div.innerHTML = `
+  <div class="cardTop">
+    <div class="timePill ${late ? "late" : ""} pulse" data-created-ms="${createdMs}" data-last-min="-1">
+      <span class="timePillDot"></span>
+      <span data-age>${_formatAge(ageMs)}</span>
+    </div>
+  </div>
 
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px">
-        ${actions}
-      </div>
-    `;
+  <div class="cardBody">
+    <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
+    <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
+  </div>
 
-    const host = hostFor(col);
+  <div class="cardActions">
+    ${actions}
+  </div>
+`;const host = hostFor(col);
     if (host) host.appendChild(div);
   }
 }
+
+
+/** ===== Modal de detalhes do pedido ===== */
+let __JPED_OPEN_ORDER_ID = null;
+
+function _ensureModal(){
+  let modal = document.getElementById("orderModal");
+  if (modal) return modal;
+
+  modal = document.createElement("div");
+  modal.id = "orderModal";
+  modal.className = "orderModal hidden";
+  modal.innerHTML = `
+    <div class="orderModalContent" role="dialog" aria-modal="true">
+      <button type="button" class="modalClose" id="orderModalClose" aria-label="Fechar">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+      </button>
+
+      <div class="modalHeader">
+        <div class="modalOrderNum" id="modalOrderNum">#----</div>
+        <div class="modalCustomer" id="modalCustomer">Cliente</div>
+        <div class="modalMeta" id="modalMeta"></div>
+      </div>
+
+      <div class="modalSection">
+        <div class="modalTitle">Itens</div>
+        <div class="modalItems" id="modalItems"></div>
+      </div>
+
+      <div class="modalSection">
+        <div class="modalTitle">Entrega</div>
+        <div class="modalInfo" id="modalDelivery"></div>
+      </div>
+
+      <div class="modalSection">
+        <div class="modalTitle">Chat</div>
+        <div class="modalChat">
+          <div class="modalChatMessages" id="modalChatMessages"></div>
+          <div class="modalChatInput">
+            <input id="modalChatText" class="input" placeholder="Escreva para o cliente..." />
+            <button type="button" class="btn small" id="modalChatSend">Enviar</button>
+          </div>
+          <div class="modalChatHint">O cliente vê em tempo real na tela de acompanhar pedido.</div>
+        </div>
+      </div>
+
+      <div class="modalFooter">
+        <button type="button" class="btn small" id="modalDispatch">Despachar</button>
+        <button type="button" class="btn small" id="modalDelivered">Entregue</button>
+        <button type="button" class="ghost small danger" id="modalCancel">Cancelar</button>
+      </div>
+    </div>
+  `;
+  document.body.appendChild(modal);
+
+  const close = () => closeOrderModal();
+  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  modal.querySelector("#orderModalClose").addEventListener("click", close);
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
+
+  return modal;
+}
+
+function closeOrderModal(){
+  const modal = document.getElementById("orderModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+  __JPED_OPEN_ORDER_ID = null;
+  // para o realtime do chat quando fecha
+  try { stopAdminChat(); } catch (_) {}
+}
+
+/** ===== Chat do pedido (admin) ===== */
+let __JPED_CHAT_UNSUB = null;
+
+function stopAdminChat(){
+  if (__JPED_CHAT_UNSUB) {
+    try { __JPED_CHAT_UNSUB(); } catch(_) {}
+    __JPED_CHAT_UNSUB = null;
+  }
+}
+
+function startAdminChat(orderId){
+  stopAdminChat();
+
+  const box = document.getElementById("modalChatMessages");
+  if (!box) return;
+
+  // realtime
+  const msgsRef = Firestore.collection(db, "restaurants", RESTAURANT_ID, "chats", orderId, "messages");
+  const q = Firestore.query(msgsRef, Firestore.orderBy("createdAt","asc"));
+
+  __JPED_CHAT_UNSUB = Firestore.onSnapshot(q, (snap) => {
+    box.innerHTML = "";
+    snap.forEach(d => {
+      const m = d.data() || {};
+      const div = document.createElement("div");
+      div.className = "chatMsg " + (m.from === "restaurant" ? "me" : "them");
+      div.textContent = m.text || "";
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  }, (err) => {
+    console.warn("Erro chat admin (snapshot):", err?.code || err, err?.message || "");
+  });
+}
+
+async function sendAdminChat(orderId, text){
+  if (!text) return;
+  const ref = Firestore.collection(db, "restaurants", RESTAURANT_ID, "chats", orderId, "messages");
+  await Firestore.addDoc(ref, {
+    from: "restaurant",
+    text,
+    createdAt: Firestore.serverTimestamp(),
+    uid: auth.currentUser?.uid || null
+  });
+  // atualiza chat doc (opcional)
+  try{
+    const chatRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "chats", orderId);
+    await Firestore.setDoc(chatRef, { updatedAt: Firestore.serverTimestamp() }, { merge: true });
+  }catch(_){}
+}
+
+
+async function openOrderModal(orderId){
+  const modal = _ensureModal();
+  __JPED_OPEN_ORDER_ID = orderId;
+
+  // tenta pegar privado (completo). Se não puder, usa público.
+  let data = null;
+  try{
+    const priv = Firestore.doc(db,"restaurants",RESTAURANT_ID,"orders",orderId);
+    const ps = await Firestore.getDoc(priv);
+    if (ps.exists()) data = ps.data();
+  }catch(_){}
+
+  if(!data){
+    try{
+      const pub = Firestore.doc(db,"restaurants",RESTAURANT_ID,"orders_public",orderId);
+      const qs = await Firestore.getDoc(pub);
+      if (qs.exists()) data = qs.data();
+    }catch(_){}
+  }
+  if(!data) return;
+
+  const orderNum = data.orderNumber || "----";
+  const customerName = data.customer?.name || data.customerName || "Cliente";
+  const phone = data.customer?.phone || "-";
+  const address = data.customer?.address || "-";
+  const status = data.status || "recebido";
+  const subtotal = data.totals?.subtotal ?? 0;
+
+  modal.querySelector("#modalOrderNum").textContent = `#${orderNum}`;
+  modal.querySelector("#modalCustomer").textContent = customerName;
+  modal.querySelector("#modalMeta").textContent = `${statusLabel(status)} • ${brl(subtotal)}`;
+
+  const items = Array.isArray(data.items) ? data.items : [];
+  modal.querySelector("#modalItems").innerHTML = items.length
+    ? items.map(i => `
+        <div class="modalItem">
+          <div class="miLeft">
+            <div class="miName">${i.name || "-"}</div>
+          </div>
+          <div class="miRight">${i.qty || 0}x</div>
+        </div>
+      `).join("")
+    : `<div class="modalEmpty">Sem itens</div>`;
+
+  modal.querySelector("#modalDelivery").innerHTML = `
+    <div><strong>Whats:</strong> ${phone}</div>
+    <div style="margin-top:6px"><strong>Endereço:</strong> ${address}</div>
+  `;
+
+  // ações no modal
+  modal.querySelector("#modalDispatch").onclick = async () => { await setOrderStatus(orderId,"saiu_pra_entrega"); closeOrderModal(); };
+  modal.querySelector("#modalDelivered").onclick = async () => { await setOrderStatus(orderId,"entregue"); closeOrderModal(); };
+  modal.querySelector("#modalCancel").onclick = async () => { await setOrderStatus(orderId,"cancelado"); closeOrderModal(); };
+
+  // ===== Chat (admin) =====
+  try {
+    startAdminChat(orderId);
+
+    const sendBtn = modal.querySelector("#modalChatSend");
+    const input = modal.querySelector("#modalChatText");
+    if (sendBtn && input) {
+      sendBtn.onclick = async () => {
+        const msg = (input.value || "").trim();
+        if (!msg) return;
+        sendBtn.disabled = true;
+        try {
+          await sendAdminChat(orderId, msg);
+          input.value = "";
+        } catch (e) {
+          console.warn("Falha ao enviar chat (admin):", e?.code || e, e?.message || "");
+          alert("Não deu pra enviar a mensagem. Veja o console (F12).");
+        } finally {
+          sendBtn.disabled = false;
+        }
+      };
+
+      // Enter envia
+      input.onkeydown = (ev) => {
+        if (ev.key === "Enter") {
+          ev.preventDefault();
+          sendBtn.click();
+        }
+      };
+    }
+  } catch (e) {
+    console.warn("Chat admin não iniciou:", e?.code || e, e?.message || "");
+  }
+
+  modal.classList.remove("hidden");
+}
+
+/** Clique no card abre modal (botões não abrem) */
+(function _wireCardClick(){
+  if (window.__JPED_WIRE_CARD) return;
+  window.__JPED_WIRE_CARD = true;
+
+  document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-act][data-id]")) return; // botão
+    const card = e.target.closest(".order");
+    if (!card) return;
+    const id = card.dataset.id;
+    if (!id) return;
+    openOrderModal(id);
+  });
+})();
+
 /** Listener realtime */
 function startOrdersListener() {
   if (!RESTAURANT_ID) {
@@ -503,23 +783,21 @@ function startOrdersListener() {
     (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderOrders(list);
-    },
+    
+      _startTimeBadges();},
     (err) => {
       console.error("Erro no listener de pedidos (snapshot):", err?.code || err, err?.message || "");
       if (err?.code === "permission-denied") {
-  const host = getOrdersErrorHost();
-  if (host) {
-    host.innerHTML = `
-      <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
-        <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
-        <div style="margin-top:6px;color:#555">
-          Ajuste as regras do Firestore para permitir leitura em
-          <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
-        </div>
-      </div>
-    `;
-  }
-}
+        ordersWrap.innerHTML = `
+          <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
+            <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
+            <div style="margin-top:6px;color:#555">
+              Ajuste as regras do Firestore para permitir leitura em
+              <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
+            </div>
+          </div>
+        `;
+      }
     }
   );
 }
@@ -547,25 +825,6 @@ Auth.onAuthStateChanged(auth, async (user) => {
   if (unsubOrders) unsubOrders();
   startOrdersListener();});
 
-/* ===== Clique global: ações de pedido (evita perder handler com re-render do onSnapshot) ===== */
-document.addEventListener("click", async (e) => {
-  const btn = e.target.closest("[data-act][data-id]");
-  if (!btn) return;
-
-  // não interfere em outros cliques do layout
-  e.preventDefault();
-
-  const orderId = btn.getAttribute("data-id");
-  const act = btn.getAttribute("data-act");
-
-  try {
-    await setOrderStatus(orderId, act);
-  } catch (err) {
-    console.error(err);
-    alert("Erro ao mudar status. Veja o console (F12).");
-  }
-});
-
 /* ===== Menu lateral (telas) ===== */
 (function(){
   const buttons = Array.from(document.querySelectorAll(".menuItem"));
@@ -590,3 +849,8 @@ document.addEventListener("click", async (e) => {
   const first = buttons.find(b => b.dataset.page === "orders") || buttons[0];
   if (first) show(first.dataset.page);
 })();
+
+// segurança: inicia o ticker mesmo se o render demorar
+document.addEventListener("DOMContentLoaded", () => {
+  try { _startTimeBadges(); } catch (_) {}
+});

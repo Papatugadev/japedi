@@ -95,7 +95,21 @@
       <div style="margin-top:8px"><strong>Status:</strong> <span id="trackStatus">-</span></div>
       <div style="margin-top:8px" class="muted" id="trackUpdated">-</div>
     </div>
-    <button id="backToMenuBtn" class="ghost" type="button">Voltar ao cardápio</button>
+    
+    <!-- Chat do pedido (tempo real) -->
+    <div id="chatBox" class="chatbox" style="margin-top:12px;display:none">
+      <div style="font-weight:700;margin:0 0 8px;">Chat com o restaurante</div>
+      <div id="chatMessages" class="chatMessages" style="height:220px;overflow:auto;border:1px solid #e5e7eb;border-radius:12px;padding:10px;background:#fff"></div>
+
+      <div class="chatInput" style="display:flex;gap:8px;margin-top:10px;">
+        <input id="chatText" class="input" placeholder="Escreva uma mensagem..." style="flex:1" />
+        <button id="sendChatBtn" class="btn" type="button" style="padding:10px 12px;">Enviar</button>
+      </div>
+
+      <button id="forgetOrderBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">Esquecer pedido neste celular</button>
+    </div>
+
+<button id="backToMenuBtn" class="ghost" type="button">Voltar ao cardápio</button>
   </div>
 </div>
 <script type="module" src="./app.js"></script>

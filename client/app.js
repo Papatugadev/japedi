@@ -1,6 +1,7 @@
 // ✅ Import por namespace (mais robusto que named imports)
 import * as FirebaseApp from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
 import * as Firestore from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+import * as Auth from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
 
 /** Firebase config (público do front) */
 const firebaseConfig = {
@@ -18,25 +19,98 @@ console.log("IMPORT FIREBASE OK ✅", typeof FirebaseApp.initializeApp);
 // Init Firebase
 const app = FirebaseApp.initializeApp(firebaseConfig);
 const db = Firestore.getFirestore(app);
+const auth = Auth.getAuth(app);
 
 /**
  * STATE = tudo que muda no app.
  * - restaurant/products vem do Firestore
  * - cart é local (por enquanto)
  */
+
+/* =========================
+   AUTH ANÔNIMO (cliente)
+   ========================= */
+
+let __authReadyResolve;
+const authReady = new Promise((res) => { __authReadyResolve = res; });
+
+Auth.onAuthStateChanged(auth, async (user) => {
+  try {
+    if (!user) {
+      await Auth.signInAnonymously(auth);
+      return; // vai disparar novamente com user
+    }
+    state.customerUid = user.uid;
+    __authReadyResolve();
+  } catch (e) {
+    console.warn("Falha no auth anônimo:", e?.code || e, e?.message || "");
+    __authReadyResolve(); // não trava o app
+  }
+});
+
+async function ensureAnonAuth() {
+  // garante que state.customerUid esteja pronto
+  await authReady;
+  return state.customerUid;
+}
+
+/* =========================
+   Persistência do último pedido
+   ========================= */
+
+function lastOrderKey() {
+  // por restaurante/slug, pra não misturar
+  return `japed:lastOrder:${state.restaurant?.id || state.slug || "unknown"}`;
+}
+
+function saveLastOrder(orderId, orderNumber) {
+  try {
+    localStorage.setItem(
+      lastOrderKey(),
+      JSON.stringify({ orderId, orderNumber: orderNumber || null, ts: Date.now() })
+    );
+  } catch (_) {}
+}
+
+function loadLastOrder() {
+  try {
+    const raw = localStorage.getItem(lastOrderKey());
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj?.orderId) return null;
+    // opcional: expira em 48h
+    if (obj.ts && Date.now() - obj.ts > 48 * 60 * 60 * 1000) return null;
+    return obj;
+  } catch (_) {
+    return null;
+  }
+}
+
+function forgetLastOrder() {
+  try { localStorage.removeItem(lastOrderKey()); } catch (_) {}
+}
+
 const state = {
   slug: null,
   restaurant: null,
   products: [],
   cart: [], // [{id,name,price,qty}]
   currentOrderId: null,
-  unsubTrack: null
+  currentOrderNumber: null,
+  customerUid: null,
+  unsubTrack: null,
+  unsubChat: null
 };
 
 /** Util: formatar BRL */
 function moneyBRL(value) {
   const v = Number(value || 0);
   return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+/** Util: gera número de pedido (4 dígitos) para exibir como #1234 */
+function genOrderNumber4() {
+  return Math.floor(1000 + Math.random() * 9000);
 }
 
 /** Pega slug por ?r=slug (local) ou /r/slug (vercel) */
@@ -270,6 +344,7 @@ function clearCheckoutInputs() {
    ========================= */
 
 async function createOrder() {
+  await ensureAnonAuth();
   const name = (document.getElementById("custName").value || "").trim();
   const phone = (document.getElementById("custPhone").value || "").trim();
   const address = (document.getElementById("custAddr").value || "").trim();
@@ -284,7 +359,9 @@ async function createOrder() {
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
 
-    customer: { name, phone, address },
+    
+    orderNumber: genOrderNumber4(),
+customer: { name, phone, address },
 
     items: state.cart.map(i => ({
       id: i.id,
@@ -302,7 +379,30 @@ async function createOrder() {
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
   const newDoc = await Firestore.addDoc(ordersRef, orderData);
 
-  // ✅ Tracking público (evita permission-denied no cliente quando rules bloqueiam /orders)
+  // cria/garante chat do pedido
+  try {
+    const chatRef = Firestore.doc(db, "restaurants", state.restaurant.id, "chats", newDoc.id);
+    await Firestore.setDoc(
+      chatRef,
+      {
+        customerUid: state.customerUid || null,
+        createdAt: Firestore.serverTimestamp(),
+        status: "open",
+        updatedAt: Firestore.serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Não foi possível criar chat (rules):", e?.code || e, e?.message || "");
+  }
+
+  // guarda número humano do pedido para UI
+
+  state.currentOrderNumber = orderData.orderNumber;
+  // salva último pedido para retomar depois
+  try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
+;
+// ✅ Tracking público (evita permission-denied no cliente quando rules bloqueiam /orders)
   // Tenta criar/atualizar um doc espelho em /orders_public com dados mínimos.
   try {
     const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
@@ -312,7 +412,8 @@ async function createOrder() {
         status: orderData.status,
         createdAt: orderData.createdAt,
         updatedAt: orderData.updatedAt,
-        totals: orderData.totals,
+            orderNumber: orderData.orderNumber,
+totals: orderData.totals,
         customerName: orderData.customer?.name || ""
       },
       { merge: true }
@@ -329,11 +430,16 @@ async function createOrder() {
 
 function openTrackScreen(orderId) {
   document.getElementById("trackScreen").classList.remove("hidden");
-  document.getElementById("trackOrderId").textContent = orderId;
+  document.getElementById("trackOrderId").textContent = (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : orderId);
+  // inicia chat do pedido
+  try { startChat(orderId); } catch (_) {}
 }
+
 
 function closeTrackScreen() {
   document.getElementById("trackScreen").classList.add("hidden");
+  // economiza listener
+  try { stopChat(); } catch (_) {}
 }
 
 function startTrackingOrder(orderId) {
@@ -350,6 +456,12 @@ function startTrackingOrder(orderId) {
     (snap) => {
     if (!snap.exists()) return;
     const data = snap.data();
+
+    // mostra número humano se existir
+    if (data.orderNumber) {
+      state.currentOrderNumber = data.orderNumber;
+      document.getElementById("trackOrderId").textContent = "#" + data.orderNumber;
+    }
 
     document.getElementById("trackStatus").textContent = data.status || "-";
 
@@ -368,11 +480,139 @@ function startTrackingOrder(orderId) {
 );
 }
 
+
+/* =========================
+   Chat (tempo real) - por pedido
+   ========================= */
+
+function ensureChatUIVisible() {
+  const box = document.getElementById("chatBox");
+  if (box) box.style.display = "block";
+}
+
+function clearChatUI() {
+  const box = document.getElementById("chatMessages");
+  if (box) box.innerHTML = "";
+  const input = document.getElementById("chatText");
+  if (input) input.value = "";
+}
+
+function stopChat() {
+  if (state.unsubChat) {
+    state.unsubChat();
+    state.unsubChat = null;
+  }
+}
+
+function startChat(orderId) {
+  stopChat();
+  ensureChatUIVisible();
+  clearChatUI();
+
+  const msgsRef = Firestore.collection(
+    db,
+    "restaurants",
+    state.restaurant.id,
+    "chats",
+    orderId,
+    "messages"
+  );
+  const q = Firestore.query(msgsRef, Firestore.orderBy("createdAt", "asc"));
+
+  state.unsubChat = Firestore.onSnapshot(
+    q,
+    (snap) => {
+      const box = document.getElementById("chatMessages");
+      if (!box) return;
+      box.innerHTML = "";
+      snap.forEach((doc) => {
+        const m = doc.data() || {};
+        const div = document.createElement("div");
+        div.className = "chatMsg " + ((m.from === "customer") ? "me" : "them");
+        div.textContent = m.text || "";
+        box.appendChild(div);
+      });
+      box.scrollTop = box.scrollHeight;
+    },
+    (err) => {
+      console.error("Erro no chat (snapshot):", err?.code || err, err?.message || "");
+    }
+  );
+}
+
+async function sendChatMessage(text) {
+  await ensureAnonAuth();
+  if (!text || !state.currentOrderId) return;
+
+  const ref = Firestore.collection(
+    db,
+    "restaurants",
+    state.restaurant.id,
+    "chats",
+    state.currentOrderId,
+    "messages"
+  );
+
+  try {
+    await Firestore.addDoc(ref, {
+      from: "customer",
+      text: String(text),
+      createdAt: Firestore.serverTimestamp()
+    });
+
+    // atualiza updatedAt no chat (ajuda a ordenar/mostrar badge no admin)
+    try {
+      const chatRef = Firestore.doc(db, "restaurants", state.restaurant.id, "chats", state.currentOrderId);
+      await Firestore.setDoc(chatRef, { updatedAt: Firestore.serverTimestamp() }, { merge: true });
+    } catch (_) {}
+  } catch (e) {
+    console.error("Erro ao enviar mensagem:", e?.code || e, e?.message || "");
+    alert("Não foi possível enviar a mensagem (verifique as regras do Firestore).");
+  }
+}
+
+
 /* =========================
    Boot
    ========================= */
 
 async function boot() {
+  
+  // Chat (acompanhar pedido)
+  const sendBtn = document.getElementById("sendChatBtn");
+  const chatText = document.getElementById("chatText");
+  if (sendBtn && chatText) {
+    sendBtn.addEventListener("click", async () => {
+      const text = (chatText.value || "").trim();
+      if (!text) return;
+      await sendChatMessage(text);
+      chatText.value = "";
+    });
+    chatText.addEventListener("keydown", async (e) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        const text = (chatText.value || "").trim();
+        if (!text) return;
+        await sendChatMessage(text);
+        chatText.value = "";
+      }
+    });
+  }
+
+  // Esquecer último pedido (opcional)
+  const forgetBtn = document.getElementById("forgetOrderBtn");
+  if (forgetBtn) {
+    forgetBtn.addEventListener("click", () => {
+      forgetLastOrder();
+      closeTrackScreen();
+      state.currentOrderId = null;
+      state.currentOrderNumber = null;
+      stopChat();
+      if (state.unsubTrack) { state.unsubTrack(); state.unsubTrack = null; }
+      alert("Pedido removido deste aparelho.");
+    });
+  }
+
   // Eventos carrinho
   document.getElementById("openCartBtn").addEventListener("click", openCartDrawer);
   document.getElementById("cartBarBtn").addEventListener("click", openCartDrawer);
@@ -432,6 +672,17 @@ async function boot() {
   }
 
   state.products = await fetchProducts(state.restaurant.id);
+
+  // Se o cliente já tem um pedido salvo (voltou pro site), abre tracking + chat automaticamente
+  const last = loadLastOrder();
+  if (last?.orderId) {
+    state.currentOrderId = last.orderId;
+    if (last.orderNumber) state.currentOrderNumber = last.orderNumber;
+
+    openTrackScreen(last.orderId);
+    startTrackingOrder(last.orderId);
+    try { startChat(last.orderId); } catch (_) {}
+  }
 
   // Render inicial
   renderProducts();

@@ -191,14 +191,17 @@ main{
 }
 
 /* lista com scroll interno */
+/* ===== GRID DE PEDIDOS (2 por linha) ===== */
 .kanList{
   overflow:auto;
-  padding-right:4px;
-  display:flex;
-  flex-direction:column;
-  gap:10px;
-}
+  padding-right:6px;
 
+  display:grid;
+  grid-template-columns: repeat(2, minmax(0,1fr));
+  gap:12px;
+
+  align-content:start;
+}
 /* card do pedido (reusa .order se jÃ¡ existir, mas garante bom visual) */
 .order{
   background:#fff;
@@ -235,21 +238,33 @@ main{
 .kanHead{
   position:sticky;
   top:0;
-  background:rgba(248,250,252,.85);
-  backdrop-filter: blur(6px);
-  border-bottom:1px solid rgba(15,23,42,.08);
-  padding:10px 10px;
-  margin:-12px -12px 10px -12px;
+
+  padding:12px 12px;
+  margin:-12px -12px 12px -12px;
+
   border-top-left-radius:16px;
   border-top-right-radius:16px;
+
+  display:flex;
+  align-items:center;
+  gap:10px;
+
+  font-size:14px;
+  font-weight:900;
+  letter-spacing:.4px;
+
+  background:#ffffff;
+  border-bottom:2px solid #e5e7eb;
+  z-index:5;
 }
 
-.kanTitle::after{
-  font-size:12px;
-  color:#0f172a;
-  font-weight:700;
+.kanTitle{
+  padding:6px 12px;
+  border-radius:999px;
+  font-size:13px;
+  font-weight:900;
+  letter-spacing:.4px;
 }
-
 .order{
   border:1px solid rgba(15,23,42,.08);
   box-shadow: 0 6px 16px rgba(0,0,0,.04);
@@ -315,24 +330,417 @@ main{
   background: rgba(239,68,68,.08);
 }
 
-/* ===== Ajustes finos: kanban ocupa a tela e listas rolam ===== */
-.kanban{
-  align-items:stretch;
+/* ===== JPED: cards v1 ===== */
+.orderTop{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.orderNum{font-weight:800;font-size:16px;color:#0f172a;letter-spacing:.2px;}
+.orderCustomer{margin-top:6px;font-size:13px;font-weight:600;color:#334155;}
+.timeBadge{display:inline-flex;align-items:center;gap:8px;padding:7px 10px;border-radius:999px;font-size:12px;font-weight:800;border:1px solid rgba(15,23,42,.10);background:#fff;color:#0f172a;white-space:nowrap;}
+.timeDot{width:8px;height:8px;border-radius:999px;display:inline-block;background:#22c55e;}
+.timeBadge.pulse{animation:timePulse .55s ease;}
+@keyframes timePulse{0%{transform:scale(1);}40%{transform:scale(1.05);}100%{transform:scale(1);}}
+.timeBadge.late{border-color:rgba(239,68,68,.35);color:#991b1b;background:rgba(239,68,68,.06);}
+.timeBadge.late .timeDot{background:#ef4444;}
+
+/* ===== Kitchen card (igual referência) ===== */
+.order{
+  border-left: 0 !important;
+  background: linear-gradient(180deg, rgba(231,247,244,1), rgba(216,242,238,1));
+  border-radius: 24px !important;
+  padding: 18px !important;
+  min-height: 170px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  cursor:pointer;
+  box-shadow: 0 10px 28px rgba(0,0,0,.06);
+  position:relative;
 }
 
-.kanCol{
-  max-height: calc(100vh - 58px - 32px - 24px);
+.cardTop{
+  position:absolute;
+  top:14px;
+  left:0;
+  right:0;
+  display:flex;
+  justify-content:center;
+  pointer-events:none;
 }
 
-.kanList{
-  flex:1;
-  min-height:0;
+/* ===== TIME BADGE — SUAVE (NOVO) ===== */
+
+.timePill{
+  pointer-events:none;
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+
+  padding:5px 10px;
+  border-radius:999px;
+
+  font-weight:700;
+  font-size:12px;
+  letter-spacing:.2px;
+
+  color:#065f46;
+  background:rgba(34,197,94,.12);
+  border:1px solid rgba(34,197,94,.25);
+
+  box-shadow:none;
+  transition:background .25s ease, color .25s ease, border .25s ease;
 }
 
-/* Header do painel fica mais "app" */
+/* bolinha */
+.timePillDot{
+  width:6px;
+  height:6px;
+  border-radius:999px;
+  background:#22c55e;
+}
+
+/* atraso (mais de 20min) */
+.timePill.late{
+  color:#7c2d12;
+  background:rgba(249,115,22,.12);
+  border:1px solid rgba(249,115,22,.30);
+}
+
+/* bolinha atrasada */
+.timePill.late .timePillDot{
+  background:#f97316;
+}
+
+/* remove animação agressiva */
+.timePill.pulse{
+  animation:none;
+}
+
+.timePillDot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background: rgba(255,255,255,.95);
+  display:inline-block;
+}
+
+.timePill.late{
+  background:#ef4444;
+  animation: pillPulse 1s infinite;
+}
+
+@keyframes pillPulse{
+  0%{ transform: scale(1); }
+  50%{ transform: scale(1.06); }
+  100%{ transform: scale(1); }
+}
+
+.cardBody{
+  margin-top:16px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:10px;
+}
+
+.cardCustomer{
+  font-size: 22px;
+  font-weight: 900;
+  text-align:center;
+  color:#0f172a;
+  line-height:1.1;
+  text-transform: uppercase;
+}
+
+.cardOrderNum{
+  font-size: 22px;
+  font-weight: 800;
+  color:#334155;
+  letter-spacing:.4px;
+}
+
+.cardActions{
+  width:100%;
+  display:flex;
+  justify-content:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:6px;
+}
+
+.cardActions button{
+  cursor:pointer;
+}
+
+/* ===== Modal (detalhes) ===== */
+.orderModal{
+  position:fixed;
+  inset:0;
+  background: rgba(2,6,23,.6);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+}
+
+.orderModal.hidden{ display:none; }
+
+.orderModalContent{
+  width: min(560px, calc(100vw - 24px));
+  max-height: calc(100vh - 24px);
+  overflow:auto;
+  background:#fff;
+  border-radius: 22px;
+  padding: 16px 16px 14px 16px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.35);
+  position:relative;
+}
+
+.modalClose{
+  position:absolute;
+  top:10px;
+  right:10px;
+  width:40px;
+  height:40px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.12);
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.modalClose svg{
+  width:20px;height:20px;
+  stroke:#0f172a; fill:none;
+  stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+
+.modalHeader{
+  padding: 10px 6px 12px 6px;
+  border-bottom:1px solid rgba(15,23,42,.08);
+}
+
+.modalOrderNum{
+  font-weight: 900;
+  font-size: 20px;
+  color:#0f172a;
+}
+
+.modalCustomer{
+  margin-top:6px;
+  font-weight: 900;
+  font-size: 18px;
+  color:#334155;
+}
+
+.modalMeta{
+  margin-top:6px;
+  color:#64748b;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.modalSection{
+  padding: 12px 6px;
+  border-bottom:1px solid rgba(15,23,42,.06);
+}
+
+.modalTitle{
+  font-weight: 900;
+  color:#0f172a;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing:.3px;
+  margin-bottom:10px;
+}
+
+.modalItems{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.modalItem{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius: 16px;
+  background: #fff;
+}
+
+.miName{ font-weight: 900; color:#0f172a; }
+.miObs{ margin-top:4px; font-size:12px; color:#64748b; }
+.miRight{ font-weight: 900; color:#0f172a; }
+
+.modalEmpty{ color:#64748b; font-weight:700; }
+
+.modalFooter{
+  padding: 12px 6px 6px 6px;
+  display:flex;
+  gap:10px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+body{
+  font-family:Arial;
+  margin:0;
+  background:#f4f5f7;
+}
+
+.login{
+  max-width:320px;
+  margin:80px auto;
+  background:#fff;
+  padding:20px;
+  border-radius:14px;
+  box-shadow:0 10px 25px rgba(0,0,0,.08);
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+
+.input{
+  padding:12px;
+  border-radius:10px;
+  border:1px solid #ddd;
+}
+
+.btn{
+  padding:12px;
+  border-radius:12px;
+  border:0;
+  background:#16a34a;
+  color:#fff;
+  font-weight:bold;
+  cursor:pointer;
+}
+
+.ghost{
+  background:transparent;
+  border:1px solid #ccc;
+  padding:8px 12px;
+  border-radius:10px;
+  cursor:pointer;
+}
+
 .top{
-  position:sticky;
-  top:0;
-  z-index:10;
-  backdrop-filter: blur(6px);
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#fff;
+  padding:14px 16px;
+  border-bottom:1px solid #eee;
 }
+
+main{
+  padding:16px;
+}
+
+.order{
+  background:#fff;
+  padding:14px;
+  border-radius:14px;
+  margin-bottom:12px;
+  border-left:6px solid #16a34a;
+}
+
+.hidden{ display:none; }
+
+.error{
+  color:red;
+  font-size:13px;
+}
+/* ===== IDENTIDADE DAS COLUNAS ===== */
+
+/* EM PREPARO */
+#orders-prep .kanHead{
+  background:rgba(251,191,36,.15);
+  border-bottom:2px solid #f59e0b;
+}
+
+#orders-prep .kanTitle{
+  background:#f59e0b;
+  color:white;
+}
+
+/* SAIU PARA ENTREGA */
+#orders-out .kanHead{
+  background:rgba(59,130,246,.15);
+  border-bottom:2px solid #3b82f6;
+}
+
+#orders-out .kanTitle{
+  background:#3b82f6;
+  color:white;
+}
+
+/* ENTREGUE */
+#orders-done .kanHead{
+  background:rgba(16,185,129,.15);
+  border-bottom:2px solid #10b981;
+}
+
+#orders-done .kanTitle{
+  background:#10b981;
+  color:white;
+}
+
+
+/* ===== Chat no modal do pedido (Admin) ===== */
+.modalChat{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+}
+.modalChatMessages{
+  max-height:220px;
+  overflow:auto;
+  padding:10px;
+  border:1px solid rgba(15,23,42,.10);
+  border-radius:14px;
+  background:#fafafa;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.chatMsg{
+  padding:10px 12px;
+  border-radius:14px;
+  max-width:86%;
+  font-size:14px;
+  line-height:1.2;
+  word-wrap:break-word;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  color:#0f172a;
+}
+.chatMsg.me{
+  align-self:flex-end;
+  background:#dcfce7;
+  border-color:#bbf7d0;
+}
+.chatMsg.them{
+  align-self:flex-start;
+}
+.modalChatInput{
+  display:flex;
+  gap:8px;
+  align-items:center;
+}
+.modalChatInput .input{
+  flex:1;
+}
+.modalChatHint{
+  font-size:12px;
+  color:#64748b;
+  font-weight:700;
+}
+
+/* esconder diagnóstico "Admin OK" */
+#permDiag{ display:none !important; }
