@@ -637,6 +637,10 @@ function clearCheckoutInputs() {
 
 async function createOrder() {
   await ensureAnonAuth();
+
+  // ✅ rules do chat exigem customerUid == request.auth.uid
+  if (!state.customerUid) return alert("Falha no login anônimo. Recarregue a página e tente novamente.");
+
   const name = (document.getElementById("custName").value || "").trim();
   const phone = (document.getElementById("custPhone").value || "").trim();
   const address = (document.getElementById("custAddr").value || "").trim();
@@ -664,28 +668,11 @@ async function createOrder() {
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
   const newDoc = await Firestore.addDoc(ordersRef, orderData);
 
-  // cria/garante chat do pedido
-  try {
-    const chatRef = Firestore.doc(db, "restaurants", state.restaurant.id, "chats", newDoc.id);
-    await Firestore.setDoc(
-      chatRef,
-      {
-        customerUid: state.customerUid || null,
-        createdAt: Firestore.serverTimestamp(),
-        status: "open",
-        updatedAt: Firestore.serverTimestamp()
-      },
-      { merge: true }
-    );
-  } catch (e) {
-    console.warn("Não foi possível criar chat (rules):", e?.code || e, e?.message || "");
-  }
-
   state.currentOrderNumber = orderData.orderNumber;
 
   try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
 
-  // tracking público
+  // ✅ tracking público PRECISA vir antes do chat (rules do chat usa exists(orders_public/{orderId}))
   try {
     const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
     await Firestore.setDoc(
@@ -705,6 +692,23 @@ async function createOrder() {
     );
   } catch (e) {
     console.warn("Não foi possível gravar orders_public (rules):", e?.code || e, e?.message || "");
+  }
+
+  // cria/garante chat do pedido (agora o exists() da rule já passa)
+  try {
+    const chatRef = Firestore.doc(db, "restaurants", state.restaurant.id, "chats", newDoc.id);
+    await Firestore.setDoc(
+      chatRef,
+      {
+        customerUid: state.customerUid,
+        createdAt: Firestore.serverTimestamp(),
+        status: "open",
+        updatedAt: Firestore.serverTimestamp()
+      },
+      { merge: true }
+    );
+  } catch (e) {
+    console.warn("Não foi possível criar chat (rules):", e?.code || e, e?.message || "");
   }
 
   return newDoc.id;
