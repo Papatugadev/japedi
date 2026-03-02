@@ -207,7 +207,7 @@ main{
 .modal{
   position:fixed;
   inset:0;
-  z-index:60;
+  z-index:120;
 }
 
 .modal__backdrop{
@@ -858,4 +858,40 @@ main, .view{
   background:#ff5a00;
   color:white;
   border:none;
+}
+
+/* =========================
+   Modal Produto (tamanho + adicionais)
+   ========================= */
+.pmImage{
+  width:100%;
+  border-radius:14px;
+  max-height:220px;
+  object-fit:cover;
+  background:#eee;
+}
+
+.pmTitle{
+  font-size:12px;
+  font-weight:900;
+  color:var(--muted);
+  margin-bottom:8px;
+}
+
+.pmRow{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  padding:10px 12px;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:14px;
+  background:#fff;
+  margin-top:8px;
+}
+
+.pmLeft{
+  display:flex;
+  align-items:center;
+  gap:10px;
 }

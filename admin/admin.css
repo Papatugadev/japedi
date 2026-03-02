@@ -903,3 +903,25 @@ main{
 }
 
 .toggleRow input{ width:18px; height:18px; }
+
+/* ===== Produtos: Tamanhos / Adicionais ===== */
+.optList{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  margin-top:10px;
+}
+.optRow{
+  display:grid;
+  grid-template-columns: 1fr 180px auto;
+  gap:8px;
+  align-items:center;
+}
+@media (max-width: 680px){
+  .optRow{ grid-template-columns: 1fr 1fr; }
+  .optRow .optDel{ grid-column: 1 / -1; justify-self:flex-end; }
+}
+.optRow .input{
+  padding:10px;
+  border-radius:12px;
+}

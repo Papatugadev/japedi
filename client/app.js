@@ -252,6 +252,196 @@ function cartTotals() {
   const subtotal = state.cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
   return { qty, subtotal };
 }
+/* =========================
+   MODAL PRODUTO (TAMANHOS + ADICIONAIS)
+   ========================= */
+
+let modalProduct = null;
+let modalSelectedSizeIndex = 0;
+let modalSelectedAddonIdx = new Set();
+
+function openProductModal(productId){
+  const p = state.products.find(x => x.id === productId);
+  if (!p) return;
+
+  modalProduct = p;
+  modalSelectedSizeIndex = 0;
+  modalSelectedAddonIdx = new Set();
+
+  // Preenche UI
+  const modal = document.getElementById("productModal");
+  if (!modal) {
+    // fallback: adiciona direto se modal não existir
+    addToCart(productId);
+    return;
+  }
+
+  document.getElementById("pmName").textContent = p.name || "Produto";
+  document.getElementById("pmDesc").textContent = (p.desc || "").toString();
+
+  const img = (p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
+  const imgEl = document.getElementById("pmImage");
+  if (imgEl) {
+    imgEl.src = img;
+    imgEl.alt = p.name || "Produto";
+  }
+
+  renderProductModalOptions();
+  updateProductModalTotal();
+
+  modal.classList.remove("hidden");
+}
+
+function closeProductModal(){
+  const modal = document.getElementById("productModal");
+  if (!modal) return;
+  modal.classList.add("hidden");
+}
+
+function productModalGetBasePrice(){
+  if (!modalProduct) return 0;
+
+  const sizes = Array.isArray(modalProduct.sizes) ? modalProduct.sizes : [];
+  if (sizes.length > 0) {
+    const s = sizes[Math.max(0, Math.min(modalSelectedSizeIndex, sizes.length - 1))] || {};
+    return Number(s.price || 0);
+  }
+  return Number(modalProduct.price || 0);
+}
+
+function productModalGetAddonsTotal(){
+  if (!modalProduct) return 0;
+  const addons = Array.isArray(modalProduct.addons) ? modalProduct.addons : [];
+  let sum = 0;
+  for (const idx of modalSelectedAddonIdx) {
+    const a = addons[idx];
+    if (a) sum += Number(a.price || 0);
+  }
+  return sum;
+}
+
+function updateProductModalTotal(){
+  const totalEl = document.getElementById("pmTotal");
+  if (!totalEl) return;
+  const total = productModalGetBasePrice() + productModalGetAddonsTotal();
+  totalEl.textContent = moneyBRL(total);
+}
+
+function renderProductModalOptions(){
+  if (!modalProduct) return;
+
+  // Tamanhos
+  const sizesBox = document.getElementById("pmSizesBox");
+  if (sizesBox) {
+    const sizes = Array.isArray(modalProduct.sizes) ? modalProduct.sizes : [];
+    sizesBox.innerHTML = "";
+
+    if (sizes.length > 0) {
+      const title = document.createElement("div");
+      title.innerHTML = `<div class="pmTitle">Tamanho</div>`;
+      sizesBox.appendChild(title);
+
+      sizes.forEach((s, i) => {
+        const row = document.createElement("label");
+        row.className = "pmRow";
+        row.innerHTML = `
+          <span class="pmLeft">
+            <input type="radio" name="pmSize" value="${i}" ${i === modalSelectedSizeIndex ? "checked" : ""}>
+            <span>${(s?.name || "Opção")}</span>
+          </span>
+          <strong>${moneyBRL(s?.price)}</strong>
+        `;
+        sizesBox.appendChild(row);
+      });
+
+      sizesBox.querySelectorAll('input[name="pmSize"]').forEach((r) => {
+        r.addEventListener("change", () => {
+          modalSelectedSizeIndex = Number(r.value || 0);
+          updateProductModalTotal();
+        });
+      });
+    }
+  }
+
+  // Adicionais
+  const addonsBox = document.getElementById("pmAddonsBox");
+  if (addonsBox) {
+    const addons = Array.isArray(modalProduct.addons) ? modalProduct.addons : [];
+    addonsBox.innerHTML = "";
+
+    if (addons.length > 0) {
+      const title = document.createElement("div");
+      title.innerHTML = `<div class="pmTitle">Adicionais</div>`;
+      addonsBox.appendChild(title);
+
+      addons.forEach((a, i) => {
+        const row = document.createElement("label");
+        row.className = "pmRow";
+        row.innerHTML = `
+          <span class="pmLeft">
+            <input type="checkbox" name="pmAddon" value="${i}">
+            <span>${(a?.name || "Adicional")}</span>
+          </span>
+          <strong>+ ${moneyBRL(a?.price)}</strong>
+        `;
+        addonsBox.appendChild(row);
+      });
+
+      addonsBox.querySelectorAll('input[name="pmAddon"]').forEach((c) => {
+        c.addEventListener("change", () => {
+          const idx = Number(c.value || 0);
+          if (c.checked) modalSelectedAddonIdx.add(idx);
+          else modalSelectedAddonIdx.delete(idx);
+          updateProductModalTotal();
+        });
+      });
+    }
+  }
+}
+
+function addConfiguredToCart(){
+  if (!modalProduct) return;
+
+  const sizes = Array.isArray(modalProduct.sizes) ? modalProduct.sizes : [];
+  const addons = Array.isArray(modalProduct.addons) ? modalProduct.addons : [];
+
+  const chosenSize = sizes.length > 0
+    ? (sizes[Math.max(0, Math.min(modalSelectedSizeIndex, sizes.length - 1))] || null)
+    : null;
+
+  const chosenAddons = [];
+  for (const idx of modalSelectedAddonIdx) {
+    const a = addons[idx];
+    if (a) chosenAddons.push({ name: a.name || "Adicional", price: Number(a.price || 0) });
+  }
+
+  const basePrice = chosenSize ? Number(chosenSize.price || 0) : Number(modalProduct.price || 0);
+  const addonsTotal = chosenAddons.reduce((acc, a) => acc + Number(a.price || 0), 0);
+  const unitPrice = basePrice + addonsTotal;
+
+  const optionsParts = [];
+  if (chosenSize?.name) optionsParts.push(chosenSize.name);
+  if (chosenAddons.length) optionsParts.push(chosenAddons.map(a => a.name).join(", "));
+  const optionsText = optionsParts.join(" • ");
+
+  state.cart.push({
+    // id único por configuração (permite 2 do mesmo produto com opções diferentes)
+    id: `${modalProduct.id}_${Date.now()}`,
+    productId: modalProduct.id,
+    name: modalProduct.name || "Produto",
+    optionsText,
+    price: unitPrice,
+    qty: 1,
+    meta: {
+      size: chosenSize ? { name: chosenSize.name || "", price: Number(chosenSize.price || 0) } : null,
+      addons: chosenAddons
+    }
+  });
+
+  renderCartUI();
+  closeProductModal();
+}
+
 
 /* =========================
    UI (RENDER)
@@ -344,7 +534,7 @@ activeProducts = activeProducts.sort(
 
     wrap.appendChild(div);
   }wrap.querySelectorAll("[data-add]").forEach(btn => {
-    btn.addEventListener("click", () => addToCart(btn.getAttribute("data-add")));
+    btn.addEventListener("click", () => openProductModal(btn.getAttribute("data-add")));
   });
 }
 
@@ -386,6 +576,7 @@ function renderCartUI() {
         <div>
           <strong>${item.name}</strong><br/>
           <span class="muted">${moneyBRL(item.price)} cada</span>
+          ${item.optionsText ? '<div class="muted" style="margin-top:4px;font-size:12px">' + item.optionsText + '</div>' : ''}
         </div>
 
         <div class="qty">
@@ -1013,6 +1204,11 @@ async function boot() {
   // Checkout fecha
   document.getElementById("closeCheckoutBtn")?.addEventListener("click", closeCheckout);
   document.getElementById("closeCheckoutBackdrop")?.addEventListener("click", closeCheckout);
+
+  // Modal produto (tamanhos + adicionais)
+  document.getElementById("closeProductBtn")?.addEventListener("click", closeProductModal);
+  document.getElementById("closeProductBackdrop")?.addEventListener("click", closeProductModal);
+  document.getElementById("pmAddCart")?.addEventListener("click", addConfiguredToCart);
 
   // Confirmar pedido
   document.getElementById("confirmOrderBtn")?.addEventListener("click", async () => {

@@ -241,6 +241,34 @@
     </div>
   </nav>
 
+  
+
+  <!-- Modal Produto (tamanho + adicionais) -->
+  <div id="productModal" class="modal hidden" role="dialog" aria-modal="true">
+    <div class="modal__backdrop" id="closeProductBackdrop"></div>
+
+    <div class="modal__panel">
+      <div class="modal__header">
+        <strong id="pmName">Produto</strong>
+        <button id="closeProductBtn" class="ghost" type="button">Fechar</button>
+      </div>
+
+      <div class="modal__content">
+        <img id="pmImage" class="pmImage" alt="" />
+        <div id="pmDesc" class="muted" style="margin-top:8px"></div>
+
+        <div id="pmSizesBox" class="pmBox" style="margin-top:14px"></div>
+        <div id="pmAddonsBox" class="pmBox" style="margin-top:14px"></div>
+
+        <div style="margin-top:18px;font-size:18px;font-weight:900">
+          Total: <span id="pmTotal">R$ 0,00</span>
+        </div>
+
+        <button id="pmAddCart" class="btn" type="button" style="margin-top:14px">Adicionar ao carrinho</button>
+      </div>
+    </div>
+  </div>
+
   <script type="module" src="./app.js"></script>
 </body>
 </html>

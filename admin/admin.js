@@ -357,6 +357,16 @@ if (!ADMIN_OK) {
     updatedAt: Firestore.serverTimestamp()
   };
 
+     // opções
+     try{
+       payload.sizes = _readOptList(sizesBox);
+       payload.addons = _readOptList(addonsBox);
+     }catch(_){
+       payload.sizes = [];
+       payload.addons = [];
+     }
+
+
   // 1) Atualiza o público (se o doc existir)
   let publicOk = false;
   try {
@@ -1078,7 +1088,21 @@ function _ensureProductModal(){
           <textarea id="pDesc" class="input textarea" placeholder="Ex: pão, hamburguer, queijo..."></textarea>
         </div>
 
-        <div class="toggleRow" style="margin-top:10px">
+        
+        <div class="formRow" style="margin-top:14px">
+          <div class="label">Tamanhos (opcional)</div>
+          <div class="muted" style="margin-top:-2px">Defina opções de tamanho e o preço final de cada tamanho.</div>
+          <div id="pSizes" class="optList"></div>
+          <button type="button" class="ghost small" id="btnAddSize">+ Adicionar tamanho</button>
+        </div>
+
+        <div class="formRow" style="margin-top:14px">
+          <div class="label">Adicionais (opcional)</div>
+          <div class="muted" style="margin-top:-2px">Itens extras que o cliente pode escolher.</div>
+          <div id="pAddons" class="optList"></div>
+          <button type="button" class="ghost small" id="btnAddAddon">+ Adicionar adicional</button>
+        </div>
+<div class="toggleRow" style="margin-top:10px">
           <input id="pActive" type="checkbox" />
           <div>
             <div style="font-weight:900;color:#0f172a">Ativo</div>
@@ -1102,6 +1126,38 @@ function _ensureProductModal(){
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
 
   return modal;
+}
+
+
+/* ===== Produtos: opções (tamanhos / adicionais) ===== */
+function _optRow(kind, data){
+  const row = document.createElement("div");
+  row.className = "optRow";
+  const name = (data?.name || "").trim();
+  const price = (data?.price ?? "") === "" ? "" : String(data?.price ?? "");
+  const phName = kind === "size" ? "Ex: Pequeno" : "Ex: Bacon";
+  const phPrice = kind === "size" ? "Preço final (ex: 29,90)" : "Preço (ex: 3,00)";
+
+  row.innerHTML = `
+    <input class="input optName" placeholder="${phName}" value="${name.replaceAll('"','&quot;')}" />
+    <input class="input optPrice" inputmode="decimal" placeholder="${phPrice}" value="${price.replaceAll('"','&quot;')}" />
+    <button type="button" class="ghost small danger optDel" aria-label="Remover">Remover</button>
+  `;
+
+  row.querySelector(".optDel")?.addEventListener("click", () => row.remove());
+  return row;
+}
+
+function _readOptList(containerEl){
+  const out = [];
+  if (!containerEl) return out;
+  containerEl.querySelectorAll(".optRow").forEach((row) => {
+    const name = (row.querySelector(".optName")?.value || "").trim();
+    const price = _num(row.querySelector(".optPrice")?.value || "");
+    if (!name) return;
+    out.push({ name, price });
+  });
+  return out;
 }
 
 let __JPED_EDIT_PROD_ID = null;
@@ -1129,6 +1185,38 @@ function openProductModal(prod){
   modal.querySelector("#pDesc").value = prod?.desc || "";
   modal.querySelector("#pActive").checked = (prod?.active !== false);
 
+  // ===== Tamanhos / Adicionais =====
+  const sizesBox = modal.querySelector("#pSizes");
+  const addonsBox = modal.querySelector("#pAddons");
+  const btnAddSize = modal.querySelector("#btnAddSize");
+  const btnAddAddon = modal.querySelector("#btnAddAddon");
+
+  if (sizesBox) sizesBox.innerHTML = "";
+  if (addonsBox) addonsBox.innerHTML = "";
+
+  const sizes = Array.isArray(prod?.sizes) ? prod.sizes : [];
+  const addons = Array.isArray(prod?.addons) ? prod.addons : [];
+
+  // preenche
+  if (sizesBox) {
+    (sizes || []).forEach(s => sizesBox.appendChild(_optRow("size", s)));
+  }
+  if (addonsBox) {
+    (addons || []).forEach(a => addonsBox.appendChild(_optRow("addon", a)));
+  }
+
+  // se não tiver nada, cria 1 linha opcional (fica mais fácil pro usuário)
+  if (sizesBox && !sizes.length) sizesBox.appendChild(_optRow("size", { name: "", price: "" }));
+  if (addonsBox && !addons.length) addonsBox.appendChild(_optRow("addon", { name: "", price: "" }));
+
+  if (btnAddSize && sizesBox) {
+    btnAddSize.onclick = () => sizesBox.appendChild(_optRow("size", { name: "", price: "" }));
+  }
+  if (btnAddAddon && addonsBox) {
+    btnAddAddon.onclick = () => addonsBox.appendChild(_optRow("addon", { name: "", price: "" }));
+  }
+
+
   const saveBtn = modal.querySelector("#prodSave");
   saveBtn.onclick = async () => {
     if (!await _ensureAdminForProducts()) return;
@@ -1143,6 +1231,16 @@ function openProductModal(prod){
       active: !!modal.querySelector("#pActive").checked,
       updatedAt: Firestore.serverTimestamp()
     };
+
+    // opções (tamanhos / adicionais)
+    try{
+      payload.sizes = _readOptList(sizesBox);
+      payload.addons = _readOptList(addonsBox);
+    }catch(_){
+      payload.sizes = [];
+      payload.addons = [];
+    }
+
 
     if (!payload.name) {
       alert("Coloque um nome para o produto.");
