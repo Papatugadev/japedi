@@ -925,3 +925,257 @@ main{
   padding:10px;
   border-radius:12px;
 }
+/* =========================
+   FIX CHAT DRAWER (apenas override – não remove nada)
+   - remove scroll horizontal feio
+   - garante drawer sobreposto (sem "empurrar" layout)
+========================= */
+
+/* Mantém scroll vertical do modal, mas corta overflow lateral causado pelo drawer */
+.orderModalContent{
+  overflow-x:hidden; /* evita barra horizontal */
+  overflow-y:auto;   /* mantém scroll vertical */
+}
+
+/* Drawer sempre sobreposto e "preso" no modal */
+#orderModal .chatDrawer{
+  top:0;
+  right:0;
+  bottom:0;
+  height:auto;
+  max-height:100%;
+}
+
+/* Quando abrir, dá um leve "blur"/escurece o conteúdo atrás (dentro do modal) */
+#orderModal.chatOpen .orderModalContent::after{
+  content:"";
+  position:absolute;
+  inset:0;
+  background:rgba(2,6,23,.12);
+  pointer-events:none;
+}
+
+/* Botão bolinha sempre acima e sem ficar grudado no rodapé */
+#orderModal .chatFab{
+  right:16px;
+  bottom:16px;
+}
+
+/* Ajuste visual do chat (bolhas mais bonitas) */
+#orderModal .modalChatMessages{
+  background:#f8fafc;
+  border:1px solid rgba(15,23,42,.10);
+}
+#orderModal .chatMsg{
+  border-radius:18px;
+  padding:10px 12px;
+  font-weight:700;
+}
+#orderModal .chatMsg.me{
+  background:#dcfce7;
+  border-color:#bbf7d0;
+}
+#orderModal .chatMsg.them{
+  background:#fff;
+}
+
+
+/* =======================================================================
+   JPED — MODAL DO PEDIDO (IGUAL REFERÊNCIA) + CHAT LATERAL (NÃO EMPURRA UI)
+   ✅ NÃO remove nada: apenas overrides no final
+======================================================================= */
+
+/* modal mais “limpo”, sem scroll horizontal */
+.orderModalContent{
+  overflow-x:hidden !important;
+}
+
+/* header mais espaçado (igual imagem) */
+.modalHeader{
+  padding: 14px 12px 12px 12px !important;
+}
+
+/* separadores suaves */
+.modalSection{
+  padding: 14px 12px !important;
+}
+
+/* “ITENS / ENTREGA” com cara de label */
+.modalTitle{
+  font-size: 12px !important;
+  letter-spacing: .6px !important;
+}
+
+/* footer sempre no final e visível (igual imagem) */
+.modalFooter{
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  border-top: 1px solid rgba(15,23,42,.08);
+  padding: 12px 12px !important;
+  margin: 0 -16px -14px -16px; /* encaixa no padding do modal */
+  border-bottom-left-radius: 22px;
+  border-bottom-right-radius: 22px;
+  justify-content: flex-end;
+}
+
+/* ====================== CHAT FAB (BOLINHA) ====================== */
+.chatFab{
+  position:absolute;
+  left:16px;
+  bottom:16px;
+  width:54px;
+  height:54px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.14);
+  background:#0f172a;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+  box-shadow: 0 12px 28px rgba(0,0,0,.18);
+  z-index:30;
+}
+
+.chatFab svg{
+  width:22px;
+  height:22px;
+  stroke:#fff;
+  fill:none;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.chatFab:active{ transform: scale(.98); }
+
+/* contador */
+.chatFabBadge{
+  position:absolute;
+  top:-6px;
+  right:-6px;
+  min-width:20px;
+  height:20px;
+  padding:0 6px;
+  border-radius:999px;
+  background:#ef4444;
+  color:#fff;
+  font-weight:900;
+  font-size:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:2px solid #0f172a;
+}
+
+/* ====================== DRAWER (LATERAL) ====================== */
+/* backdrop dentro do modal (não cria scroll) */
+.chatDrawerBackdrop{
+  position:absolute;
+  inset:0;
+  background: rgba(2,6,23,.35);
+  z-index:40;
+}
+
+/* drawer sobreposto, sem empurrar conteúdo */
+.chatDrawer{
+  position:absolute;
+  top:0;
+  right:0;
+  height:100%;
+  width:min(360px, 92%);
+  background:#fff;
+  border-left:1px solid rgba(15,23,42,.10);
+  box-shadow: -20px 0 60px rgba(0,0,0,.20);
+  z-index:50;
+
+  display:flex;
+  flex-direction:column;
+  border-top-right-radius:22px;
+  border-bottom-right-radius:22px;
+
+  /* animação suave */
+  transform: translateX(0);
+}
+
+.chatDrawer.hidden{ display:none; }
+.chatDrawerBackdrop.hidden{ display:none; }
+
+.chatDrawerHead{
+  padding:14px 14px;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  border-bottom:1px solid rgba(15,23,42,.08);
+}
+
+.chatDrawerTitle{
+  font-weight:900;
+  color:#0f172a;
+}
+
+.chatDrawerClose{
+  width:40px;
+  height:40px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.12);
+  background:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  cursor:pointer;
+}
+
+.chatDrawerClose svg{
+  width:18px;height:18px;
+  stroke:#0f172a; fill:none;
+  stroke-width:2;
+  stroke-linecap:round; stroke-linejoin:round;
+}
+
+.chatDrawerBody{
+  padding:12px;
+  overflow:auto;
+  flex:1;
+  background:#f8fafc;
+}
+
+/* deixa as bolhas mais bonitas (whats-like) */
+.modalChatMessages{
+  background:transparent !important;
+  border:0 !important;
+  padding:0 !important;
+  max-height:none !important;
+}
+
+.chatMsg{
+  border-radius:16px !important;
+  padding:10px 12px !important;
+  border:1px solid rgba(15,23,42,.08) !important;
+  box-shadow: 0 6px 14px rgba(0,0,0,.05);
+}
+
+.chatMsg.me{
+  background:#dcfce7 !important;
+  border-color:#bbf7d0 !important;
+}
+
+.chatMsg.them{
+  background:#fff !important;
+}
+
+.chatDrawerFoot{
+  padding:12px;
+  border-top:1px solid rgba(15,23,42,.08);
+  background:#fff;
+}
+
+/* input + botão alinhados e sem estourar */
+.modalChatInput{
+  gap:10px !important;
+}
+
+.modalChatInput .input{
+  min-width:0;
+}
+

@@ -339,7 +339,8 @@ async function setOrderStatus(orderId, newStatus) {
     alert("Assinatura expirada. Ative um plano para mudar status.");
     return;
   }
-if (!ADMIN_OK) {
+
+  if (!ADMIN_OK) {
     console.warn("Usuário não é admin deste restaurante (RID/UID).");
     await checkAdminAccess();
     if (!ADMIN_OK) {
@@ -348,40 +349,84 @@ if (!ADMIN_OK) {
     }
   }
 
-  // ✅ Admin atualiza SEMPRE o tracking público (cliente acompanha)
   const privateRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders", orderId);
-  const publicRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
+  const publicRef  = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
+  const historyRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_history", orderId);
 
+  // ✅ Se for ENTREGUE: arquiva e remove dos ativos
+  if (newStatus === "entregue") {
+    // 1) tenta pegar dados do privado, se não der, do público
+    let baseData = null;
+
+    try {
+      const ps = await Firestore.getDoc(privateRef);
+      if (ps.exists()) baseData = ps.data();
+    } catch (_) {}
+
+    if (!baseData) {
+      try {
+        const qs = await Firestore.getDoc(publicRef);
+        if (qs.exists()) baseData = qs.data();
+      } catch (_) {}
+    }
+
+    // 2) salva no histórico (mesmo se baseData vier null, ainda salva meta)
+    try {
+      await Firestore.setDoc(
+        historyRef,
+        {
+          ...(baseData || {}),
+          id: orderId,
+          status: "entregue",
+          deliveredAt: Firestore.serverTimestamp(),
+          archivedAt: Firestore.serverTimestamp(),
+          updatedAt: Firestore.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn("Erro ao arquivar em orders_history:", e?.code || e, e?.message || "");
+      alert("Não consegui arquivar no histórico (orders_history). Veja o console (F12).");
+      return; // não apaga se não arquivou
+    }
+
+    // 3) apaga dos ativos (some da tela)
+    try { await Firestore.deleteDoc(publicRef); } catch (e) {
+      console.warn("Erro ao deletar orders_public:", e?.code || e, e?.message || "");
+    }
+    try { await Firestore.deleteDoc(privateRef); } catch (e) {
+      console.warn("Erro ao deletar orders:", e?.code || e, e?.message || "");
+    }
+
+    return;
+  }
+
+  // ✅ Caso normal: só atualiza status
   const payload = {
     status: newStatus,
     updatedAt: Firestore.serverTimestamp()
   };
 
-     // opções
-     try{
-       payload.sizes = _readOptList(sizesBox);
-       payload.addons = _readOptList(addonsBox);
-     }catch(_){
-       payload.sizes = [];
-       payload.addons = [];
-     }
+  // (se você quiser manter sizes/addons como já tinha antes, pode deixar seu trecho aqui)
+  try {
+    payload.sizes = _readOptList(sizesBox);
+    payload.addons = _readOptList(addonsBox);
+  } catch (_) {
+    payload.sizes = [];
+    payload.addons = [];
+  }
 
-
-  // 1) Atualiza o público (se o doc existir)
+  // público (cliente acompanha)
   let publicOk = false;
   try {
     await Firestore.updateDoc(publicRef, payload);
     publicOk = true;
   } catch (e) {
-    // Se não existir ainda, cria
     if (e?.code === "not-found") {
       try {
         await Firestore.setDoc(
           publicRef,
-          {
-            ...payload,
-            createdAt: Firestore.serverTimestamp()
-          },
+          { ...payload, createdAt: Firestore.serverTimestamp() },
           { merge: true }
         );
         publicOk = true;
@@ -393,14 +438,13 @@ if (!ADMIN_OK) {
     }
   }
 
-  // 2) Atualiza o privado (admin/relatórios)
+  // privado (admin/relatórios)
   try {
     await Firestore.updateDoc(privateRef, payload);
   } catch (e) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
   }
 
-  // 3) Feedback/consistência: se não atualizou o público, avisa
   if (!publicOk) {
     console.warn("ATENÇÃO: status não foi gravado em orders_public; o cliente não vai ver a mudança.");
   }
@@ -584,17 +628,35 @@ function _ensureModal(){
         <div class="modalInfo" id="modalDelivery"></div>
       </div>
 
-      <div class="modalSection">
-        <div class="modalTitle">Chat</div>
-        <div class="modalChat">
+      <!-- Chat: botão flutuante + drawer lateral -->
+      <button type="button" class="chatFab" id="chatFab" aria-label="Abrir chat">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+        <span class="chatFabBadge hidden" id="chatFabBadge">0</span>
+      </button>
+
+      <div class="chatDrawerBackdrop hidden" id="chatDrawerBackdrop" aria-hidden="true"></div>
+
+      <aside class="chatDrawer hidden" id="chatDrawer" aria-label="Chat do pedido">
+        <div class="chatDrawerHead">
+          <div class="chatDrawerTitle">Chat</div>
+          <button type="button" class="chatDrawerClose" id="chatDrawerClose" aria-label="Fechar chat">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </div>
+
+        <div class="chatDrawerBody">
           <div class="modalChatMessages" id="modalChatMessages"></div>
+        </div>
+
+        <div class="chatDrawerFoot">
           <div class="modalChatInput">
             <input id="modalChatText" class="input" placeholder="Escreva para o cliente..." />
             <button type="button" class="btn small" id="modalChatSend">Enviar</button>
           </div>
           <div class="modalChatHint">O cliente vê em tempo real na tela de acompanhar pedido.</div>
         </div>
-      </div>
+      </aside>
+
 
       <div class="modalFooter">
         <button type="button" class="btn small" id="modalDispatch">Despachar</button>
@@ -610,12 +672,46 @@ function _ensureModal(){
   modal.querySelector("#orderModalClose").addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
 
+
+  // ===== Chat drawer (lateral) =====
+  const fab = modal.querySelector("#chatFab");
+  const drawer = modal.querySelector("#chatDrawer");
+  const back = modal.querySelector("#chatDrawerBackdrop");
+  const btnCloseChat = modal.querySelector("#chatDrawerClose");
+
+  const openChat = () => {
+    if (!drawer || !back) return;
+    drawer.classList.remove("hidden");
+    back.classList.remove("hidden");
+    const bd = modal.querySelector("#chatFabBadge");
+    if (bd) { bd.textContent = "0"; bd.classList.add("hidden"); }
+
+    // foca no input
+    try{
+      const input = modal.querySelector("#modalChatText");
+      if (input) setTimeout(() => input.focus(), 0);
+    }catch(_){}
+  };
+  const closeChat = () => {
+    if (!drawer || !back) return;
+    drawer.classList.add("hidden");
+    back.classList.add("hidden");
+  };
+
+  // deixa disponível para fechar quando fechar o modal
+  modal.__closeChat = closeChat;
+
+  if (fab) fab.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openChat(); });
+  if (btnCloseChat) btnCloseChat.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); closeChat(); });
+  if (back) back.addEventListener("click", closeChat);
+
   return modal;
 }
 
 function closeOrderModal(){
   const modal = document.getElementById("orderModal");
   if (!modal) return;
+  try { if (modal.__closeChat) modal.__closeChat(); } catch (_) {}
   modal.classList.add("hidden");
   __JPED_OPEN_ORDER_ID = null;
   // para o realtime do chat quando fecha
@@ -652,6 +748,28 @@ function startAdminChat(orderId){
       box.appendChild(div);
     });
     box.scrollTop = box.scrollHeight;
+
+    // ===== Unread badge (se drawer fechado) =====
+    try{
+      const modal = document.getElementById("orderModal");
+      const drawer = modal ? modal.querySelector("#chatDrawer") : null;
+      const badge = modal ? modal.querySelector("#chatFabBadge") : null;
+      if (modal && badge && drawer) {
+        const open = !drawer.classList.contains("hidden");
+        const seen = Number(modal.__chatSeenCount || 0);
+        const total = snap.size || 0;
+        if (open) {
+          modal.__chatSeenCount = total;
+          badge.textContent = "0";
+          badge.classList.add("hidden");
+        } else {
+          const unread = Math.max(0, total - seen);
+          badge.textContent = String(unread);
+          badge.classList.toggle("hidden", unread === 0);
+        }
+      }
+    }catch(_){}
+
   }, (err) => {
     console.warn("Erro chat admin (snapshot):", err?.code || err, err?.message || "");
   });
@@ -678,6 +796,12 @@ async function openOrderModal(orderId){
   const modal = _ensureModal();
   __JPED_OPEN_ORDER_ID = orderId;
 
+  // garante que o chat comece fechado (não altera o layout do pedido)
+  try { if (modal.__closeChat) modal.__closeChat(); } catch (_) {}
+
+
+  // reset unread when abre um pedido novo
+  try{ modal.__chatSeenCount = 0; const b = modal.querySelector('#chatFabBadge'); if (b) { b.textContent='0'; b.classList.add('hidden'); } }catch(_){}
   // tenta pegar privado (completo). Se não puder, usa público.
   let data = null;
   try{
