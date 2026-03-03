@@ -22,6 +22,36 @@ const db = Firestore.getFirestore(app);
 const auth = Auth.getAuth(app);
 
 /* =========================
+   STATE (precisa existir ANTES do onAuthStateChanged)
+   ========================= */
+
+const state = {
+  slug: null,
+  restaurant: null,
+  config: null,
+  isOpen: true,
+  showImages: true,
+  checkoutMode: "delivery",
+  paymentMethod: "pix",
+  couponCode: "",
+  products: [],
+  cart: [], // [{id,name,price,qty}]
+  currentOrderId: null,
+  currentOrderNumber: null,
+  customerUid: null,
+  unsubTrack: null,
+  unsubChat: null,
+  selectedCategory: "Todos",
+  categories: [],
+
+  // (adicionado) Chat unread / notificações
+  chatUnread: 0,
+  chatInitialized: false,
+  chatLastSeenRestaurantMs: 0,
+  chatToastTimer: null
+};
+
+/* =========================
    AUTH ANÔNIMO (cliente)
    ========================= */
 
@@ -81,39 +111,12 @@ function forgetLastOrder() {
   try { localStorage.removeItem(lastOrderKey()); } catch (_) {}
 }
 
-const state = {
-  slug: null,
-  restaurant: null,
-  config: null,
-  isOpen: true,
-  showImages: true,
-  checkoutMode: "delivery",
-  paymentMethod: "pix",
-  couponCode: "",
-  products: [],
-  cart: [], // [{id,name,price,qty}]
-  currentOrderId: null,
-  currentOrderNumber: null,
-  customerUid: null,
-  unsubTrack: null,
-  unsubChat: null,
-  selectedCategory: "Todos",
-categories: [],
-
-  // (adicionado) Chat unread / notificações
-  chatUnread: 0,
-  chatInitialized: false,
-  chatLastSeenRestaurantMs: 0,
-  chatToastTimer: null
-};
-
 /** Util: formatar BRL */
 function moneyBRL(value) {
   const v = Number(value || 0);
   const cur = (state?.config?.theme?.currency || "BRL").toString().trim() || "BRL";
   return v.toLocaleString("pt-BR", { style: "currency", currency: cur });
 }
-
 
 // ============================
 // Chat FAB: badge + popup + som (adicionado sem remover nada)
@@ -188,16 +191,36 @@ function genOrderNumber4() {
   return Math.floor(1000 + Math.random() * 9000);
 }
 
-/** Pega slug por ?r=slug (local) ou /r/slug (vercel) */
+/** Pega slug por ?slug=... (recomendado) ou ?r=... (compat) ou /r/slug */
 function getSlug() {
   const params = new URLSearchParams(window.location.search);
-  const fromQuery = params.get("r");
-  if (fromQuery) return fromQuery;
 
+  // ✅ preferido
+  const fromSlug = params.get("slug");
+  if (fromSlug) return fromSlug;
+
+  // ✅ compat antigo
+  const fromR = params.get("r");
+  if (fromR) return fromR;
+
+  // ✅ path: /r/slug
   const parts = (window.location.pathname || "/").split("/").filter(Boolean);
   if (parts[0] === "r" && parts[1]) return parts[1];
 
   return null;
+}
+
+function saveLastSlug(slug){
+  try { localStorage.setItem("japed:lastSlug", String(slug || "")); } catch(_) {}
+}
+
+function loadLastSlug(){
+  try {
+    const s = localStorage.getItem("japed:lastSlug");
+    return (s && String(s).trim()) ? String(s).trim() : null;
+  } catch(_) {
+    return null;
+  }
 }
 
 /** Buscar restaurante pelo slug (multi-tenant) */
@@ -221,7 +244,6 @@ async function fetchProducts(restaurantId) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
-
 /* =========================
    CONFIG (restaurants/{rid}/config/app)
    ========================= */
@@ -236,7 +258,6 @@ async function fetchAppConfig(restaurantId){
     return {};
   }
 }
-
 
 // Realtime: atualiza config em tempo real (quando mudar no admin)
 let __JPED_UNSUB_CONFIG = null;
@@ -295,7 +316,6 @@ function _setOnPrimary(primaryHex){
   }catch(_){}
 }
 
-
 function _ensurePromoBanner(){
   try{
     let banner = document.getElementById("promoBanner");
@@ -338,9 +358,51 @@ function _ensureOpenPill(){
   }catch(_){ return null; }
 }
 
+
+// ============================
+// Identidade (logo + fundo) via config.restaurant.logoUrl / coverUrl
+// (adicionado sem remover nada)
+// ============================
+function _applyBrandIdentity(r){
+  try{
+    r = r || {};
+    const logoUrl = String(r.logoUrl || r.logo || "").trim();
+    const coverUrl = String(r.coverUrl || r.cover || r.backgroundUrl || "").trim();
+
+    const header = document.querySelector("header.topbar");
+    const coverEl = document.getElementById("brandCover");
+    const logoEl = document.getElementById("brandLogo");
+
+    if (coverEl){
+      if (coverUrl){
+        coverEl.style.backgroundImage = `url("${coverUrl.replace(/"/g, '\"')}")`;
+        coverEl.classList.remove("hidden");
+        if (header) header.classList.add("hasCover");
+      } else {
+        coverEl.style.backgroundImage = "";
+        coverEl.classList.add("hidden");
+        if (header) header.classList.remove("hasCover");
+      }
+    }
+
+    if (logoEl){
+      if (logoUrl){
+        logoEl.src = logoUrl;
+        logoEl.classList.remove("hidden");
+      } else {
+        logoEl.removeAttribute("src");
+        logoEl.classList.add("hidden");
+      }
+    }
+  }catch(_){}
+}
+
 function applyConfigToClient(cfg){
   cfg = cfg || {};
   state.config = cfg;
+
+  // aplica identidade mesmo antes do render (se existir)
+  try { _applyBrandIdentity(cfg?.restaurant || {}); } catch(_) {}
 
   const r = cfg.restaurant || {};
   const hours = cfg.hours || {};
@@ -372,6 +434,9 @@ function applyConfigToClient(cfg){
     if (r.whatsapp) state.restaurant.whatsapp = r.whatsapp;
     if (r.instagram) state.restaurant.instagram = r.instagram;
   }
+
+  // aplica logo/fundo (identidade)
+  try { _applyBrandIdentity(Object.assign({}, state.restaurant || {}, r || {})); } catch(_) {}
 
   // pill aberto/fechado
   const pill = _ensureOpenPill();
@@ -481,6 +546,7 @@ function cartTotals() {
   const subtotal = state.cart.reduce((acc, i) => acc + (i.price * i.qty), 0);
   return { qty, subtotal };
 }
+
 /* =========================
    MODAL PRODUTO (TAMANHOS + ADICIONAIS)
    ========================= */
@@ -671,7 +737,6 @@ function addConfiguredToCart(){
   closeProductModal();
 }
 
-
 /* =========================
    UI (RENDER)
    ========================= */
@@ -688,8 +753,8 @@ function buildCategories(){
   const list = document.getElementById("categoryList");
 
   if(!list) return;
+  if (bar) bar.classList.remove("hidden");
 
-  bar.classList.remove("hidden");
   list.innerHTML="";
 
   state.categories.forEach(cat=>{
@@ -708,6 +773,7 @@ function buildCategories(){
     list.appendChild(chip);
   });
 }
+
 function renderProducts() {
   const titleEl = document.getElementById("title");
   const descEl = document.getElementById("desc");
@@ -721,24 +787,24 @@ function renderProducts() {
   }
 
   titleEl.textContent = state.restaurant.name || "Restaurante";
-  descEl.textContent = state.restaurant.whatsapp ? `WhatsApp: ${state.restaurant.whatsapp}` : "";
+  // Identidade: no topo preferimos a descrição (sem exibir WhatsApp aqui)
+  descEl.textContent = (state.restaurant.desc || "").toString();
 
   wrap.innerHTML = "";
 
-let activeProducts = state.products
-  .filter(p => p.active !== false);
+  let activeProducts = state.products
+    .filter(p => p.active !== false);
 
-if(state.selectedCategory !== "Todos"){
-  activeProducts = activeProducts.filter(
-    p => (p.category || "Outros") === state.selectedCategory
+  if(state.selectedCategory !== "Todos"){
+    activeProducts = activeProducts.filter(
+      p => (p.category || "Outros") === state.selectedCategory
+    );
+  }
+
+  activeProducts = activeProducts.sort(
+    (a,b)=> (a.name||"").localeCompare(b.name||"")
   );
-}
 
-activeProducts = activeProducts.sort(
-  (a,b)=> (a.name||"").localeCompare(b.name||"")
-);
-
-  
   for (const p of activeProducts){
     const img = (p.imageUrl || p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
     const div = document.createElement("div");
@@ -762,7 +828,8 @@ activeProducts = activeProducts.sort(
     `;
 
     wrap.appendChild(div);
-  }wrap.querySelectorAll("[data-add]").forEach(btn => {
+  }
+  wrap.querySelectorAll("[data-add]").forEach(btn => {
     btn.addEventListener("click", () => openProductModal(btn.getAttribute("data-add")));
   });
 }
@@ -868,7 +935,6 @@ function clearCheckoutInputs() {
   document.getElementById("custPhone").value = "";
   document.getElementById("custAddr").value = "";
 }
-
 
 let __checkoutUIReady = false;
 
@@ -1000,7 +1066,6 @@ function updateCheckoutUIFromConfig(){
       modeHint.textContent = parts.join(" • ");
     }
   }
-
 
   // Bairros (opcional) - se tiver lista, mostra um select para facilitar
   try{
@@ -1861,10 +1926,21 @@ async function boot() {
 
   // Carregar dados do restaurante
   state.slug = getSlug();
+
+  // ✅ Se abriu sem slug (PWA start_url), tenta recuperar último slug usado e redirecionar
   if (!state.slug) {
-    document.getElementById("title").textContent = "URL inválida. Use /r/slug ou ?r=slug";
+    const lastSlug = loadLastSlug();
+    if (lastSlug) {
+      // preferir /r/slug (funciona bem com rewrite na Vercel)
+      location.replace(`/r/${encodeURIComponent(lastSlug)}`);
+      return;
+    }
+    document.getElementById("title").textContent = "URL inválida. Use /r/slug ou ?slug=slug";
     return;
   }
+
+  // salva slug para o PWA abrir “certo” depois
+  saveLastSlug(state.slug);
 
   state.restaurant = await fetchRestaurantBySlug(state.slug);
   if (!state.restaurant) {
@@ -1877,7 +1953,6 @@ async function boot() {
   applyConfigToClient(state.config);
   // Realtime config: se mudar no admin, atualiza no cliente
   startConfigListener(state.restaurant.id);
-
 
   state.products = await fetchProducts(state.restaurant.id);
   buildCategories();
@@ -1907,10 +1982,12 @@ boot();
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      await navigator.serviceWorker.register("./sw.js", { scope: "./" });
+      // ✅ garante que funciona mesmo abrindo em /r/slug (PWA instalado)
+      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       console.log("SW registrado ✅");
     } catch (e) {
       console.warn("SW falhou:", e);
     }
   });
 }
+await navigator.serviceWorker.register("/client/sw.js", { scope: "/client/" });

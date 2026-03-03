@@ -1034,3 +1034,54 @@ body.compactMenu .productContent{ padding:12px; }
   background:#fff;
 }
 .menuUrlBtn:hover{ filter:brightness(.98); }
+
+/* =========================
+   Identidade (logo redonda + fundo no topo)
+   ========================= */
+.topbar{ position:sticky; }
+.brand{ position:relative; z-index:2; }
+
+.brandCover{
+  z-index:1;
+  position:absolute;
+  left:0; right:0; top:0;
+  height:140px;
+  background-size:cover;
+  background-position:center;
+  background-repeat:no-repeat;
+  filter:saturate(1.05);
+}
+
+.topbar.hasCover{
+  border-bottom:0;
+}
+
+.topbar.hasCover .brand{
+  padding-top:56px; /* espaço para o fundo aparecer */
+}
+
+.topbar.hasCover .brand__text h1,
+.topbar.hasCover .brand__text p{
+  color:#fff;
+  text-shadow:0 2px 10px rgba(0,0,0,.35);
+}
+
+.topbar.hasCover::after{
+  z-index:1;
+  content:"";
+  position:absolute;
+  left:0; right:0; top:0;
+  height:140px;
+  background:linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.05));
+  pointer-events:none;
+}
+
+.brandLogo{
+  width:56px;
+  height:56px;
+  border-radius:999px;
+  object-fit:cover;
+  border:3px solid rgba(255,255,255,.95);
+  box-shadow:0 10px 25px rgba(0,0,0,.18);
+  flex:0 0 auto;
+}

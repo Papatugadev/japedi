@@ -2,11 +2,14 @@
 <html lang="pt-br">
 <head>
   <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta
+  name="viewport"
+  content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover"
+/>
   <title>Cardápio</title>
 
   <!-- PWA (funciona só em HTTPS) -->
-  <link rel="manifest" href="./manifest.webmanifest">
+<link rel="manifest" href="/client/manifest.webmanifest">
   <meta name="theme-color" content="#16a34a">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -15,6 +18,24 @@
   <link rel="stylesheet" href="./styles.css">
 
   <style>
+   
+  /* ...seu CSS atual... */
+
+  /* ✅ App-like: sem scroll lateral + sem bounce lateral */
+  html, body {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: hidden;
+    overscroll-behavior-x: none;
+    -webkit-text-size-adjust: 100%;
+    touch-action: pan-y; /* permite só scroll vertical */
+  }
+
+  /* Evita elementos estourarem a tela e criarem scroll lateral */
+  img, svg, video, canvas {
+    max-width: 100%;
+    height: auto;
+  }
     /* Chat bubbles (cliente x restaurante) */
     .chatbox { margin-top:12px; }
     .chatMessages { display:flex; flex-direction:column; gap:8px; }
@@ -29,7 +50,9 @@
 
 <body>
   <header class="topbar">
+      <div id="brandCover" class="brandCover hidden" aria-hidden="true"></div>
     <div class="brand">
+      <img id="brandLogo" class="brandLogo hidden" alt="Logo do restaurante" />
       <div class="brand__text">
         <h1 id="title">Carregando...</h1>
         <p id="desc"></p>
@@ -270,5 +293,19 @@
   </div>
 
   <script type="module" src="./app.js"></script>
+  <script>
+  // ✅ iOS Safari: bloquear gesto de pinch zoom
+  document.addEventListener('gesturestart', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('gesturechange', function (e) { e.preventDefault(); }, { passive: false });
+  document.addEventListener('gestureend', function (e) { e.preventDefault(); }, { passive: false });
+
+  // ✅ bloquear double-tap zoom (sem afetar cliques normais)
+  let lastTouchEnd = 0;
+  document.addEventListener('touchend', function (e) {
+    const now = Date.now();
+    if (now - lastTouchEnd <= 300) e.preventDefault();
+    lastTouchEnd = now;
+  }, { passive: false });
+</script>
 </body>
 </html>

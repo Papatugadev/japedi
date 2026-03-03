@@ -173,6 +173,49 @@ async function uploadProductImage(file) {
   return data.secure_url || data.url || null;
 }
 
+
+/** ===== Upload de imagem (Branding: logo/capa) =====
+ * Usa o mesmo Cloudinary do produto, mas salva em /branding
+ */
+async function uploadBrandImage(file, kind) {
+  if (!file) return null;
+  if (!RESTAURANT_ID) throw new Error("RESTAURANT_ID vazio");
+
+  const isImage = (file.type || "").startsWith("image/");
+  if (!isImage) throw new Error("Arquivo não é imagem");
+
+  const maxMB = 4;
+  const maxBytes = maxMB * 1024 * 1024;
+  if (file.size > maxBytes) throw new Error(`Imagem muito grande. Máx: ${maxMB}MB`);
+
+  if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === "SEU_CLOUD_NAME") {
+    throw new Error("Configure CLOUDINARY_CLOUD_NAME no admin.js");
+  }
+  if (!CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_UPLOAD_PRESET === "SEU_UPLOAD_PRESET") {
+    throw new Error("Configure CLOUDINARY_UPLOAD_PRESET (unsigned) no admin.js");
+  }
+
+  const safeKind = (kind === "logo") ? "logo" : "cover";
+  const folder = `restaurants/${RESTAURANT_ID}/branding`;
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  form.append("folder", folder);
+  form.append("context", `alt=${encodeURIComponent(`${safeKind}-${file.name || "imagem"}`)}`);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+  const res = await fetch(endpoint, { method: "POST", body: form });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const msg = data?.error?.message || `Falha no upload (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+
+  return data.secure_url || data.url || null;
+}
+
 /** ===== Tempo ao vivo (badge) ===== */
 let __JPED_TIME_TICK = null;
 
@@ -2018,6 +2061,183 @@ function _arrToCsv(a){
   return (Array.isArray(a) ? a : []).join(", ");
 }
 
+
+/* ===== Identidade (logo + fundo) ===== */
+function _ensureIdentityUI(){
+  // já existe?
+  if (document.getElementById("setIdentityCard")) return;
+
+  // tenta achar um ponto bom pra inserir (depois do Instagram, ou no fim do bloco settings)
+  const ig = _setEl("setInstagram");
+  const host = (ig && (ig.closest(".formRow") || ig.parentElement)) || document.getElementById("page-settings") || document.body;
+
+  const wrap = document.createElement("div");
+  wrap.id = "setIdentityCard";
+  wrap.style.marginTop = "14px";
+  wrap.innerHTML = `
+    <div style="padding:14px;border:1px solid #e5e7eb;border-radius:16px;background:#fff">
+      <div style="font-weight:900;color:#0f172a;margin-bottom:8px">Identidade</div>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:12px;color:#334155;margin-bottom:6px">Fundo (capa)</div>
+          <input id="setCoverUrl" class="input" placeholder="URL da imagem de fundo (opcional)" />
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+            <input id="setCoverFile" type="file" accept="image/*" />
+            <button type="button" class="ghost small" id="setCoverClear">Remover fundo</button>
+            <span id="setCoverStatus" class="muted" style="font-size:12px"></span>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:240px">
+          <div style="font-size:12px;color:#334155;margin-bottom:6px">Logo (redonda)</div>
+          <input id="setLogoUrl" class="input" placeholder="URL da logo (opcional)" />
+          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
+            <input id="setLogoFile" type="file" accept="image/*" />
+            <button type="button" class="ghost small" id="setLogoClear">Remover logo</button>
+            <span id="setLogoStatus" class="muted" style="font-size:12px"></span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:12px">
+        <div style="font-size:12px;color:#334155;margin-bottom:6px">Prévia</div>
+        <div id="setIdentityPreview" style="position:relative;height:110px;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;background:#f1f5f9">
+          <div id="setCoverPreview" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05)"></div>
+          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.05));"></div>
+          <img id="setLogoPreview" alt="Logo" style="position:absolute;left:14px;bottom:14px;width:62px;height:62px;border-radius:999px;object-fit:cover;background:#fff;border:3px solid rgba(255,255,255,0.9);box-shadow:0 10px 25px rgba(0,0,0,.18);display:none" />
+          <div style="position:absolute;left:92px;bottom:22px;color:#fff">
+            <div id="setPreviewName" style="font-weight:900;font-size:16px;line-height:1.1;text-shadow:0 2px 10px rgba(0,0,0,.25)"></div>
+            <div id="setPreviewDesc" style="opacity:.9;font-size:12px;margin-top:2px;text-shadow:0 2px 10px rgba(0,0,0,.25)"></div>
+          </div>
+        </div>
+        <div class="muted" style="font-size:12px;margin-top:8px">Dica: use uma imagem larga para o fundo e uma logo quadrada (ela vira redonda).</div>
+      </div>
+    </div>
+  `;
+
+  // insere depois do Instagram, se possível
+  if (ig && (ig.closest(".formRow") || ig.parentElement)) {
+    const anchor = ig.closest(".formRow") || ig.parentElement;
+    anchor.insertAdjacentElement("afterend", wrap);
+  } else {
+    host.appendChild(wrap);
+  }
+
+  // esconde WhatsApp (identidade agora é só logo + fundo)
+  try{
+    const wa = _setEl("setWhatsapp");
+    if (wa) {
+      const row = wa.closest(".formRow") || wa.parentElement;
+      if (row) row.style.display = "none";
+    }
+  }catch(_){}
+
+  // wire preview sync
+  ["setName","setDesc","setLogoUrl","setCoverUrl"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.addEventListener("input", () => { try{ _updateIdentityPreview(); }catch(_){} });
+  });
+
+  // clear buttons
+  const clearCover = document.getElementById("setCoverClear");
+  if (clearCover) clearCover.onclick = () => {
+    const u = document.getElementById("setCoverUrl"); if (u) u.value = "";
+    try{ _updateIdentityPreview(); }catch(_){}
+  };
+  const clearLogo = document.getElementById("setLogoClear");
+  if (clearLogo) clearLogo.onclick = () => {
+    const u = document.getElementById("setLogoUrl"); if (u) u.value = "";
+    try{ _updateIdentityPreview(); }catch(_){}
+  };
+
+  // upload handlers
+  const coverFile = document.getElementById("setCoverFile");
+  if (coverFile) {
+    coverFile.value = "";
+    coverFile.onchange = async () => {
+      const f = coverFile.files?.[0];
+      if (!f) return;
+      const status = document.getElementById("setCoverStatus");
+      const urlInput = document.getElementById("setCoverUrl");
+      if (status) status.textContent = "Enviando...";
+      coverFile.disabled = true;
+      if (urlInput) urlInput.disabled = true;
+      try{
+        const finalUrl = await uploadBrandImage(f, "cover");
+        if (urlInput) urlInput.value = finalUrl || "";
+        if (status) status.textContent = "Fundo enviado ✅";
+        _updateIdentityPreview();
+      }catch(e){
+        console.warn("Upload cover falhou:", e?.code || e, e?.message || e);
+        if (status) status.textContent = "Falha ❌";
+        alert(e?.message || "Não foi possível enviar o fundo.");
+      }finally{
+        coverFile.disabled = false;
+        if (urlInput) urlInput.disabled = false;
+      }
+    };
+  }
+
+  const logoFile = document.getElementById("setLogoFile");
+  if (logoFile) {
+    logoFile.value = "";
+    logoFile.onchange = async () => {
+      const f = logoFile.files?.[0];
+      if (!f) return;
+      const status = document.getElementById("setLogoStatus");
+      const urlInput = document.getElementById("setLogoUrl");
+      if (status) status.textContent = "Enviando...";
+      logoFile.disabled = true;
+      if (urlInput) urlInput.disabled = true;
+      try{
+        const finalUrl = await uploadBrandImage(f, "logo");
+        if (urlInput) urlInput.value = finalUrl || "";
+        if (status) status.textContent = "Logo enviada ✅";
+        _updateIdentityPreview();
+      }catch(e){
+        console.warn("Upload logo falhou:", e?.code || e, e?.message || e);
+        if (status) status.textContent = "Falha ❌";
+        alert(e?.message || "Não foi possível enviar a logo.");
+      }finally{
+        logoFile.disabled = false;
+        if (urlInput) urlInput.disabled = false;
+      }
+    };
+  }
+
+  // preview inicial
+  try{ _updateIdentityPreview(); }catch(_){}
+}
+
+function _updateIdentityPreview(){
+  const name = (_setEl("setName")?.value || "").trim();
+  const desc = (_setEl("setDesc")?.value || "").trim();
+  const logoUrl = (document.getElementById("setLogoUrl")?.value || "").trim();
+  const coverUrl = (document.getElementById("setCoverUrl")?.value || "").trim();
+
+  const elName = document.getElementById("setPreviewName");
+  const elDesc = document.getElementById("setPreviewDesc");
+  if (elName) elName.textContent = name || "Seu restaurante";
+  if (elDesc) elDesc.textContent = desc || "";
+
+  const cover = document.getElementById("setCoverPreview");
+  if (cover) cover.style.backgroundImage = coverUrl ? `url("${coverUrl.replaceAll('"', '\"')}")` : "none";
+
+  const logo = document.getElementById("setLogoPreview");
+  if (logo) {
+    if (logoUrl) {
+      logo.src = logoUrl;
+      logo.style.display = "block";
+    } else {
+      logo.removeAttribute("src");
+      logo.style.display = "none";
+    }
+  }
+}
+
+
+
 function _applySettingsToForm(cfg){
   cfg = cfg || {};
   const r = cfg.restaurant || {};
@@ -2031,8 +2251,11 @@ function _applySettingsToForm(cfg){
 
   _setVal("setName", r.name);
   _setVal("setDesc", r.desc);
-  _setVal("setWhatsapp", r.whatsapp);
+  // WhatsApp removido da Identidade (mantém compatibilidade: não exibe/nem salva)
   _setVal("setInstagram", r.instagram);
+  _setVal("setLogoUrl", r.logoUrl);
+  _setVal("setCoverUrl", r.coverUrl);
+  try{ _updateIdentityPreview(); }catch(_){ }
 
   _setVal("setOpen", hours.open);
   _setVal("setClose", hours.close);
@@ -2083,8 +2306,9 @@ function _collectSettingsFromForm(){
     restaurant: {
       name: _val("setName").trim(),
       desc: _val("setDesc").trim(),
-      whatsapp: _val("setWhatsapp").trim(),
       instagram: _val("setInstagram").trim(),
+      logoUrl: _val("setLogoUrl").trim(),
+      coverUrl: _val("setCoverUrl").trim(),
     },
     hours: {
       open: _val("setOpen").trim(),
@@ -2213,6 +2437,9 @@ function _startSettingsPanel(){
   const btnReload = _setEl("setReload");
   if (btnSave) btnSave.onclick = _saveSettings;
   if (btnReload) btnReload.onclick = _reloadSettingsOnce;
+
+  // Identidade (logo + fundo) + remove WhatsApp da seção
+  try{ _ensureIdentityUI(); }catch(_){}
 
   // carrega e escuta em tempo real
   _setText("setStatus", "Carregando...");
