@@ -83,16 +83,464 @@
 
       <section id="page-finance" class="page">
         <h3 class="pageTitle">Financeiro</h3>
-        <div class="placeholderCard"></div>
+
+        <div class="finTop" id="financeTop">
+          <div class="finTopLeft">
+            <div class="finKicker">Relatório</div>
+            <div class="finTitleLine">
+              <div class="finTitle">Resumo do mês</div>
+              <span class="finPill" id="finMonthLabel">-</span>
+            </div>
+            <div class="muted finSub" id="finSub">Carregando dados…</div>
+          </div>
+
+          <div class="finTopRight">
+            <label class="finControl">
+              <span class="finControlLabel">Mês</span>
+              <input id="finMonth" class="input finMonth" type="month" />
+            </label>
+
+            <button id="finRefresh" class="ghost" type="button" title="Atualizar">Atualizar</button>
+            <button id="finPdf" class="btn" type="button" title="Baixar PDF">Baixar PDF</button>
+          </div>
+        </div>
+
+        <div id="financeReport" class="finWrap">
+          <div class="finGrid">
+            <div class="finCard finCardAccent">
+              <div class="finCardHead">
+                <div class="finCardTitle">Faturamento no mês</div>
+                <div class="finIcon">R$</div>
+              </div>
+              <div class="finCardValue" id="finRevenueMonth">-</div>
+              <div class="finCardMeta" id="finRevenueMeta">-</div>
+            </div>
+
+            <div class="finCard">
+              <div class="finCardHead">
+                <div class="finCardTitle">Pedidos concluídos</div>
+                <div class="finIcon">✓</div>
+              </div>
+              <div class="finCardValue" id="finDoneMonth">-</div>
+              <div class="finCardMeta" id="finDoneCompare">-</div>
+            </div>
+
+            <div class="finCard">
+              <div class="finCardHead">
+                <div class="finCardTitle">Ticket médio</div>
+                <div class="finIcon">≈</div>
+              </div>
+              <div class="finCardValue" id="finAvgTicket">-</div>
+              <div class="finCardMeta" id="finAvgTicketMeta">-</div>
+            </div>
+
+            <div class="finCard">
+              <div class="finCardHead">
+                <div class="finCardTitle">Lanche mais vendido</div>
+                <div class="finIcon">★</div>
+              </div>
+              <div class="finCardValue" id="finTopItem">-</div>
+              <div class="finCardMeta" id="finTopItemMeta">-</div>
+            </div>
+
+            <div class="finCard finCardWide">
+              <div class="finCardHead">
+                <div class="finCardTitle">Hoje</div>
+                <div class="finIcon">🕒</div>
+              </div>
+
+              <div class="finRow2">
+                <div class="finMini">
+                  <div class="finMiniLabel">Pedidos</div>
+                  <div class="finMiniValue" id="finTodayOrders">-</div>
+                </div>
+                <div class="finMini">
+                  <div class="finMiniLabel">Faturamento</div>
+                  <div class="finMiniValue" id="finTodayRevenue">-</div>
+                </div>
+                <div class="finMini">
+                  <div class="finMiniLabel">Cancelados</div>
+                  <div class="finMiniValue" id="finTodayCanceled">-</div>
+                </div>
+              </div>
+
+              <div class="finCardMeta" id="finTodayMeta">-</div>
+            </div>
+
+            <div class="finCard finCardWide">
+              <div class="finCardHead">
+                <div class="finCardTitle">Insights</div>
+                <div class="finIcon">⚡</div>
+              </div>
+
+              <div class="finInsights" id="finInsights">
+                <div class="muted">Carregando…</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="finFooter muted" id="finStatus">-</div>
       </section>
 
-      <section id="page-settings" class="page">
+            <section id="page-settings" class="page">
         <h3 class="pageTitle">Configurações</h3>
-        <div class="placeholderCard"></div>
+
+        <div class="setTop">
+          <div class="setTopLeft">
+            <div class="setKicker">Preferências do restaurante</div>
+            <div class="setTitleLine">
+              <div class="setTitle">Configuração geral</div>
+              <span class="setPill" id="setRidPill">RID: -</span>
+            </div>
+            <div class="muted" id="setSub">Tudo que você salva aqui vale pro cardápio e pro painel.</div>
+          </div>
+
+          <div class="setTopRight">
+            <button id="setReload" class="ghost" type="button">Recarregar</button>
+            <button id="setSave" class="btn" type="button">Salvar</button>
+          </div>
+        </div>
+
+        <div class="setGrid">
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Identidade</div>
+                <div class="setCardHint">Nome, descrição e contato público.</div>
+              </div>
+              <div class="setIcon">🏷️</div>
+            </div>
+
+            <div class="setForm">
+              <label class="setField">
+                <span>Nome do restaurante</span>
+                <input id="setName" class="input" placeholder="Ex: Lanche do Jorge" />
+              </label>
+
+              <label class="setField">
+                <span>Descrição</span>
+                <input id="setDesc" class="input" placeholder="Ex: Peça rápido pelo celular" />
+              </label>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>WhatsApp (DDI+DDD+Número)</span>
+                  <input id="setWhatsapp" class="input" placeholder="5511999999999" />
+                </label>
+
+                <label class="setField">
+                  <span>Instagram (opcional)</span>
+                  <input id="setInstagram" class="input" placeholder="@seurestaurante" />
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Atendimento</div>
+                <div class="setCardHint">Horário, mensagens e tempo médio.</div>
+              </div>
+              <div class="setIcon">🕒</div>
+            </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Abre (HH:MM)</span>
+                  <input id="setOpen" class="input" placeholder="18:00" />
+                </label>
+                <label class="setField">
+                  <span>Fecha (HH:MM)</span>
+                  <input id="setClose" class="input" placeholder="23:30" />
+                </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Tempo médio (min)</span>
+                  <input id="setPrepMin" class="input" placeholder="35" inputmode="numeric" />
+                </label>
+
+                <label class="setField">
+                  <span>Mensagem automática (opcional)</span>
+                  <input id="setAutoMsg" class="input" placeholder="Ex: Recebemos seu pedido ✅" />
+                </label>
+              </div>
+
+              <label class="setSwitch">
+                <input id="setIsOpen" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Loja aberta</span>
+              </label>
+
+              <label class="setSwitch">
+                <input id="setAutoConfirm" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Confirmar pedido automaticamente</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Entrega</div>
+                <div class="setCardHint">Taxas, raio e pedido mínimo.</div>
+              </div>
+              <div class="setIcon">🛵</div>
+            </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Taxa fixa (R$)</span>
+                  <input id="setDeliveryFee" class="input" placeholder="5" inputmode="decimal" />
+                </label>
+                <label class="setField">
+                  <span>Raio máximo (km)</span>
+                  <input id="setDeliveryKm" class="input" placeholder="6" inputmode="decimal" />
+                </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Pedido mínimo (R$)</span>
+                  <input id="setMinOrder" class="input" placeholder="20" inputmode="decimal" />
+                </label>
+                <label class="setField">
+                  <span>Tempo extra entrega (min)</span>
+                  <input id="setDeliveryEta" class="input" placeholder="15" inputmode="numeric" />
+                </label>
+              </div>
+
+              <label class="setField">
+                <span>Bairros atendidos (separar por vírgula)</span>
+                <input id="setNeighborhoods" class="input" placeholder="Centro, Vila Mariana, ..." />
+              </label>
+
+              <label class="setSwitch">
+                <input id="setPickup" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Permitir retirada no balcão</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Pagamentos</div>
+                <div class="setCardHint">PIX, dinheiro e observações.</div>
+              </div>
+              <div class="setIcon">💳</div>
+            </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Chave PIX (opcional)</span>
+                  <input id="setPixKey" class="input" placeholder="email, telefone ou aleatória" />
+                </label>
+                <label class="setField">
+                  <span>Nome do titular PIX</span>
+                  <input id="setPixName" class="input" placeholder="Nome do titular" />
+                </label>
+              </div>
+
+              <label class="setSwitch">
+                <input id="setCash" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Aceitar dinheiro</span>
+              </label>
+
+              <label class="setSwitch">
+                <input id="setCard" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Aceitar cartão na entrega</span>
+              </label>
+
+              <label class="setField">
+                <span>Texto de observação (checkout)</span>
+                <input id="setPayNote" class="input" placeholder="Ex: Troco para? / Aceitamos cartão via maquininha." />
+              </label>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Promoções e destaques</div>
+                <div class="setCardHint">Banner, cupom e aviso no topo.</div>
+              </div>
+              <div class="setIcon">🔥</div>
+            </div>
+
+            <div class="setForm">
+              <label class="setSwitch">
+                <input id="setPromoOn" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Ativar promoção</span>
+              </label>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Título da promoção</span>
+                  <input id="setPromoTitle" class="input" placeholder="Ex: Frete grátis hoje" />
+                </label>
+                <label class="setField">
+                  <span>Subtítulo</span>
+                  <input id="setPromoSub" class="input" placeholder="Ex: acima de R$ 35" />
+                </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Cupom (opcional)</span>
+                  <input id="setCouponCode" class="input" placeholder="EX: JPED10" />
+                </label>
+                <label class="setField">
+                  <span>Desconto (%)</span>
+                  <input id="setCouponPct" class="input" placeholder="10" inputmode="numeric" />
+                </label>
+              </div>
+
+              <label class="setField">
+                <span>Aviso (opcional)</span>
+                <input id="setNotice" class="input" placeholder="Ex: Hoje fechamos às 22:00" />
+              </label>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Notificações</div>
+                <div class="setCardHint">Som, vibração e badge.</div>
+              </div>
+              <div class="setIcon">🔔</div>
+            </div>
+
+            <div class="setForm">
+              <label class="setSwitch">
+                <input id="setSoundNewOrder" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Som ao chegar pedido</span>
+              </label>
+
+              <label class="setSwitch">
+                <input id="setSoundChat" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Som ao chegar mensagem</span>
+              </label>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Volume (0 a 1)</span>
+                  <input id="setVolume" class="input" placeholder="0.7" inputmode="decimal" />
+                </label>
+                <label class="setField">
+                  <span>Popup (toast)</span>
+                  <select id="setToasts" class="input">
+                    <option value="on">Ligado</option>
+                    <option value="off">Desligado</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </div>
+
+          <div class="setCard">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Aparência</div>
+                <div class="setCardHint">Cor principal e layout do cardápio.</div>
+              </div>
+              <div class="setIcon">🎨</div>
+            </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Cor principal (hex)</span>
+                  <input id="setPrimary" class="input" placeholder="#16a34a" />
+                </label>
+                <label class="setField">
+                  <span>Moeda</span>
+                  <select id="setCurrency" class="input">
+                    <option value="BRL">BRL (R$)</option>
+                    <option value="EUR">EUR (€)</option>
+                    <option value="USD">USD ($)</option>
+                  </select>
+                </label>
+              </div>
+
+              <label class="setSwitch">
+                <input id="setShowImages" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Mostrar fotos no cardápio</span>
+              </label>
+
+              <label class="setSwitch">
+                <input id="setCompactMenu" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Cardápio compacto (mais itens na tela)</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="setCard setCardWide">
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Avançado (Cloudinary / Integração)</div>
+                <div class="setCardHint">Somente se quiser trocar depois.</div>
+              </div>
+              <div class="setIcon">⚙️</div>
+            </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Cloudinary Cloud Name</span>
+                  <input id="setCloudName" class="input" placeholder="dbrxftz4q" />
+                </label>
+                <label class="setField">
+                  <span>Upload preset</span>
+                  <input id="setUploadPreset" class="input" placeholder="qikjmjnv" />
+                </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Link do cardápio (opcional)</span>
+                  <input id="setMenuUrl" class="input" placeholder="https://seu-dominio.com/?r=rid" />
+                </label>
+                <label class="setField">
+                  <span>Mensagem padrão do WhatsApp</span>
+                  <input id="setWaTemplate" class="input" placeholder="Olá! Quero pedir: {{order}}" />
+                </label>
+              </div>
+
+              <div class="setNote">
+                <strong>Dica:</strong> se você não preencher nada aqui, o sistema continua usando os valores do código (MVP).
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <div class="setFooter muted" id="setStatus">-</div>
       </section>
     </main>
   </div>
 </div>
+
+
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
 <script type="module" src="./admin.js"></script>
 </body>

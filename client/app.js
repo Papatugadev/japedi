@@ -84,6 +84,12 @@ function forgetLastOrder() {
 const state = {
   slug: null,
   restaurant: null,
+  config: null,
+  isOpen: true,
+  showImages: true,
+  checkoutMode: "delivery",
+  paymentMethod: "pix",
+  couponCode: "",
   products: [],
   cart: [], // [{id,name,price,qty}]
   currentOrderId: null,
@@ -104,7 +110,8 @@ categories: [],
 /** Util: formatar BRL */
 function moneyBRL(value) {
   const v = Number(value || 0);
-  return v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const cur = (state?.config?.theme?.currency || "BRL").toString().trim() || "BRL";
+  return v.toLocaleString("pt-BR", { style: "currency", currency: cur });
 }
 
 
@@ -214,11 +221,233 @@ async function fetchProducts(restaurantId) {
   return snap.docs.map(d => ({ id: d.id, ...d.data() }));
 }
 
+
+/* =========================
+   CONFIG (restaurants/{rid}/config/app)
+   ========================= */
+
+async function fetchAppConfig(restaurantId){
+  try{
+    const ref = Firestore.doc(db, "restaurants", restaurantId, "config", "app");
+    const snap = await Firestore.getDoc(ref);
+    return snap.exists() ? (snap.data() || {}) : {};
+  }catch(e){
+    console.warn("Falha ao carregar config/app:", e?.code || e, e?.message || "");
+    return {};
+  }
+}
+
+
+// Realtime: atualiza config em tempo real (quando mudar no admin)
+let __JPED_UNSUB_CONFIG = null;
+
+function startConfigListener(restaurantId){
+  try{
+    if (__JPED_UNSUB_CONFIG) { try{ __JPED_UNSUB_CONFIG(); }catch(_){} __JPED_UNSUB_CONFIG=null; }
+    const ref = Firestore.doc(db, "restaurants", restaurantId, "config", "app");
+    __JPED_UNSUB_CONFIG = Firestore.onSnapshot(ref, (snap) => {
+      const cfg = snap.exists() ? (snap.data() || {}) : {};
+      applyConfigToClient(cfg);
+    }, (err) => {
+      console.warn("Erro config realtime:", err?.code || err, err?.message || "");
+    });
+  }catch(e){
+    console.warn("Falha ao iniciar listener de config:", e?.code || e, e?.message || "");
+  }
+}
+
+function _setCssVar(name, value){
+  try{
+    if (!value) return;
+    document.documentElement.style.setProperty(name, String(value).trim());
+  }catch(_){}
+}
+
+function _hexToRgb(hex){
+  try{
+    let h = String(hex || "").trim();
+    if (!h) return null;
+    if (h.startsWith("rgb")) return null; // já é rgb/rgba
+    if (h[0] === "#") h = h.slice(1);
+    if (h.length === 3) h = h.split("").map(c => c + c).join("");
+    if (h.length !== 6) return null;
+    const r = parseInt(h.slice(0,2), 16);
+    const g = parseInt(h.slice(2,4), 16);
+    const b = parseInt(h.slice(4,6), 16);
+    if ([r,g,b].some(n => Number.isNaN(n))) return null;
+    return { r, g, b };
+  }catch(_){ return null; }
+}
+
+function _isLightColor(hex){
+  const rgb = _hexToRgb(hex);
+  if (!rgb) return false;
+  // luminância relativa (aprox) para escolher texto preto/branco
+  const y = (rgb.r * 299 + rgb.g * 587 + rgb.b * 114) / 1000;
+  return y > 170;
+}
+
+function _setOnPrimary(primaryHex){
+  try{
+    if (!primaryHex) return;
+    const on = _isLightColor(primaryHex) ? "#111111" : "#ffffff";
+    document.documentElement.style.setProperty("--onPrimary", on);
+  }catch(_){}
+}
+
+
+function _ensurePromoBanner(){
+  try{
+    let banner = document.getElementById("promoBanner");
+    if (banner) return banner;
+
+    const header = document.querySelector("header.topbar");
+    if (!header) return null;
+
+    banner = document.createElement("div");
+    banner.id = "promoBanner";
+    banner.className = "promoBanner hidden";
+    banner.innerHTML = `
+      <div class="promoInner">
+        <div class="promoIcon">🔥</div>
+        <div class="promoText">
+          <div class="promoTitle">Promoção</div>
+          <div class="promoSub"></div>
+        </div>
+      </div>
+    `;
+    header.insertAdjacentElement("afterend", banner);
+    return banner;
+  }catch(_){
+    return null;
+  }
+}
+
+function _ensureOpenPill(){
+  try{
+    let pill = document.getElementById("openPill");
+    if (pill) return pill;
+    const header = document.querySelector(".brand");
+    if (!header) return null;
+    pill = document.createElement("div");
+    pill.id = "openPill";
+    pill.className = "openPill";
+    pill.innerHTML = `<span class="dot"></span><span id="openPillText">Aberto</span>`;
+    header.appendChild(pill);
+    return pill;
+  }catch(_){ return null; }
+}
+
+function applyConfigToClient(cfg){
+  cfg = cfg || {};
+  state.config = cfg;
+
+  const r = cfg.restaurant || {};
+  const hours = cfg.hours || {};
+  const delivery = cfg.delivery || {};
+  const pay = cfg.payments || {};
+  const promo = cfg.promo || {};
+  const theme = cfg.theme || {};
+  const adv = cfg.advanced || {};
+
+  // flags
+  state.isOpen = (hours.isOpen !== false);
+  state.showImages = (theme.showImages !== false);
+
+  // tema (DESATIVADO)
+  // Você pediu para NÃO mudar a cor do app pelo painel admin.
+  // A cor fica fixa no CSS (:root --primary).
+  // _setCssVar("--accent", (theme.primary || "").trim());
+  // _setCssVar("--primary", (theme.primary || "").trim());
+  // _setOnPrimary((theme.primary || "").trim());
+
+  // esconder imagens e menu compacto
+  document.body.classList.toggle("noImages", !state.showImages);
+  document.body.classList.toggle("compactMenu", !!theme.compactMenu);
+
+  // sobrescreve infos do restaurante no state.restaurant (sem apagar outras)
+  if (state.restaurant){
+    if (r.name) state.restaurant.name = r.name;
+    if (r.desc) state.restaurant.desc = r.desc;
+    if (r.whatsapp) state.restaurant.whatsapp = r.whatsapp;
+    if (r.instagram) state.restaurant.instagram = r.instagram;
+  }
+
+  // pill aberto/fechado
+  const pill = _ensureOpenPill();
+  if (pill){
+    const txt = document.getElementById("openPillText");
+    pill.classList.toggle("isClosed", !state.isOpen);
+    if (txt) txt.textContent = state.isOpen ? "Aberto" : "Fechado";
+  }
+
+  // banner promo
+  const banner = _ensurePromoBanner();
+  if (banner){
+    const on = !!promo.enabled;
+    const title = (promo.title || "").trim();
+    const sub = (promo.subtitle || promo.notice || "").trim();
+    if (on && (title || sub)){
+      banner.classList.remove("hidden");
+      const t = banner.querySelector(".promoTitle");
+      const s = banner.querySelector(".promoSub");
+      if (t) t.textContent = title || "Promoção";
+      if (s) s.textContent = sub || "";
+    } else {
+      banner.classList.add("hidden");
+    }
+  }
+
+  // defaults do checkout com base nas configs
+  // modo: se pickup habilitado, mantém último; se não, força delivery
+  if (!delivery.pickup) state.checkoutMode = "delivery";
+  // método pagamento: prioriza PIX se tem chave, senão dinheiro, senão cartão
+  const hasPix = !!String(pay.pixKey || "").trim();
+  const hasCash = (pay.cash !== false);
+  const hasCard = !!pay.cardOnDelivery;
+
+  if (hasPix) state.paymentMethod = "pix";
+  else if (hasCash) state.paymentMethod = "cash";
+  else if (hasCard) state.paymentMethod = "card";
+  else state.paymentMethod = "cash";
+
+  // link externo menuUrl (opcional)
+  try{
+    if (adv.menuUrl){
+      let btn = document.getElementById("menuUrlBtn");
+      const header = document.querySelector(".brand");
+      if (!btn && header){
+        btn = document.createElement("a");
+        btn.id = "menuUrlBtn";
+        btn.className = "menuUrlBtn";
+        btn.target = "_blank";
+        btn.rel = "noopener";
+        btn.textContent = "Ver cardápio";
+        header.appendChild(btn);
+      }
+      if (btn){
+        btn.href = adv.menuUrl;
+        btn.classList.remove("hidden");
+      }
+    }
+  }catch(_){}
+
+  // atualiza UI que depende de config
+  try { updateCheckoutUIFromConfig(); } catch(_) {}
+  try { updateCheckoutTotals(); } catch(_) {}
+}
+
 /* =========================
    CARRINHO (LÓGICA)
    ========================= */
 
 function addToCart(productId) {
+  // respeita config aberto/fechado
+  if (state.config && state.isOpen === false) {
+    const msg = state.config?.hours?.autoMsg || "Restaurante fechado no momento.";
+    alert(msg);
+    return;
+  }
   const p = state.products.find(x => x.id === productId);
   if (!p) return;
 
@@ -618,6 +847,15 @@ function closeCartDrawer() {
    ========================= */
 
 function openCheckout() {
+  // respeita config aberto/fechado
+  if (state.config && state.isOpen === false) {
+    const msg = state.config?.hours?.autoMsg || "Restaurante fechado no momento.";
+    alert(msg);
+    return;
+  }
+  ensureCheckoutUI();
+  updateCheckoutUIFromConfig();
+  updateCheckoutTotals();
   document.getElementById("checkoutModal").classList.remove("hidden");
 }
 
@@ -631,12 +869,362 @@ function clearCheckoutInputs() {
   document.getElementById("custAddr").value = "";
 }
 
+
+let __checkoutUIReady = false;
+
+function ensureCheckoutUI(){
+  if (__checkoutUIReady) return;
+  __checkoutUIReady = true;
+
+  const content = document.querySelector("#checkoutModal .modal__content");
+  if (!content) return;
+
+  // Bloco: Entrega / Retirada
+  if (!document.getElementById("coModeBox")){
+    const box = document.createElement("div");
+    box.id = "coModeBox";
+    box.className = "coBox";
+    box.innerHTML = `
+      <div class="coTitle">Entrega</div>
+      <div class="coChips" id="coModeChips"></div>
+      <div class="coHint muted" id="coModeHint" style="margin-top:6px"></div>
+    `;
+    content.insertAdjacentElement("afterbegin", box);
+  }
+
+  // Bloco: Pagamento
+  if (!document.getElementById("coPayBox")){
+    const box = document.createElement("div");
+    box.id = "coPayBox";
+    box.className = "coBox";
+    box.innerHTML = `
+      <div class="coTitle">Pagamento</div>
+      <div class="coChips" id="coPayChips"></div>
+      <div class="muted" id="coPayNote" style="margin-top:6px"></div>
+    `;
+    content.appendChild(box);
+  }
+
+  // Cupom
+  if (!document.getElementById("coCouponBox")){
+    const box = document.createElement("div");
+    box.id = "coCouponBox";
+    box.className = "coBox";
+    box.innerHTML = `
+      <div class="coTitle">Cupom</div>
+      <div class="coRow">
+        <input id="coCouponInput" class="input" placeholder="Digite o cupom (opcional)" />
+        <button id="coApplyCoupon" class="ghost" type="button">Aplicar</button>
+      </div>
+      <div class="muted" id="coCouponMsg" style="margin-top:6px"></div>
+    `;
+    content.appendChild(box);
+  }
+
+  // Totais (sub + entrega + desconto + total)
+  if (!document.getElementById("coTotalsBox")){
+    const footer = document.querySelector("#checkoutModal .modal__footer");
+    if (footer){
+      const totals = document.createElement("div");
+      totals.id = "coTotalsBox";
+      totals.className = "coTotals";
+      totals.innerHTML = `
+        <div class="coLine"><span class="muted">Subtotal</span><strong id="coSub">-</strong></div>
+        <div class="coLine" id="coDeliveryLine"><span class="muted">Entrega</span><strong id="coDelivery">-</strong></div>
+        <div class="coLine hidden" id="coDiscountLine"><span class="muted">Desconto</span><strong id="coDiscount">-</strong></div>
+        <div class="coLine coTotal"><span>Total</span><strong id="coTotal">-</strong></div>
+        <div class="muted" id="coMinWarn" style="margin-top:8px;font-size:12px"></div>
+      `;
+      footer.insertAdjacentElement("afterbegin", totals);
+    }
+  }
+
+  // listeners
+  const couponInput = document.getElementById("coCouponInput");
+  const applyBtn = document.getElementById("coApplyCoupon");
+  if (applyBtn && couponInput){
+    applyBtn.addEventListener("click", () => {
+      state.couponCode = (couponInput.value || "").trim();
+      validateCouponAndUpdateUI(true);
+    });
+    couponInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter"){
+        e.preventDefault();
+        state.couponCode = (couponInput.value || "").trim();
+        validateCouponAndUpdateUI(true);
+      }
+    });
+  }
+}
+
+function updateCheckoutUIFromConfig(){
+  ensureCheckoutUI();
+  const cfg = state.config || {};
+  const delivery = cfg.delivery || {};
+  const pay = cfg.payments || {};
+  const promo = cfg.promo || {};
+  const hours = cfg.hours || {};
+
+  // Entrega / Retirada
+  const modeChips = document.getElementById("coModeChips");
+  const modeHint = document.getElementById("coModeHint");
+  if (modeChips){
+    modeChips.innerHTML = "";
+    const opts = [];
+    opts.push({ id:"delivery", label:"Entrega" });
+    if (delivery.pickup) opts.push({ id:"pickup", label:"Retirada" });
+
+    opts.forEach(o => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (state.checkoutMode === o.id ? " is-active" : "");
+      b.textContent = o.label;
+      b.addEventListener("click", () => {
+        state.checkoutMode = o.id;
+        updateCheckoutUIFromConfig();
+        updateCheckoutTotals();
+      });
+      modeChips.appendChild(b);
+    });
+  }
+  if (modeHint){
+    const fee = Number(delivery.fee || 0);
+    const eta = Number(delivery.etaMin || 0);
+    if (state.checkoutMode === "pickup"){
+      modeHint.textContent = "Retirada no balcão.";
+    } else {
+      const parts = [];
+      if (fee > 0) parts.push(`Taxa: ${moneyBRL(fee)}`);
+      if (eta > 0) parts.push(`Entrega: ~${eta} min`);
+      if (hours.prepMin) parts.push(`Preparo: ~${hours.prepMin} min`);
+      modeHint.textContent = parts.join(" • ");
+    }
+  }
+
+
+  // Bairros (opcional) - se tiver lista, mostra um select para facilitar
+  try{
+    const nbs = Array.isArray(delivery.neighborhoods) ? delivery.neighborhoods.filter(Boolean) : [];
+    let sel = document.getElementById("coNeighborhood");
+    if (nbs.length){
+      const addr = document.getElementById("custAddr");
+      if (addr && !sel){
+        // cria bloco acima do endereço
+        const label = document.createElement("label");
+        label.className = "label";
+        label.textContent = "Bairro";
+        sel = document.createElement("select");
+        sel.id = "coNeighborhood";
+        sel.className = "input";
+        sel.innerHTML = `<option value="">Selecione (opcional)</option>` + nbs.map(x => `<option value="${String(x).replace(/"/g,'&quot;')}">${x}</option>`).join("");
+        sel.addEventListener("change", () => {
+          const v = (sel.value || "").trim();
+          if (!v) return;
+          // tenta adicionar o bairro no início do endereço se não tiver
+          const cur = (addr.value || "");
+          if (!cur.toLowerCase().includes(v.toLowerCase())){
+            addr.value = (cur ? (cur + "\n") : "") + "Bairro: " + v;
+          }
+        });
+        // insere antes do label do endereço (que é o label anterior do textarea)
+        addr.insertAdjacentElement("beforebegin", sel);
+        addr.insertAdjacentElement("beforebegin", label);
+      }
+    } else {
+      // se não tem bairros, remove o select se existir
+      if (sel){
+        const prev = sel.previousElementSibling;
+        if (prev && prev.classList.contains("label")) prev.remove();
+        sel.remove();
+      }
+    }
+  }catch(_){}
+
+  // Pagamento
+  const payChips = document.getElementById("coPayChips");
+  const payNote = document.getElementById("coPayNote");
+  if (payChips){
+    payChips.innerHTML = "";
+    const opts = [];
+    if (String(pay.pixKey || "").trim()) opts.push({ id:"pix", label:"PIX" });
+    if (pay.cash !== false) opts.push({ id:"cash", label:"Dinheiro" });
+    if (pay.cardOnDelivery) opts.push({ id:"card", label:"Cartão" });
+
+    // garante método válido
+    if (!opts.find(o => o.id === state.paymentMethod)){
+      state.paymentMethod = opts[0]?.id || "cash";
+    }
+
+    opts.forEach(o => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "chip" + (state.paymentMethod === o.id ? " is-active" : "");
+      b.textContent = o.label;
+      b.addEventListener("click", () => {
+        state.paymentMethod = o.id;
+        updateCheckoutUIFromConfig();
+        updateCheckoutTotals();
+      });
+      payChips.appendChild(b);
+    });
+  }
+  if (payNote){
+    const parts = [];
+    if (state.paymentMethod === "pix" && (pay.pixName || pay.pixKey)){
+      parts.push(`Chave PIX: ${pay.pixKey || ""}`.trim());
+      if (pay.pixName) parts.push(`Nome: ${pay.pixName}`);
+    }
+    if (pay.note) parts.push(pay.note);
+    payNote.textContent = parts.join(" • ");
+  }
+
+  // Cupom
+  const couponBox = document.getElementById("coCouponBox");
+  if (couponBox){
+    const show = !!(promo.enabled && promo.couponCode && promo.couponPct);
+    couponBox.classList.toggle("hidden", !show);
+    if (!show){
+      state.couponCode = "";
+      const inp = document.getElementById("coCouponInput");
+      if (inp) inp.value = "";
+      const msg = document.getElementById("coCouponMsg");
+      if (msg) msg.textContent = "";
+    }
+  }
+}
+
+function validateCouponAndUpdateUI(showAlerts){
+  const cfg = state.config || {};
+  const promo = cfg.promo || {};
+  const msg = document.getElementById("coCouponMsg");
+
+  const code = (state.couponCode || "").trim();
+  const expected = (promo.couponCode || "").trim();
+  const pct = Number(promo.couponPct || 0);
+
+  let ok = false;
+  if (promo.enabled && expected && pct > 0 && code){
+    ok = code.toLowerCase() === expected.toLowerCase();
+  }
+
+  if (msg){
+    if (!code){
+      msg.textContent = "";
+    } else if (ok){
+      msg.textContent = `Cupom aplicado: ${pct}% OFF ✅`;
+    } else {
+      msg.textContent = "Cupom inválido ❌";
+    }
+  }
+
+  if (showAlerts && code && !ok) alert("Cupom inválido.");
+  updateCheckoutTotals();
+}
+
+function computeOrderTotals(){
+  const cfg = state.config || {};
+  const delivery = cfg.delivery || {};
+  const promo = cfg.promo || {};
+
+  const { subtotal, qty } = cartTotals();
+
+  // taxa de entrega (só no modo delivery)
+  const deliveryFee = (state.checkoutMode === "delivery") ? Number(delivery.fee || 0) : 0;
+
+  // cupom (%)
+  let discount = 0;
+  const code = (state.couponCode || "").trim();
+  const expected = (promo.couponCode || "").trim();
+  const pct = Number(promo.couponPct || 0);
+  const couponOk = !!(promo.enabled && expected && pct > 0 && code && code.toLowerCase() === expected.toLowerCase());
+
+  if (couponOk) {
+    discount = Math.round((subtotal * (pct / 100)) * 100) / 100;
+  }
+
+  const total = Math.max(0, (subtotal + deliveryFee) - discount);
+
+  // pedido mínimo (somente delivery)
+  const minOrder = Number(delivery.minOrder || 0);
+  const minOk = !(state.checkoutMode === "delivery" && minOrder > 0 && subtotal < minOrder);
+
+  return {
+    qty,
+    subtotal,
+    deliveryFee,
+    discount,
+    total,
+    couponOk,
+    couponPct: couponOk ? pct : 0,
+    minOk,
+    minOrder
+  };
+}
+
+function updateCheckoutTotals(){
+  ensureCheckoutUI();
+
+  const { subtotal, deliveryFee, discount, total, couponOk, couponPct } = computeOrderTotals();
+  const cfg = state.config || {};
+  const delivery = cfg.delivery || {};
+
+  const subEl = document.getElementById("coSub");
+  const delEl = document.getElementById("coDelivery");
+  const delLine = document.getElementById("coDeliveryLine");
+  const discEl = document.getElementById("coDiscount");
+  const discLine = document.getElementById("coDiscountLine");
+  const totalEl = document.getElementById("coTotal");
+  const warnEl = document.getElementById("coMinWarn");
+
+  if (subEl) subEl.textContent = moneyBRL(subtotal);
+  if (delEl) delEl.textContent = deliveryFee ? moneyBRL(deliveryFee) : "R$ 0,00";
+  if (delLine) delLine.classList.toggle("hidden", state.checkoutMode !== "delivery");
+
+  if (discLine){
+    discLine.classList.toggle("hidden", !couponOk || discount <= 0);
+  }
+  if (discEl){
+    discEl.textContent = couponOk ? `- ${moneyBRL(discount)} (${couponPct}%)` : "-";
+  }
+  if (totalEl) totalEl.textContent = moneyBRL(total);
+
+  if (warnEl){
+    const min = Number(delivery.minOrder || 0);
+    if (state.checkoutMode === "delivery" && min > 0 && subtotal < min){
+      warnEl.textContent = `Pedido mínimo para entrega: ${moneyBRL(min)} (falta ${moneyBRL(min - subtotal)}).`;
+    } else {
+      warnEl.textContent = "";
+    }
+  }
+
+  // Ajusta campo endereço (retirada não exige)
+  try{
+    const addr = document.getElementById("custAddr");
+    if (addr){
+      addr.placeholder = (state.checkoutMode === "pickup")
+        ? "Observação (opcional)"
+        : "Rua, número, bairro...";
+    }
+  }catch(_){}
+}
+
 /* =========================
    Criar pedido no Firestore
    ========================= */
 
 async function createOrder() {
   await ensureAnonAuth();
+
+  // garante uid atual (rules do chat exigem customerUid == request.auth.uid)
+  const uid = auth.currentUser?.uid || state.customerUid;
+  state.customerUid = uid;
+
+  // ✅ Respeita config: aberto/fechado
+  if (state.config && state.isOpen === false) {
+    const msg = state.config?.hours?.autoMsg || "Restaurante fechado no momento.";
+    alert(msg);
+    return;
+  }
 
   // ✅ rules do chat exigem customerUid == request.auth.uid
   if (!state.customerUid) return alert("Falha no login anônimo. Recarregue a página e tente novamente.");
@@ -645,10 +1233,33 @@ async function createOrder() {
   const phone = (document.getElementById("custPhone").value || "").trim();
   const address = (document.getElementById("custAddr").value || "").trim();
 
+  if (state.checkoutMode === "delivery" && !address) return alert("Digite seu endereço.");
+
   if (!name) return alert("Digite seu nome.");
   if (state.cart.length === 0) return alert("Carrinho vazio.");
 
-  const { subtotal, qty } = cartTotals();
+  const totalsCalc = computeOrderTotals();
+  const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, minOk, minOrder } = totalsCalc;
+
+  if (!minOk) {
+    alert(`Pedido mínimo para entrega: ${moneyBRL(minOrder)}.`);
+    return;
+  }
+
+  // ✅ Checkout snapshot (NUNCA pode ter undefined, senão o Firestore recusa)
+  const checkout = {
+    mode: (state.checkoutMode || "delivery"),
+    paymentMethod: (state.paymentMethod || null),
+    couponCode: ((state.couponCode || "").trim() || null),
+    couponOk: !!couponOk,
+    couponPct: Number(couponPct || 0),
+    deliveryFee: Number(deliveryFee || 0),
+    discount: Number(discount || 0),
+    total: Number(total || 0),
+    // no modo retirada, usamos o campo "address" como observação opcional
+    deliveryAddress: (state.checkoutMode === "delivery" ? (address || "") : null),
+    pickupNote: (state.checkoutMode === "pickup" ? (address || "") : null)
+  };
 
   const orderData = {
     status: "recebido",
@@ -656,13 +1267,17 @@ async function createOrder() {
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
     customer: { name, phone, address },
+    checkout,
     items: state.cart.map(i => ({
       id: i.id,
+      productId: i.productId || i.id,
       name: i.name,
       price: i.price,
-      qty: i.qty
+      qty: i.qty,
+      optionsText: i.optionsText || "",
+      meta: i.meta || null
     })),
-    totals: { qty, subtotal }
+    totals: { qty, subtotal, deliveryFee, discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
@@ -673,6 +1288,7 @@ async function createOrder() {
   try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
 
   // ✅ tracking público PRECISA vir antes do chat (rules do chat usa exists(orders_public/{orderId}))
+  let publicOk = false;
   try {
     const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
     await Firestore.setDoc(
@@ -683,6 +1299,7 @@ async function createOrder() {
         updatedAt: orderData.updatedAt,
         orderNumber: orderData.orderNumber,
         totals: orderData.totals,
+        checkout: orderData.checkout, // ✅ agora sempre existe e sem undefined
         customerName: orderData.customer?.name || "",
         // ✅ Para o cliente conseguir ver os itens na aba Pedidos
         // (sem precisar de permissão de leitura no /orders)
@@ -690,8 +1307,14 @@ async function createOrder() {
       },
       { merge: true }
     );
+    publicOk = true;
   } catch (e) {
     console.warn("Não foi possível gravar orders_public (rules):", e?.code || e, e?.message || "");
+  }
+
+  // Se não conseguiu gravar o público, o chat também vai falhar (rule usa exists()).
+  if (!publicOk) {
+    throw new Error("Falha ao criar pedido: não consegui gravar orders_public (permissão/dados).");
   }
 
   // cria/garante chat do pedido (agora o exists() da rule já passa)
@@ -1248,6 +1871,13 @@ async function boot() {
     document.getElementById("title").textContent = "Restaurante não encontrado";
     return;
   }
+
+  // Carregar config/app (salva no painel admin) e aplicar no client
+  state.config = await fetchAppConfig(state.restaurant.id);
+  applyConfigToClient(state.config);
+  // Realtime config: se mudar no admin, atualiza no cliente
+  startConfigListener(state.restaurant.id);
+
 
   state.products = await fetchProducts(state.restaurant.id);
   buildCategories();

@@ -1,4 +1,5 @@
 :root{
+  --onPrimary:#ffffff;
   --primary:#16a34a;
   --bg:#f6f7fb;
   --text:#111111;
@@ -63,7 +64,7 @@ main{
   border:0;
   border-radius:12px;
   background:var(--primary);
-  color:#fff;
+  color:var(--onPrimary,#fff);
   font-weight:800;
   cursor:pointer;
   transition:.15s;
@@ -94,7 +95,7 @@ main{
   top:-8px;
   right:-8px;
   background:var(--primary);
-  color:#fff;
+  color:var(--onPrimary,#fff);
   font-size:12px;
   font-weight:800;
   border-radius:999px;
@@ -707,7 +708,7 @@ main, .view{
   font-size: 12px;
   font-weight: 700;
   background: #ef4444;
-  color: #fff;
+  color: var(--onPrimary,#fff);
   border: 2px solid #fff;
   box-shadow: 0 6px 16px rgba(0,0,0,.18);
   pointer-events:none;
@@ -895,3 +896,141 @@ main, .view{
   align-items:center;
   gap:10px;
 }
+
+/* =========================
+   CONFIG UI (client) - adicionado
+   ========================= */
+
+/* cor custom vinda da config */
+:root{
+  --onPrimary:#ffffff;
+  --accent: var(--primary);
+}
+
+/* pill aberto/fechado */
+.openPill{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  font-size:12px;
+  font-weight:900;
+  color:#166534;
+  white-space:nowrap;
+}
+.openPill .dot{
+  width:8px;height:8px;border-radius:999px;
+  background:#16a34a;
+  box-shadow:0 0 0 3px rgba(22,163,74,.15);
+}
+.openPill.isClosed{
+  color:#991b1b;
+}
+.openPill.isClosed .dot{
+  background:#ef4444;
+  box-shadow:0 0 0 3px rgba(239,68,68,.14);
+}
+
+/* banner promo */
+.promoBanner{
+  max-width:720px;
+  margin:12px auto 0;
+  padding:0 16px;
+}
+.promoInner{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  border-radius:16px;
+  padding:12px 14px;
+  border:1px solid rgba(15,23,42,.08);
+  background: linear-gradient(90deg, rgba(255,90,0,.12), rgba(255,90,0,.04));
+  box-shadow:0 8px 24px rgba(0,0,0,.06);
+}
+.promoIcon{
+  width:36px;height:36px;border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  background:rgba(255,90,0,.18);
+  font-size:18px;
+}
+.promoTitle{ font-weight:900; }
+.promoSub{ color:var(--muted); margin-top:2px; font-size:13px; }
+
+/* chips do checkout */
+.coBox{
+  margin-top:12px;
+  padding:12px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.08);
+  background:#fff;
+}
+.coTitle{
+  font-size:12px;
+  font-weight:900;
+  color:var(--muted);
+  margin-bottom:10px;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.coChips{ display:flex; flex-wrap:wrap; gap:8px; }
+.chip{
+  border:1px solid rgba(15,23,42,.12);
+  background:#fff;
+  color:#0f172a;
+  border-radius:999px;
+  padding:8px 12px;
+  font-weight:900;
+  font-size:13px;
+  cursor:pointer;
+}
+.chip.is-active{
+  border-color: rgba(0,0,0,0);
+  background:var(--primary);
+  color:#fff;
+}
+.coRow{ display:flex; gap:8px; align-items:center; }
+.coRow .input{ flex:1; }
+
+/* totais checkout */
+.coTotals{
+  margin-bottom:10px;
+  padding:10px 12px;
+  border-radius:14px;
+  border:1px solid rgba(15,23,42,.08);
+  background:#fff;
+}
+.coLine{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  padding:6px 0;
+}
+.coLine + .coLine{ border-top:1px dashed rgba(15,23,42,.10); }
+.coTotal{
+  font-size:16px;
+  font-weight:900;
+}
+
+/* esconder imagens se config pedir */
+body.noImages .productImg{ display:none !important; }
+
+/* menu compacto */
+body.compactMenu .productCard{ grid-template-columns: 1fr; }
+body.compactMenu .productImg{ height:140px; }
+body.compactMenu .productContent{ padding:12px; }
+
+/* botão link externo */
+.menuUrlBtn{
+  margin-left:auto;
+  text-decoration:none;
+  border:1px solid rgba(15,23,42,.10);
+  padding:10px 12px;
+  border-radius:12px;
+  font-weight:900;
+  color:#0f172a;
+  background:#fff;
+}
+.menuUrlBtn:hover{ filter:brightness(.98); }

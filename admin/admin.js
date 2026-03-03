@@ -393,7 +393,6 @@ async function setOrderStatus(orderId, newStatus) {
   }
 
   if (!ADMIN_OK) {
-    console.warn("Usuário não é admin deste restaurante (RID/UID).");
     await checkAdminAccess();
     if (!ADMIN_OK) {
       alert("Sem permissão de admin. Confira o RID/UID no topo.");
@@ -405,70 +404,20 @@ async function setOrderStatus(orderId, newStatus) {
   const publicRef  = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
   const historyRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_history", orderId);
 
-  // ✅ Se for ENTREGUE: arquiva e remove dos ativos
-  if (newStatus === "entregue") {
-    // 1) tenta pegar dados do privado, se não der, do público
-    let baseData = null;
-
-    try {
-      const ps = await Firestore.getDoc(privateRef);
-      if (ps.exists()) baseData = ps.data();
-    } catch (_) {}
-
-    if (!baseData) {
-      try {
-        const qs = await Firestore.getDoc(publicRef);
-        if (qs.exists()) baseData = qs.data();
-      } catch (_) {}
-    }
-
-    // 2) salva no histórico (mesmo se baseData vier null, ainda salva meta)
-    try {
-      await Firestore.setDoc(
-        historyRef,
-        {
-          ...(baseData || {}),
-          id: orderId,
-          status: "entregue",
-          deliveredAt: Firestore.serverTimestamp(),
-          archivedAt: Firestore.serverTimestamp(),
-          updatedAt: Firestore.serverTimestamp(),
-        },
-        { merge: true }
-      );
-    } catch (e) {
-      console.warn("Erro ao arquivar em orders_history:", e?.code || e, e?.message || "");
-      alert("Não consegui arquivar no histórico (orders_history). Veja o console (F12).");
-      return; // não apaga se não arquivou
-    }
-
-    // 3) apaga dos ativos (some da tela)
-    try { await Firestore.deleteDoc(publicRef); } catch (e) {
-      console.warn("Erro ao deletar orders_public:", e?.code || e, e?.message || "");
-    }
-    try { await Firestore.deleteDoc(privateRef); } catch (e) {
-      console.warn("Erro ao deletar orders:", e?.code || e, e?.message || "");
-    }
-
-    return;
-  }
-
-  // ✅ Caso normal: só atualiza status
   const payload = {
     status: newStatus,
     updatedAt: Firestore.serverTimestamp()
   };
 
-  // (se você quiser manter sizes/addons como já tinha antes, pode deixar seu trecho aqui)
+  // (mantém sua compatibilidade de opções se existir)
   try {
     payload.sizes = _readOptList(sizesBox);
     payload.addons = _readOptList(addonsBox);
   } catch (_) {
-    payload.sizes = [];
-    payload.addons = [];
+    // não força limpar, só ignora se não existir no contexto
   }
 
-  // público (cliente acompanha)
+  // 1) Atualiza orders_public (cliente acompanha)
   let publicOk = false;
   try {
     await Firestore.updateDoc(publicRef, payload);
@@ -490,11 +439,47 @@ async function setOrderStatus(orderId, newStatus) {
     }
   }
 
-  // privado (admin/relatórios)
+  // 2) Atualiza orders (privado)
   try {
     await Firestore.updateDoc(privateRef, payload);
   } catch (e) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
+  }
+
+  // 3) Se for ENTREGUE: arquiva no histórico, MAS NÃO DELETA (não some hoje)
+  if (newStatus === "entregue") {
+    try {
+      // tenta pegar dados do privado, se não der pega do público
+      let baseData = null;
+
+      try {
+        const ps = await Firestore.getDoc(privateRef);
+        if (ps.exists()) baseData = ps.data();
+      } catch (_) {}
+
+      if (!baseData) {
+        try {
+          const qs = await Firestore.getDoc(publicRef);
+          if (qs.exists()) baseData = qs.data();
+        } catch (_) {}
+      }
+
+      await Firestore.setDoc(
+        historyRef,
+        {
+          ...(baseData || {}),
+          id: orderId,
+          status: "entregue",
+          deliveredAt: Firestore.serverTimestamp(),
+          archivedAt: Firestore.serverTimestamp(),
+          updatedAt: Firestore.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    } catch (e) {
+      console.warn("Falha ao arquivar em orders_history:", e?.code || e, e?.message || "");
+      // não bloqueia a entrega (status já foi salvo), só avisa no console
+    }
   }
 
   if (!publicOk) {
@@ -957,36 +942,61 @@ async function openOrderModal(orderId){
 })();
 
 /** Listener realtime */
+let __JPED_MIDNIGHT_TIMER = null;
+
+function _msUntilNextMidnight() {
+  const now = new Date();
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1); // 00:00:01
+  return Math.max(1000, next.getTime() - now.getTime());
+}
+
 function startOrdersListener() {
   if (!RESTAURANT_ID) {
     console.warn("RESTAURANT_ID vazio; não iniciou listener.");
     return;
   }
+
+  // limpa listener anterior
+  if (unsubOrders) {
+    try { unsubOrders(); } catch (_) {}
+    unsubOrders = null;
+  }
+
+  // limpa timer anterior
+  if (__JPED_MIDNIGHT_TIMER) {
+    try { clearTimeout(__JPED_MIDNIGHT_TIMER); } catch (_) {}
+    __JPED_MIDNIGHT_TIMER = null;
+  }
+
   const ref = Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_public");
-  const q = Firestore.query(ref, Firestore.orderBy("createdAt", "desc"));
+
+  // 🔥 início do dia (00:00:00) como Timestamp do Firestore
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+  const startTs = Firestore.Timestamp.fromDate(startOfDay);
+
+  const q = Firestore.query(
+    ref,
+    Firestore.where("createdAt", ">=", startTs),
+    Firestore.orderBy("createdAt", "desc")
+  );
 
   unsubOrders = Firestore.onSnapshot(
     q,
     (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
       renderOrders(list);
-    
-      _startTimeBadges();},
+      _startTimeBadges();
+    },
     (err) => {
       console.error("Erro no listener de pedidos (snapshot):", err?.code || err, err?.message || "");
-      if (err?.code === "permission-denied") {
-        ordersWrap.innerHTML = `
-          <div style="padding:12px;border:1px solid #eee;border-radius:12px;background:#fff">
-            <strong style="color:#ef4444">Sem permissão para ler pedidos.</strong>
-            <div style="margin-top:6px;color:#555">
-              Ajuste as regras do Firestore para permitir leitura em
-              <code>restaurants/${RESTAURANT_ID}/orders_public</code>.
-            </div>
-          </div>
-        `;
-      }
     }
   );
+
+  // reinicia quando virar o dia (aí os de ontem somem)
+  __JPED_MIDNIGHT_TIMER = setTimeout(() => {
+    startOrdersListener();
+  }, _msUntilNextMidnight());
 }
 
 /** Auth state */
@@ -1034,7 +1044,17 @@ Auth.onAuthStateChanged(auth, async (user) => {
     if (page === "products") {
       try { _startProductsListener(); } catch (_) {}
     }
-  }
+  
+    // ✅ Inicia o Financeiro só quando abre a tela
+    if (page === "finance") {
+      try { _startFinancePanel(); } catch (_) {}
+    }
+
+    // ✅ Inicia Configurações só quando abre a tela
+    if (page === "settings") {
+      try { _startSettingsPanel(); } catch (_) {}
+    }
+}
 
   buttons.forEach(btn => btn.addEventListener("click", () => show(btn.dataset.page)));
   // padrão
@@ -1529,3 +1549,690 @@ function openProductModal(prod){
 document.addEventListener("DOMContentLoaded", () => {
   try { _startTimeBadges(); } catch (_) {}
 });
+
+/* =========================================================
+   FINANCEIRO (Dashboard)
+   - Lanche mais vendido no mês
+   - Pedidos concluídos (mês atual vs mês anterior)
+   - Relatório em PDF (sem pagar nada)
+   ========================================================= */
+let __JPED_FIN_READY = false;
+let __JPED_FIN_DATA = []; // docs do orders_history
+let __JPED_FIN_LOADING = false;
+
+function _ordersHistoryCol(){
+  return Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_history");
+}
+
+function _safeMs(v){
+  try{
+    if (!v) return null;
+    if (typeof v === "number") return v;
+    if (v?.toDate) return v.toDate().getTime();
+    if (typeof v === "string") {
+      const t = Date.parse(v);
+      return Number.isFinite(t) ? t : null;
+    }
+  }catch(_){}
+  return null;
+}
+
+function _orderMs(o){
+  // tenta achar um timestamp plausível
+  return (
+    _safeMs(o?.deliveredAt) ??
+    _safeMs(o?.completedAt) ??
+    _safeMs(o?.updatedAt) ??
+    _safeMs(o?.createdAt) ??
+    null
+  );
+}
+
+function _monthKey(d){
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  return `${y}-${m}`;
+}
+
+function _monthRange(monthStr){
+  // monthStr: "YYYY-MM"
+  const [y, m] = String(monthStr || "").split("-").map(n => parseInt(n,10));
+  if (!y || !m) return null;
+  const start = new Date(y, m-1, 1, 0,0,0,0);
+  const end = new Date(y, m, 1, 0,0,0,0);
+  return { start, end };
+}
+
+function _fmtMonth(monthStr){
+  const r = _monthRange(monthStr);
+  if (!r) return "-";
+  const d = r.start;
+  const names = ["Jan","Fev","Mar","Abr","Mai","Jun","Jul","Ago","Set","Out","Nov","Dez"];
+  return `${names[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function _sumOrderTotal(o){
+  // tenta somar total/cash
+  const candidates = [o?.total, o?.totalAmount, o?.amount, o?.priceTotal, o?.grandTotal, o?.sum];
+  for (const c of candidates){
+    const n = _num(c);
+    if (n > 0) return n;
+  }
+  // fallback: soma itens
+  const items = Array.isArray(o?.items) ? o.items : (Array.isArray(o?.cart?.items) ? o.cart.items : []);
+  let sum = 0;
+  for (const it of items){
+    const q = _num(it?.qty ?? it?.qtd ?? it?.quantity ?? 1) || 1;
+    const p = _num(it?.price ?? it?.unitPrice ?? it?.value ?? 0);
+    if (p > 0) sum += q * p;
+  }
+  return sum;
+}
+
+function _isDone(o){
+  const s = String(o?.status || o?.state || "").toLowerCase();
+  return s === "entregue" || s === "entregue " || s === "delivered" || s === "done";
+}
+
+function _isCanceled(o){
+  const s = String(o?.status || o?.state || "").toLowerCase();
+  return s === "cancelado" || s === "canceled" || s === "cancelled";
+}
+
+async function _loadFinanceData(){
+  if (__JPED_FIN_LOADING) return;
+  __JPED_FIN_LOADING = true;
+
+  const statusEl = document.getElementById("finStatus");
+  const subEl = document.getElementById("finSub");
+  try{
+    if (statusEl) statusEl.textContent = "Carregando dados do histórico…";
+    if (subEl) subEl.textContent = "Buscando pedidos concluídos e cancelados do histórico.";
+
+    if (!RESTAURANT_ID) throw new Error("RESTAURANT_ID vazio");
+    const col = _ordersHistoryCol();
+
+    // tenta uma query "boa" (mais eficiente)
+    let docs = [];
+    try{
+      const q = Firestore.query(col, Firestore.orderBy("createdAt","desc"), Firestore.limit(900));
+      const snap = await Firestore.getDocs(q);
+      docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }catch(err1){
+      // fallback 1: updatedAt
+      try{
+        const q2 = Firestore.query(col, Firestore.orderBy("updatedAt","desc"), Firestore.limit(900));
+        const snap2 = await Firestore.getDocs(q2);
+        docs = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+      }catch(err2){
+        // fallback 2: pega tudo (limitado na UI) — pode ser mais lento dependendo do volume
+        const snap3 = await Firestore.getDocs(col);
+        docs = snap3.docs.slice(0, 1200).map(d => ({ id: d.id, ...d.data() }));
+      }
+    }
+
+    __JPED_FIN_DATA = docs || [];
+    if (statusEl) statusEl.textContent = `Histórico carregado: ${__JPED_FIN_DATA.length} registro(s).`;
+    if (subEl) subEl.textContent = "Selecione o mês para ver o resumo.";
+
+  }catch(err){
+    console.warn("Financeiro: falha ao carregar histórico:", err?.code || err, err?.message || "");
+    if (statusEl) statusEl.textContent = "Não foi possível carregar o histórico (veja o console F12).";
+    if (subEl) subEl.textContent = "Verifique permissões do Firestore para orders_history.";
+    __JPED_FIN_DATA = [];
+  }finally{
+    __JPED_FIN_LOADING = false;
+  }
+}
+
+function _renderFinance(monthStr){
+  const labelEl = document.getElementById("finMonthLabel");
+  if (labelEl) labelEl.textContent = _fmtMonth(monthStr);
+
+  const range = _monthRange(monthStr);
+  if (!range) return;
+
+  const ms0 = range.start.getTime();
+  const ms1 = range.end.getTime();
+
+  // prev month
+  const prevStart = new Date(range.start.getFullYear(), range.start.getMonth()-1, 1, 0,0,0,0);
+  const prevEnd = new Date(range.start.getFullYear(), range.start.getMonth(), 1, 0,0,0,0);
+  const p0 = prevStart.getTime();
+  const p1 = prevEnd.getTime();
+
+  const monthOrders = [];
+  const prevOrders = [];
+
+  for (const o of (__JPED_FIN_DATA || [])){
+    const t = _orderMs(o);
+    if (!t) continue;
+    if (t >= ms0 && t < ms1) monthOrders.push(o);
+    else if (t >= p0 && t < p1) prevOrders.push(o);
+  }
+
+  const doneMonth = monthOrders.filter(_isDone);
+  const donePrev = prevOrders.filter(_isDone);
+
+  const revenueMonth = doneMonth.reduce((acc,o)=> acc + _sumOrderTotal(o), 0);
+  const avgTicket = doneMonth.length ? (revenueMonth / doneMonth.length) : 0;
+
+  // top item
+  const tally = new Map();
+  for (const o of doneMonth){
+    const items = Array.isArray(o?.items) ? o.items : (Array.isArray(o?.cart?.items) ? o.cart.items : []);
+    for (const it of items){
+      const name = String(it?.name ?? it?.title ?? it?.productName ?? "").trim();
+      if (!name) continue;
+      const q = _num(it?.qty ?? it?.qtd ?? it?.quantity ?? 1) || 1;
+      tally.set(name, (tally.get(name) || 0) + q);
+    }
+  }
+  let topName = "-";
+  let topQty = 0;
+  for (const [k,v] of tally.entries()){
+    if (v > topQty){ topQty = v; topName = k; }
+  }
+
+  // cards
+  const elRev = document.getElementById("finRevenueMonth");
+  const elRevMeta = document.getElementById("finRevenueMeta");
+  const elDone = document.getElementById("finDoneMonth");
+  const elDoneCmp = document.getElementById("finDoneCompare");
+  const elAvg = document.getElementById("finAvgTicket");
+  const elAvgMeta = document.getElementById("finAvgTicketMeta");
+  const elTop = document.getElementById("finTopItem");
+  const elTopMeta = document.getElementById("finTopItemMeta");
+
+  if (elRev) elRev.textContent = brl(revenueMonth);
+  if (elRevMeta) elRevMeta.textContent = `${doneMonth.length} pedido(s) concluído(s) no mês.`;
+
+  if (elDone) elDone.textContent = String(doneMonth.length);
+  const delta = doneMonth.length - donePrev.length;
+  const pct = donePrev.length ? Math.round((delta / donePrev.length) * 100) : (doneMonth.length ? 100 : 0);
+  const sign = delta > 0 ? "+" : (delta < 0 ? "−" : "");
+  if (elDoneCmp) elDoneCmp.textContent = `Mês anterior: ${donePrev.length} • Variação: ${sign}${Math.abs(delta)} (${sign}${Math.abs(pct)}%)`;
+
+  if (elAvg) elAvg.textContent = doneMonth.length ? brl(avgTicket) : "—";
+  if (elAvgMeta) elAvgMeta.textContent = doneMonth.length ? "Média por pedido concluído." : "Sem pedidos concluídos no período.";
+
+  if (elTop) elTop.textContent = topName;
+  if (elTopMeta) elTopMeta.textContent = topQty ? `${topQty} unidade(s) vendida(s) no mês.` : "Sem itens vendidos no período.";
+
+  // Hoje
+  const today0 = new Date(); today0.setHours(0,0,0,0);
+  const today1 = new Date(); today1.setHours(24,0,0,0);
+  const t0 = today0.getTime();
+  const t1 = today1.getTime();
+
+  let todayOrders = 0;
+  let todayRevenue = 0;
+  let todayCanceled = 0;
+
+  for (const o of (__JPED_FIN_DATA || [])){
+    const t = _orderMs(o);
+    if (!t) continue;
+    if (t < t0 || t >= t1) continue;
+    if (_isCanceled(o)) { todayCanceled++; continue; }
+    if (_isDone(o)) {
+      todayOrders++;
+      todayRevenue += _sumOrderTotal(o);
+    }
+  }
+
+  const elTO = document.getElementById("finTodayOrders");
+  const elTR = document.getElementById("finTodayRevenue");
+  const elTC = document.getElementById("finTodayCanceled");
+  const elTM = document.getElementById("finTodayMeta");
+  if (elTO) elTO.textContent = String(todayOrders);
+  if (elTR) elTR.textContent = brl(todayRevenue);
+  if (elTC) elTC.textContent = String(todayCanceled);
+  if (elTM) elTM.textContent = "Baseado no histórico (orders_history).";
+
+  // Insights (simples e úteis)
+  const insightsEl = document.getElementById("finInsights");
+  if (insightsEl){
+    const totalAll = monthOrders.length;
+    const canceledMonth = monthOrders.filter(_isCanceled).length;
+    const cancelRate = totalAll ? Math.round((canceledMonth/totalAll)*100) : 0;
+
+    // horário mais comum (concluídos)
+    const hourTally = new Array(24).fill(0);
+    for (const o of doneMonth){
+      const t = _orderMs(o);
+      if (!t) continue;
+      const d = new Date(t);
+      hourTally[d.getHours()]++;
+    }
+    let bestHour = 0, bestHourCount = 0;
+    for (let h=0; h<24; h++){
+      if (hourTally[h] > bestHourCount){ bestHour = h; bestHourCount = hourTally[h]; }
+    }
+
+    const parts = [];
+    parts.push({
+      title: "Taxa de cancelamento",
+      desc: totalAll ? `${canceledMonth} cancelado(s) em ${totalAll} pedido(s) no mês selecionado.` : "Sem dados no período.",
+      badge: totalAll ? `${cancelRate}%` : "—"
+    });
+
+    parts.push({
+      title: "Pico de pedidos concluídos",
+      desc: doneMonth.length ? `Horário mais frequente: ${String(bestHour).padStart(2,"0")}:00.` : "Sem pedidos concluídos no período.",
+      badge: doneMonth.length ? `${bestHourCount}` : "—"
+    });
+
+    parts.push({
+      title: "Top 3 itens do mês",
+      desc: (() => {
+        if (!tally.size) return "Sem itens no período.";
+        const top3 = Array.from(tally.entries()).sort((a,b)=>b[1]-a[1]).slice(0,3);
+        return top3.map(([n,q]) => `${n} (${q})`).join(" • ");
+      })(),
+      badge: tally.size ? "TOP" : "—"
+    });
+
+    insightsEl.innerHTML = parts.map(p => `
+      <div class="finInsightItem">
+        <div>
+          <div class="finInsightTitle">${p.title}</div>
+          <div class="finInsightDesc">${p.desc}</div>
+        </div>
+        <span class="finInsightBadge">${p.badge}</span>
+      </div>
+    `).join("");
+  }
+
+  const statusEl = document.getElementById("finStatus");
+  if (statusEl){
+    statusEl.textContent = `Atualizado: ${new Date().toLocaleString()} • Fonte: restaurants/${RESTAURANT_ID}/orders_history`;
+  }
+}
+
+async function _downloadFinancePDF(){
+  const host = document.getElementById("financeReport");
+  if (!host) return;
+
+  const hasCanvas = typeof window.html2canvas === "function";
+  const hasPdf = !!(window.jspdf && window.jspdf.jsPDF);
+
+  if (!hasCanvas || !hasPdf){
+    alert("Para gerar PDF, precisamos carregar as bibliotecas (html2canvas + jsPDF). Confira sua conexão e recarregue a página.");
+    return;
+  }
+
+  const btn = document.getElementById("finPdf");
+  if (btn) btn.disabled = true;
+
+  try{
+    const canvas = await window.html2canvas(host, { scale: 2, backgroundColor: "#ffffff" });
+
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF("p", "mm", "a4");
+    const pageW = pdf.internal.pageSize.getWidth();
+    const pageH = pdf.internal.pageSize.getHeight();
+
+    // margens
+    const margin = 10;
+    const usableW = pageW - margin*2;
+    const usableH = pageH - margin*2;
+
+    // tamanho no PDF mantendo proporção
+    const imgW = usableW;
+    const imgH = (canvas.height * imgW) / canvas.width;
+
+    // se cabe em uma página, simples
+    if (imgH <= usableH){
+      pdf.setFontSize(14);
+      pdf.text("Relatório Financeiro (Resumo do mês)", margin, margin-2);
+      const imgData = canvas.toDataURL("image/png");
+      pdf.addImage(imgData, "PNG", margin, margin+4, imgW, imgH);
+    } else {
+      // quebra em páginas cortando o canvas
+      const pxPerMm = canvas.width / imgW;
+      const pagePxH = Math.floor(usableH * pxPerMm);
+
+      let y = 0;
+      let page = 0;
+
+      while (y < canvas.height){
+        if (page > 0) pdf.addPage();
+
+        if (page === 0){
+          pdf.setFontSize(14);
+          pdf.text("Relatório Financeiro (Resumo do mês)", margin, margin-2);
+        }
+
+        const sliceH = Math.min(pagePxH, canvas.height - y);
+
+        const slice = document.createElement("canvas");
+        slice.width = canvas.width;
+        slice.height = sliceH;
+
+        const ctx = slice.getContext("2d");
+        ctx.drawImage(canvas, 0, y, canvas.width, sliceH, 0, 0, canvas.width, sliceH);
+
+        const imgData = slice.toDataURL("image/png");
+        const sliceMmH = sliceH / pxPerMm;
+
+        pdf.addImage(imgData, "PNG", margin, margin+4, imgW, sliceMmH);
+
+        y += sliceH;
+        page++;
+      }
+    }
+
+    const monthStr = document.getElementById("finMonth")?.value || _monthKey(new Date());
+    const fname = `relatorio_${RESTAURANT_ID || "rest"}_${monthStr}.pdf`;
+    pdf.save(fname);
+  }catch(err){
+    console.warn("PDF: falha ao gerar:", err);
+    alert("Não foi possível gerar o PDF. Veja o console (F12).");
+  }finally{
+    if (btn) btn.disabled = false;
+  }
+}
+
+async function _startFinancePanel(){
+  if (__JPED_FIN_READY) return;
+  __JPED_FIN_READY = true;
+
+  const monthInput = document.getElementById("finMonth");
+  const monthLabel = document.getElementById("finMonthLabel");
+  const refreshBtn = document.getElementById("finRefresh");
+  const pdfBtn = document.getElementById("finPdf");
+
+  // default mês atual
+  const now = new Date();
+  const def = _monthKey(now);
+  if (monthInput && !monthInput.value) monthInput.value = def;
+  if (monthLabel) monthLabel.textContent = _fmtMonth(monthInput?.value || def);
+
+  const rerender = () => _renderFinance(monthInput?.value || def);
+
+  if (monthInput){
+    monthInput.addEventListener("change", rerender);
+  }
+  if (refreshBtn){
+    refreshBtn.addEventListener("click", async () => {
+      await _loadFinanceData();
+      rerender();
+    });
+  }
+  if (pdfBtn){
+    pdfBtn.addEventListener("click", _downloadFinancePDF);
+  }
+
+  // carrega primeira vez
+  await _loadFinanceData();
+  rerender();
+}
+
+
+/* ===== Configurações (Settings) ===== */
+let __JPED_SETTINGS_STARTED = false;
+let __JPED_SETTINGS_UNSUB = null;
+
+function _settingsDocRef(){
+  return Firestore.doc(db, "restaurants", RESTAURANT_ID, "config", "app");
+}
+
+function _setEl(id){ return document.getElementById(id); }
+
+function _setText(id, txt){
+  const el = _setEl(id);
+  if (el) el.textContent = txt;
+}
+
+function _val(id){ return (_setEl(id)?.value ?? ""); }
+function _setVal(id, v){
+  const el = _setEl(id);
+  if (el) el.value = (v ?? "") === null ? "" : String(v ?? "");
+}
+function _checked(id){ return !!_setEl(id)?.checked; }
+function _setChecked(id, v){
+  const el = _setEl(id);
+  if (el) el.checked = !!v;
+}
+
+function _numOrNull(v){
+  const s = String(v ?? "").trim().replace(",", ".");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+
+function _intOrNull(v){
+  const n = _numOrNull(v);
+  if (n === null) return null;
+  return Math.max(0, Math.round(n));
+}
+
+function _csvToArr(v){
+  const s = String(v ?? "").trim();
+  if (!s) return [];
+  return s.split(",").map(x => x.trim()).filter(Boolean);
+}
+
+function _arrToCsv(a){
+  return (Array.isArray(a) ? a : []).join(", ");
+}
+
+function _applySettingsToForm(cfg){
+  cfg = cfg || {};
+  const r = cfg.restaurant || {};
+  const hours = cfg.hours || {};
+  const delivery = cfg.delivery || {};
+  const pay = cfg.payments || {};
+  const promo = cfg.promo || {};
+  const notif = cfg.notifications || {};
+  const theme = cfg.theme || {};
+  const adv = cfg.advanced || {};
+
+  _setVal("setName", r.name);
+  _setVal("setDesc", r.desc);
+  _setVal("setWhatsapp", r.whatsapp);
+  _setVal("setInstagram", r.instagram);
+
+  _setVal("setOpen", hours.open);
+  _setVal("setClose", hours.close);
+  _setVal("setPrepMin", hours.prepMin);
+  _setVal("setAutoMsg", hours.autoMsg);
+  _setChecked("setIsOpen", hours.isOpen !== false); // default true
+  _setChecked("setAutoConfirm", !!hours.autoConfirm);
+
+  _setVal("setDeliveryFee", delivery.fee);
+  _setVal("setDeliveryKm", delivery.maxKm);
+  _setVal("setMinOrder", delivery.minOrder);
+  _setVal("setDeliveryEta", delivery.etaMin);
+  _setVal("setNeighborhoods", _arrToCsv(delivery.neighborhoods));
+  _setChecked("setPickup", !!delivery.pickup);
+
+  _setVal("setPixKey", pay.pixKey);
+  _setVal("setPixName", pay.pixName);
+  _setChecked("setCash", pay.cash !== false); // default true
+  _setChecked("setCard", !!pay.cardOnDelivery);
+  _setVal("setPayNote", pay.note);
+
+  _setChecked("setPromoOn", !!promo.enabled);
+  _setVal("setPromoTitle", promo.title);
+  _setVal("setPromoSub", promo.subtitle);
+  _setVal("setCouponCode", promo.couponCode);
+  _setVal("setCouponPct", promo.couponPct);
+  _setVal("setNotice", promo.notice);
+
+  _setChecked("setSoundNewOrder", notif.soundNewOrder !== false); // default true
+  _setChecked("setSoundChat", notif.soundChat !== false); // default true
+  _setVal("setVolume", (notif.volume ?? "") === "" ? "" : String(notif.volume ?? ""));
+  _setVal("setToasts", (notif.toasts === "off") ? "off" : "on");
+
+  _setVal("setPrimary", theme.primary);
+  _setVal("setCurrency", theme.currency || "BRL");
+  _setChecked("setShowImages", theme.showImages !== false); // default true
+  _setChecked("setCompactMenu", !!theme.compactMenu);
+
+  _setVal("setCloudName", adv.cloudinaryCloudName);
+  _setVal("setUploadPreset", adv.cloudinaryUploadPreset);
+  _setVal("setMenuUrl", adv.menuUrl);
+  _setVal("setWaTemplate", adv.whatsappTemplate);
+}
+
+function _collectSettingsFromForm(){
+  const payload = {
+    updatedAt: Firestore.serverTimestamp(),
+    restaurant: {
+      name: _val("setName").trim(),
+      desc: _val("setDesc").trim(),
+      whatsapp: _val("setWhatsapp").trim(),
+      instagram: _val("setInstagram").trim(),
+    },
+    hours: {
+      open: _val("setOpen").trim(),
+      close: _val("setClose").trim(),
+      prepMin: _intOrNull(_val("setPrepMin")),
+      autoMsg: _val("setAutoMsg").trim(),
+      isOpen: _checked("setIsOpen"),
+      autoConfirm: _checked("setAutoConfirm"),
+    },
+    delivery: {
+      fee: _numOrNull(_val("setDeliveryFee")),
+      maxKm: _numOrNull(_val("setDeliveryKm")),
+      minOrder: _numOrNull(_val("setMinOrder")),
+      etaMin: _intOrNull(_val("setDeliveryEta")),
+      neighborhoods: _csvToArr(_val("setNeighborhoods")),
+      pickup: _checked("setPickup"),
+    },
+    payments: {
+      pixKey: _val("setPixKey").trim(),
+      pixName: _val("setPixName").trim(),
+      cash: _checked("setCash"),
+      cardOnDelivery: _checked("setCard"),
+      note: _val("setPayNote").trim(),
+    },
+    promo: {
+      enabled: _checked("setPromoOn"),
+      title: _val("setPromoTitle").trim(),
+      subtitle: _val("setPromoSub").trim(),
+      couponCode: _val("setCouponCode").trim(),
+      couponPct: _intOrNull(_val("setCouponPct")),
+      notice: _val("setNotice").trim(),
+    },
+    notifications: {
+      soundNewOrder: _checked("setSoundNewOrder"),
+      soundChat: _checked("setSoundChat"),
+      volume: _numOrNull(_val("setVolume")),
+      toasts: (_val("setToasts") === "off") ? "off" : "on"
+    },
+    theme: {
+      primary: _val("setPrimary").trim(),
+      currency: _val("setCurrency").trim() || "BRL",
+      showImages: _checked("setShowImages"),
+      compactMenu: _checked("setCompactMenu"),
+    },
+    advanced: {
+      cloudinaryCloudName: _val("setCloudName").trim(),
+      cloudinaryUploadPreset: _val("setUploadPreset").trim(),
+      menuUrl: _val("setMenuUrl").trim(),
+      whatsappTemplate: _val("setWaTemplate").trim(),
+    }
+  };
+
+  // limpa campos vazios (deixa o merge mais limpo)
+  function clean(obj){
+    if (!obj || typeof obj !== "object") return obj;
+    Object.keys(obj).forEach(k => {
+      const v = obj[k];
+      if (v && typeof v === "object" && !Array.isArray(v) && !(v?.seconds && v?.nanoseconds)) {
+        clean(v);
+        if (Object.keys(v).length === 0) delete obj[k];
+      } else if (v === "" || v === null) {
+        delete obj[k];
+      }
+    });
+    return obj;
+  }
+  return clean(payload);
+}
+
+async function _saveSettings(){
+  if (!SUBSCRIPTION_OK) {
+    alert("Assinatura expirada. Ative um plano para salvar configurações.");
+    return;
+  }
+  if (!ADMIN_OK) {
+    alert("Sem permissão de admin.");
+    return;
+  }
+  if (!RESTAURANT_ID) {
+    alert("Sem restaurantId.");
+    return;
+  }
+
+  const btn = _setEl("setSave");
+  if (btn) { btn.disabled = true; btn.textContent = "Salvando..."; }
+  _setText("setStatus", "Salvando no Firestore...");
+
+  try{
+    const payload = _collectSettingsFromForm();
+    await Firestore.setDoc(_settingsDocRef(), payload, { merge: true });
+
+    _setText("setStatus", "Salvo ✅");
+  }catch(e){
+    console.warn("Falha ao salvar configurações:", e?.code || e, e?.message || e);
+    _setText("setStatus", "Erro ao salvar ❌");
+    alert(e?.message || "Não foi possível salvar as configurações.");
+  }finally{
+    if (btn) { btn.disabled = false; btn.textContent = "Salvar"; }
+  }
+}
+
+async function _reloadSettingsOnce(){
+  if (!RESTAURANT_ID) return;
+  try{
+    const snap = await Firestore.getDoc(_settingsDocRef());
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    _applySettingsToForm(data);
+    _setText("setStatus", snap.exists() ? "Carregado." : "Ainda não existe config salva (você pode salvar agora).");
+  }catch(e){
+    console.warn("Falha ao carregar configurações:", e?.code || e, e?.message || e);
+    _setText("setStatus", "Erro ao carregar ❌");
+  }
+}
+
+function _startSettingsPanel(){
+  if (__JPED_SETTINGS_STARTED) return;
+  __JPED_SETTINGS_STARTED = true;
+
+  // garante permissão e restaurante carregados
+  try{
+    const pill = _setEl("setRidPill");
+    if (pill) pill.textContent = `RID: ${RESTAURANT_ID || "-"}`;
+  }catch(_){}
+
+  const btnSave = _setEl("setSave");
+  const btnReload = _setEl("setReload");
+  if (btnSave) btnSave.onclick = _saveSettings;
+  if (btnReload) btnReload.onclick = _reloadSettingsOnce;
+
+  // carrega e escuta em tempo real
+  _setText("setStatus", "Carregando...");
+  _reloadSettingsOnce();
+
+  if (__JPED_SETTINGS_UNSUB) { try{ __JPED_SETTINGS_UNSUB(); }catch(_){} }
+  try{
+    __JPED_SETTINGS_UNSUB = Firestore.onSnapshot(_settingsDocRef(), (snap) => {
+      const data = snap.exists() ? (snap.data() || {}) : {};
+      _applySettingsToForm(data);
+      _setText("setStatus", snap.exists() ? "Sincronizado (tempo real)." : "Nenhuma config salva ainda.");
+      try{
+        const pill = _setEl("setRidPill");
+        if (pill) pill.textContent = `RID: ${RESTAURANT_ID || "-"}`;
+      }catch(_){}
+    }, (err) => {
+      console.warn("Erro settings (snapshot):", err?.code || err, err?.message || "");
+      _setText("setStatus", "Sem permissão para ler config.");
+    });
+  }catch(e){
+    console.warn("Falha ao iniciar listener settings:", e?.code || e, e?.message || e);
+  }
+}
