@@ -16,6 +16,13 @@ const app = FirebaseApp.initializeApp(firebaseConfig);
 const auth = Auth.getAuth(app);
 const db = Firestore.getFirestore(app);
 
+/** ✅ Cloudinary (upload grátis)
+ *  1) Crie conta no Cloudinary
+ *  2) Settings > Upload > Upload presets > Add upload preset (Unsigned)
+ *  3) Preencha abaixo:
+ */
+const CLOUDINARY_CLOUD_NAME = "dbrxftz4q";
+const CLOUDINARY_UPLOAD_PRESET = "qikjmjnv";
 /**
  * ✅ MVP: fixo por enquanto
  * Depois vamos buscar do users/{uid}.restaurantId (multi-tenant real).
@@ -120,6 +127,51 @@ function minsSince(ts) {
   return Math.max(0, Math.round(ms / 60000));
 }
 
+
+
+
+/** ===== Upload de imagem do produto (Firebase Storage) ===== */
+async function uploadProductImage(file) {
+  if (!file) return null;
+  if (!RESTAURANT_ID) throw new Error("RESTAURANT_ID vazio");
+
+  const isImage = (file.type || "").startsWith("image/");
+  if (!isImage) throw new Error("Arquivo não é imagem");
+
+  const maxMB = 4;
+  const maxBytes = maxMB * 1024 * 1024;
+  if (file.size > maxBytes) throw new Error(`Imagem muito grande. Máx: ${maxMB}MB`);
+
+  if (!CLOUDINARY_CLOUD_NAME || CLOUDINARY_CLOUD_NAME === "SEU_CLOUD_NAME") {
+    throw new Error("Configure CLOUDINARY_CLOUD_NAME no admin.js");
+  }
+  if (!CLOUDINARY_UPLOAD_PRESET || CLOUDINARY_UPLOAD_PRESET === "SEU_UPLOAD_PRESET") {
+    throw new Error("Configure CLOUDINARY_UPLOAD_PRESET (unsigned) no admin.js");
+  }
+
+  // pasta organizada por restaurante
+  const folder = `restaurants/${RESTAURANT_ID}/products`;
+
+  const form = new FormData();
+  form.append("file", file);
+  form.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  form.append("folder", folder);
+
+  // (opcional) ajuda a cachear/identificar
+  form.append("context", `alt=${encodeURIComponent(file.name || "produto")}`);
+
+  const endpoint = `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`;
+
+  const res = await fetch(endpoint, { method: "POST", body: form });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const msg = data?.error?.message || `Falha no upload (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+
+  return data.secure_url || data.url || null;
+}
 
 /** ===== Tempo ao vivo (badge) ===== */
 let __JPED_TIME_TICK = null;
@@ -1205,6 +1257,17 @@ function _ensureProductModal(){
             <div class="label">Imagem (URL) (opcional)</div>
             <input id="pImage" class="input" placeholder="https://..." />
           </div>
+
+          <div class="formRow">
+            <div class="label">Upload da imagem (opcional)</div>
+            <input id="pImageFile" class="input" type="file" accept="image/*" />
+            <div class="muted" id="pImageStatus" style="margin-top:6px"></div>
+
+            <div class="prodImgWrap" style="margin-top:10px;display:flex;justify-content:center">
+              <img id="pImagePreview" alt="Preview" class="prodImgPreview"
+                   style="display:none;max-width:100%;max-height:200px;border-radius:14px;border:1px solid #e5e7eb;background:#fff" />
+            </div>
+          </div>
         </div>
 
         <div class="formRow" style="margin-top:10px">
@@ -1306,6 +1369,72 @@ function openProductModal(prod){
   modal.querySelector("#pPrice").value = (prod?.price ?? "") === "" ? "" : String(prod?.price ?? "");
   modal.querySelector("#pCategory").value = prod?.category || "";
   modal.querySelector("#pImage").value = prod?.imageUrl || "";
+
+  // ===== Upload + Preview =====
+  const urlInput = modal.querySelector("#pImage");
+  const fileInput = modal.querySelector("#pImageFile");
+  const previewImg = modal.querySelector("#pImagePreview");
+  const statusEl = modal.querySelector("#pImageStatus");
+
+  function setPreview(src) {
+    if (!previewImg) return;
+    if (!src) {
+      previewImg.style.display = "none";
+      previewImg.removeAttribute("src");
+      return;
+    }
+    previewImg.src = src;
+    previewImg.style.display = "block";
+  }
+
+  // preview inicial (se já tem url salva)
+  setPreview((urlInput?.value || "").trim());
+
+  // preview quando digita URL
+  if (urlInput) {
+    urlInput.oninput = () => setPreview((urlInput.value || "").trim());
+  }
+
+  // upload quando escolhe arquivo
+  if (fileInput) {
+    fileInput.value = ""; // sempre limpa ao abrir modal
+
+    fileInput.onchange = async () => {
+      const f = fileInput.files?.[0];
+      if (!f) return;
+
+      let localUrl = "";
+      try {
+        localUrl = URL.createObjectURL(f);
+        setPreview(localUrl);
+      } catch (_) {}
+
+      if (statusEl) statusEl.textContent = "Enviando imagem...";
+
+      // trava inputs durante upload
+      if (urlInput) urlInput.disabled = true;
+      fileInput.disabled = true;
+
+      try {
+        const finalUrl = await uploadProductImage(f);
+
+        // coloca a URL final no campo e no preview
+        if (urlInput) urlInput.value = finalUrl || "";
+        setPreview(finalUrl || "");
+
+        if (statusEl) statusEl.textContent = "Imagem enviada ✅";
+      } catch (e) {
+        console.warn("Upload imagem falhou:", e?.code || e, e?.message || e);
+        if (statusEl) statusEl.textContent = "Falha ao enviar imagem ❌";
+        alert(e?.message || "Não foi possível enviar a imagem.");
+      } finally {
+        if (urlInput) urlInput.disabled = false;
+        fileInput.disabled = false;
+        try { if (localUrl) URL.revokeObjectURL(localUrl); } catch (_) {}
+      }
+    };
+  }
+
   modal.querySelector("#pDesc").value = prod?.desc || "";
   modal.querySelector("#pActive").checked = (prod?.active !== false);
 

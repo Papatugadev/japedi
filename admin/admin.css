@@ -1179,3 +1179,8 @@ main{
   min-width:0;
 }
 
+
+
+/* ===== Upload/Preview imagem do produto ===== */
+.prodImgWrap{ width:100%; }
+.prodImgPreview{ width:100%; object-fit:cover; }

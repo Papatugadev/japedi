@@ -279,7 +279,7 @@ function openProductModal(productId){
   document.getElementById("pmName").textContent = p.name || "Produto";
   document.getElementById("pmDesc").textContent = (p.desc || "").toString();
 
-  const img = (p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
+  const img = (p.imageUrl || p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
   const imgEl = document.getElementById("pmImage");
   if (imgEl) {
     imgEl.src = img;
@@ -511,7 +511,7 @@ activeProducts = activeProducts.sort(
 
   
   for (const p of activeProducts){
-    const img = (p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
+    const img = (p.imageUrl || p.image || p.img || p.photo || "").trim() || "https://images.unsplash.com/photo-1546069901-ba9599a7e63c";
     const div = document.createElement("div");
     div.className = "productCard";
 
