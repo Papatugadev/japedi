@@ -60,18 +60,20 @@ const authReady = new Promise((res) => { __authReadyResolve = res; });
 
 Auth.onAuthStateChanged(auth, async (user) => {
   try {
+    updateProfileUI(user);
+
     if (!user) {
       await Auth.signInAnonymously(auth);
-      return; // vai disparar novamente com user
+      return;
     }
+
     state.customerUid = user.uid;
     __authReadyResolve();
   } catch (e) {
-    console.warn("Falha no auth anônimo:", e?.code || e, e?.message || "");
-    __authReadyResolve(); // não trava o app
+    console.warn("Falha no auth:", e?.code || e, e?.message || "");
+    __authReadyResolve();
   }
 });
-
 async function ensureAnonAuth() {
   await authReady;
   return state.customerUid;
@@ -651,6 +653,7 @@ if (couponEl) {
   // atualiza UI que depende de config
   try { updateCheckoutUIFromConfig(); } catch(_) {}
   try { updateCheckoutTotals(); } catch(_) {}
+  try { syncMenuChrome(); } catch(_) {}
 }
 
 /* =========================
@@ -1065,15 +1068,16 @@ function closeCartDrawer() {
    ========================= */
 
 function openCheckout() {
-  // respeita config aberto/fechado
   if (state.config && state.isOpen === false) {
     const msg = state.config?.hours?.autoMsg || "Restaurante fechado no momento.";
     alert(msg);
     return;
   }
+
   ensureCheckoutUI();
   updateCheckoutUIFromConfig();
   updateCheckoutTotals();
+  fillCheckoutWithProfile();
   document.getElementById("checkoutModal")?.classList?.remove("hidden");
 }
 
@@ -1611,8 +1615,14 @@ function showTab(name){
     );
   }
 
-  if (isCart) {
-    try { renderCartUI(); } catch(_) {}
+  // ✅ mostra topo/fundo/logo SOMENTE no cardápio
+  syncMenuChrome();
+
+  // carrinho flutuante só no cardápio
+  const cartBar = document.getElementById("cartBar");
+  const hasItems = state.cart && state.cart.length > 0;
+  if (cartBar){
+    cartBar.classList.toggle("hidden", !isMenu || !hasItems);
   }
 }
 function setOrdersUI(hasOrder){
@@ -1971,7 +1981,56 @@ async function sendChatMessage(text) {
     alert("Não foi possível enviar a mensagem (verifique as regras do Firestore).");
   }
 }
+function getProfilePoints(data){
+  let points = 0;
+  if (data?.name) points += 20;
+  if (data?.address) points += 30;
+  if (data?.complement) points += 10;
+  if (data?.avatar) points += 10;
+  return Math.min(points, 100);
+}
 
+function getProfileLevel(points){
+  if (points >= 100) return "Diamante";
+  if (points >= 75) return "Ouro";
+  if (points >= 45) return "Prata";
+  return "Bronze";
+}
+
+function updateProfileHero(){
+  const data = loadProfile();
+  const points = getProfilePoints(data);
+  const level = getProfileLevel(points);
+
+  const heroName = document.getElementById("profileHeroName");
+  const avatarPreview = document.getElementById("profileAvatarPreview");
+  const miniStatus = document.getElementById("profileMiniStatus");
+  const levelName = document.getElementById("profileLevelName");
+  const levelBarFill = document.getElementById("profileLevelBarFill");
+  const levelHint = document.getElementById("profileLevelHint");
+
+  if (heroName) heroName.textContent = data.name?.trim() || "Seu perfil";
+  if (avatarPreview) avatarPreview.textContent = data.avatar || "🙂";
+
+  if (miniStatus) {
+    if (data.address?.trim()) {
+      miniStatus.textContent = data.address + (data.complement ? " - " + data.complement : "");
+    } else {
+      miniStatus.textContent = "Complete seu perfil para uma experiência melhor.";
+    }
+  }
+
+  if (levelName) levelName.textContent = level;
+  if (levelBarFill) levelBarFill.style.width = `${points}%`;
+
+  if (levelHint) {
+    if (points >= 100) {
+      levelHint.textContent = "Perfil completo. Nível máximo atingido.";
+    } else {
+      levelHint.textContent = `${points} / 100 pontos para o próximo nível`;
+    }
+  }
+}
 /* =========================
    Boot
    ========================= */
@@ -1983,16 +2042,30 @@ async function boot() {
   });
 
   // ✅ Tabs (navbar pílula)
-  const tabMenu = document.getElementById("tabMenu");
-  const tabOrders = document.getElementById("tabOrders");
-  if (tabMenu) tabMenu.addEventListener("click", () => showTab("menu"));
-  if (tabOrders) tabOrders.addEventListener("click", () => {
+ const tabMenu = document.getElementById("tabMenu");
+const tabOrders = document.getElementById("tabOrders");
+const tabProfile = document.getElementById("tabProfile");
+
+if (tabMenu) {
+  tabMenu.addEventListener("click", () => showTab("menu"));
+}
+
+if (tabOrders) {
+  tabOrders.addEventListener("click", () => {
     if (!state.currentOrderId) return showTab("menu");
     showTab("orders");
-    document.getElementById("tabProfile")?.addEventListener("click", () => {
+  });
+}
+
+document.getElementById("tabProfile")?.addEventListener("click", () => {
   showTab("profile");
 });
+
+if (tabProfile) {
+  tabProfile.addEventListener("click", () => {
+    showTab("profile");
   });
+}
 
   const goMenuBtn = document.getElementById("goMenuBtn");
   if (goMenuBtn) goMenuBtn.addEventListener("click", () => showTab("menu"));
@@ -2149,10 +2222,323 @@ async function boot() {
   renderProducts();
   renderCartUI();
   showTab("menu");
+    document.getElementById("tabProfile")?.addEventListener("click", () => {
+    showTab("profile");
+  });
+
+  document.getElementById("loginGoogleBtn")?.addEventListener("click", loginWithGoogle);
+  document.getElementById("openEmailAuthBtn")?.addEventListener("click", openEmailAuthModal);
+  document.getElementById("closeEmailAuthBtn")?.addEventListener("click", closeEmailAuthModal);
+  document.getElementById("closeEmailAuthBackdrop")?.addEventListener("click", closeEmailAuthModal);
+  document.getElementById("emailLoginBtn")?.addEventListener("click", loginWithEmail);
+  document.getElementById("emailRegisterBtn")?.addEventListener("click", registerWithEmail);
+  document.getElementById("logoutBtn")?.addEventListener("click", logoutProfile);
+}
+function updateProfileUI(user){
+  const guestBox = document.getElementById("profileGuestBox");
+  const userBox = document.getElementById("profileUserBox");
+  const userName = document.getElementById("profileUserName");
+  const userEmail = document.getElementById("profileUserEmail");
+
+  if (user && !user.isAnonymous){
+    guestBox?.classList.add("hidden");
+    userBox?.classList.remove("hidden");
+
+    if (userName) userName.textContent = user.displayName || "Conta conectada";
+    if (userEmail) userEmail.textContent = user.email || "";
+  } else {
+    guestBox?.classList.remove("hidden");
+    userBox?.classList.add("hidden");
+
+    if (userName) userName.textContent = "Conta conectada";
+    if (userEmail) userEmail.textContent = "";
+  }
+}
+
+async function loginWithGoogle(){
+  try {
+    const provider = new Auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: "select_account" });
+
+    const currentUser = auth.currentUser;
+
+    if (currentUser?.isAnonymous) {
+      await Auth.linkWithPopup(currentUser, provider);
+    } else {
+      await Auth.signInWithPopup(auth, provider);
+    }
+
+    alert("Login com Google realizado com sucesso.");
+  } catch (e) {
+    console.error("Erro no login com Google:", e);
+
+    // fallback: se falhar o link da conta anônima, tenta login normal
+    try {
+      if (
+        e?.code === "auth/credential-already-in-use" ||
+        e?.code === "auth/email-already-in-use" ||
+        e?.code === "auth/provider-already-linked"
+      ) {
+        await Auth.signInWithPopup(auth, new Auth.GoogleAuthProvider());
+        alert("Login com Google realizado com sucesso.");
+        return;
+      }
+    } catch (err2) {
+      console.error("Fallback Google falhou:", err2);
+    }
+
+    alert("Não foi possível entrar com Google.");
+  }
+}
+
+function openEmailAuthModal(){
+  document.getElementById("emailAuthModal")?.classList.remove("hidden");
+}
+
+function closeEmailAuthModal(){
+  document.getElementById("emailAuthModal")?.classList.add("hidden");
+}
+
+async function loginWithEmail(){
+  const email = (document.getElementById("authEmail")?.value || "").trim();
+  const password = (document.getElementById("authPassword")?.value || "").trim();
+
+  if (!email || !password) {
+    alert("Preencha email e senha.");
+    return;
+  }
+
+  try {
+    const currentUser = auth.currentUser;
+
+    if (currentUser?.isAnonymous) {
+      const cred = Auth.EmailAuthProvider.credential(email, password);
+      await Auth.linkWithCredential(currentUser, cred);
+    } else {
+      await Auth.signInWithEmailAndPassword(auth, email, password);
+    }
+
+    closeEmailAuthModal();
+    alert("Login realizado com sucesso.");
+  } catch (e) {
+    console.error("Erro no login por email:", e);
+    alert("Não foi possível entrar com email.");
+  }
+}
+
+async function registerWithEmail(){
+  const email = (document.getElementById("authEmail")?.value || "").trim();
+  const password = (document.getElementById("authPassword")?.value || "").trim();
+
+  if (!email || !password) {
+    alert("Preencha email e senha.");
+    return;
+  }
+
+  try {
+    const currentUser = auth.currentUser;
+
+    if (currentUser?.isAnonymous) {
+      const cred = Auth.EmailAuthProvider.credential(email, password);
+      await Auth.linkWithCredential(currentUser, cred);
+    } else {
+      await Auth.createUserWithEmailAndPassword(auth, email, password);
+    }
+
+    closeEmailAuthModal();
+    alert("Conta criada com sucesso.");
+  } catch (e) {
+    console.error("Erro ao criar conta:", e);
+    alert("Não foi possível criar a conta.");
+  }
+}
+
+async function logoutProfile(){
+  try {
+    await Auth.signOut(auth);
+    alert("Você saiu da conta.");
+  } catch (e) {
+    console.error("Erro ao sair:", e);
+    alert("Não foi possível sair.");
+  }
+}
+const PROFILE_STORAGE_KEY = "client_profile_v2";
+
+function getDefaultProfile(){
+  return {
+    avatar: "🙂",
+    name: "",
+    address: "",
+    number: "",
+    complement: "",
+    level: "Bronze",
+    xp: 22
+  };
+}
+
+function loadProfile(){
+  try{
+    const raw = localStorage.getItem(PROFILE_STORAGE_KEY);
+    return raw ? { ...getDefaultProfile(), ...JSON.parse(raw) } : getDefaultProfile();
+  }catch(_){
+    return getDefaultProfile();
+  }
+}
+
+function saveProfile(data){
+  const current = loadProfile();
+
+  const safe = {
+    avatar: data?.avatar ?? current.avatar ?? "🙂",
+    name: (data?.name ?? current.name ?? "").trim(),
+    address: (data?.address ?? current.address ?? "").trim(),
+    number: (data?.number ?? current.number ?? "").trim(),
+    complement: (data?.complement ?? current.complement ?? "").trim(),
+    level: (data?.level ?? current.level ?? "Bronze").trim() || "Bronze",
+    xp: Math.max(0, Math.min(100, Number(data?.xp ?? current.xp ?? 22)))
+  };
+
+  localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(safe));
+  return safe;
+}
+
+function renderProfileForm(){
+  const data = loadProfile();
+
+  const avatarPreview = document.getElementById("profileAvatarPreview");
+  const heroName = document.getElementById("profileHeroName");
+  const levelText = document.getElementById("profileLevelText");
+  const xpFill = document.getElementById("profileXpBarFill");
+
+  const nameInput = document.getElementById("profileNameInput");
+  const addressInput = document.getElementById("profileAddressInput");
+  const numberInput = document.getElementById("profileNumberInput");
+  const complementInput = document.getElementById("profileComplementInput");
+
+  if (avatarPreview) avatarPreview.textContent = data.avatar || "🙂";
+  if (heroName) heroName.textContent = data.name || "Seu perfil";
+  if (levelText) levelText.textContent = data.level || "Bronze";
+  if (xpFill) xpFill.style.width = `${Number(data.xp || 0)}%`;
+
+  const xpHint = document.getElementById("profileXpHint");
+  if (xpHint) xpHint.textContent = `${Number(data.xp || 0)} XP • Toque para ver benefícios e como funciona`;
+
+  if (nameInput) nameInput.value = data.name || "";
+  if (addressInput) addressInput.value = data.address || "";
+  if (numberInput) numberInput.value = data.number || "";
+  if (complementInput) complementInput.value = data.complement || "";
+
+  document.querySelectorAll(".avatarOption").forEach(btn => {
+    btn.classList.toggle("is-active", btn.dataset.avatar === data.avatar);
+  });
+}
+
+function bindProfileAvatarPicker(){
+  document.querySelectorAll(".avatarOption").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const current = loadProfile();
+      saveProfile({ ...current, avatar: btn.dataset.avatar || "🙂" });
+      renderProfileForm();
+    });
+  });
+}
+
+function handleSaveAvatar(){
+  const current = loadProfile();
+  const avatar = document.querySelector(".avatarOption.is-active")?.dataset?.avatar || "🙂";
+  saveProfile({ ...current, avatar });
+  renderProfileForm();
+  alert("Avatar salvo com sucesso.");
+}
+
+function handleSaveProfileData(){
+  const current = loadProfile();
+
+  const name = document.getElementById("profileNameInput")?.value || "";
+  const address = document.getElementById("profileAddressInput")?.value || "";
+  const number = document.getElementById("profileNumberInput")?.value || "";
+  const complement = document.getElementById("profileComplementInput")?.value || "";
+
+  saveProfile({
+    ...current,
+    name,
+    address,
+    number,
+    complement
+  });
+
+  renderProfileForm();
+  alert("Dados salvos com sucesso.");
+}
+
+function openProfileSettings(){
+  renderProfileForm();
+  document.getElementById("profileSettingsModal")?.classList.remove("hidden");
+}
+
+function closeProfileSettings(){
+  document.getElementById("profileSettingsModal")?.classList.add("hidden");
+}
+
+function openLevelsGuide(){
+  document.getElementById("levelsGuideModal")?.classList.remove("hidden");
+  syncLevelsDots();
+}
+
+function closeLevelsGuide(){
+  document.getElementById("levelsGuideModal")?.classList.add("hidden");
+}
+
+function syncLevelsDots(){
+  const track = document.getElementById("levelsGuideTrack");
+  if (!track) return;
+
+  const cards = Array.from(track.children);
+  const dots = Array.from(document.querySelectorAll(".levelsDot"));
+  if (!cards.length || !dots.length) return;
+
+  const index = Math.round(track.scrollLeft / (cards[0].offsetWidth + 12));
+  dots.forEach((dot, i) => dot.classList.toggle("active", i === index));
+}
+
+function fillCheckoutWithProfile(){
+  const data = loadProfile();
+
+  const checkoutName = document.getElementById("custName");
+  const checkoutAddress = document.getElementById("custAddr");
+
+  if (checkoutName && !checkoutName.value.trim()) {
+    checkoutName.value = data.name || "";
+  }
+
+  if (checkoutAddress && !checkoutAddress.value.trim()) {
+    checkoutAddress.value = [
+      data.address || "",
+      data.number ? `Nº ${data.number}` : "",
+      data.complement || ""
+    ].filter(Boolean).join(" - ");
+  }
+
+  alert("Dados do perfil aplicados no checkout.");
 }
 
 boot();
+document.getElementById("openProfileSettingsBtn")?.addEventListener("click", openProfileSettings);
+document.getElementById("closeProfileSettingsBtn")?.addEventListener("click", closeProfileSettings);
+document.getElementById("closeProfileSettingsBackdrop")?.addEventListener("click", closeProfileSettings);
 
+document.getElementById("openLevelsGuideBtn")?.addEventListener("click", openLevelsGuide);
+document.getElementById("closeLevelsGuideBtn")?.addEventListener("click", closeLevelsGuide);
+document.getElementById("closeLevelsGuideBackdrop")?.addEventListener("click", closeLevelsGuide);
+document.getElementById("levelsGuideTrack")?.addEventListener("scroll", syncLevelsDots, { passive: true });
+
+document.getElementById("saveAvatarBtn")?.addEventListener("click", handleSaveAvatar);
+document.getElementById("saveProfileDataBtn")?.addEventListener("click", handleSaveProfileData);
+document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fillCheckoutWithProfile);
+
+renderProfileForm();
+bindProfileAvatarPicker();
+  document.getElementById("saveProfileBtn")?.addEventListener("click", handleSaveProfileData);
 /* =========================
    PWA: Service Worker
    =========================
@@ -2186,6 +2572,22 @@ function startPromoListener() {
 
   });
 
+function applyProfileToCheckoutFields(force = false){
+  const data = loadProfile();
+
+  const nameEl = document.getElementById("custName");
+  const addrEl = document.getElementById("custAddr");
+
+  if (nameEl && (force || !nameEl.value.trim())) {
+    nameEl.value = data.name || "";
+  }
+
+  if (addrEl && (force || !addrEl.value.trim())) {
+    addrEl.value = [data.address || "", data.complement || ""]
+      .filter(Boolean)
+      .join(" - ");
+  }
+}
 }
 // ✅ Mostra no banner o cupom digitado no input "promo"
 (function bindPromoToBanner() {
@@ -2272,3 +2674,25 @@ function closeProfile() {
   modal.classList.add("hidden");
 }
 lucide.createIcons();
+function syncMenuChrome(){
+  const topbar = document.querySelector(".topbar");
+  const categoryBar = document.getElementById("categoryBar");
+  const promoBanner = document.getElementById("promoBanner");
+  const promoMount = document.getElementById("promoMount");
+
+  const isMenuActive =
+    !document.getElementById("menuView")?.classList.contains("hidden");
+
+  topbar?.classList.toggle("hidden", !isMenuActive);
+  categoryBar?.classList.toggle("hidden", !isMenuActive);
+
+  // esconde também o banner promo fora do cardápio
+  if (promoBanner) {
+    promoBanner.classList.toggle("hidden", !isMenuActive);
+  }
+
+  // caso você esteja usando só o mount
+  if (promoMount) {
+    promoMount.classList.toggle("hidden", !isMenuActive);
+  }
+}

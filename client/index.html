@@ -184,35 +184,48 @@
     </div>
   </main>
 <main id="profileView" class="view hidden">
-  <div class="sectionTitle">
-    <h2 style="margin:0">Perfil</h2>
-    <p class="muted" style="margin:6px 0 0">Entre com sua conta ou continue como visitante.</p>
-  </div>
+  <section class="profileHeroCard clean">
+    <button id="openProfileSettingsBtn" class="profileSettingsIcon" type="button" aria-label="Abrir configurações">
+      <i data-lucide="settings-2"></i>
+    </button>
 
-  <div class="box">
-    <div id="profileGuestBox">
-      <div style="font-weight:800; font-size:18px;">Você está como visitante</div>
-      <div class="muted" style="margin-top:6px;">
-        Você pode continuar usando sem login, ou entrar para salvar seus dados.
+    <div class="profileHeroName" id="profileHeroName">Seu perfil</div>
+
+    <div class="profileHeroAvatarWrap">
+      <div class="profileHeroAvatar" id="profileAvatarPreview">🙂</div>
+    </div>
+
+    <button id="openLevelsGuideBtn" class="profileXpCard" type="button" aria-label="Ver benefícios dos níveis">
+      <div class="profileXpTop">
+        <span class="profileXpLabel">Nível</span>
+        <strong id="profileLevelText">Bronze</strong>
       </div>
 
-      <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
-        Entrar com Google
-      </button>
+      <div class="profileXpBar">
+        <div id="profileXpBarFill" class="profileXpBarFill" style="width:22%;"></div>
+      </div>
 
-      <button id="openEmailAuthBtn" class="ghost" type="button" style="margin-top:10px;">
-        Entrar com email
-      </button>
+      <div class="profileXpHint" id="profileXpHint">Toque para ver benefícios e como funciona</div>
+    </button>
+  </section>
+
+  <div class="box profileBox">
+    <div class="profileSectionTitle">Escolha seu avatar</div>
+
+    <div class="avatarGrid" id="avatarGrid">
+      <button class="avatarOption is-active" type="button" data-avatar="🙂">🙂</button>
+      <button class="avatarOption" type="button" data-avatar="😎">😎</button>
+      <button class="avatarOption" type="button" data-avatar="🤠">🤠</button>
+      <button class="avatarOption" type="button" data-avatar="🧑‍🍳">🧑‍🍳</button>
+      <button class="avatarOption" type="button" data-avatar="👨‍💼">👨‍💼</button>
+      <button class="avatarOption" type="button" data-avatar="👩‍🦱">👩‍🦱</button>
+      <button class="avatarOption" type="button" data-avatar="🧔">🧔</button>
+      <button class="avatarOption" type="button" data-avatar="👩‍🎨">👩‍🎨</button>
     </div>
 
-    <div id="profileUserBox" class="hidden">
-      <div style="font-weight:800; font-size:18px;" id="profileUserName">Conta conectada</div>
-      <div class="muted" id="profileUserEmail" style="margin-top:6px;"></div>
-
-      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px;">
-        Sair
-      </button>
-    </div>
+    <button id="saveAvatarBtn" class="btn" type="button" style="margin-top:14px;">
+      Salvar avatar
+    </button>
   </div>
 </main>
 <div id="emailAuthModal" class="modal hidden" role="dialog" aria-modal="true">
@@ -366,5 +379,142 @@
     lastTouchEnd = now;
   }, { passive: false });
 </script>
+<div id="profileSettingsModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal__backdrop" id="closeProfileSettingsBackdrop"></div>
+
+  <div class="modal__panel">
+    <div class="modal__header">
+      <strong>Configurações</strong>
+      <button id="closeProfileSettingsBtn" class="ghost" type="button">Fechar</button>
+    </div>
+
+    <div class="modal__content">
+      <label class="label">Nome</label>
+      <input id="profileNameInput" class="input" type="text" placeholder="Digite seu nome" />
+
+      <label class="label">Endereço</label>
+      <input id="profileAddressInput" class="input" type="text" placeholder="Rua, bairro" />
+
+      <label class="label">Número</label>
+      <input id="profileNumberInput" class="input" type="text" placeholder="Número da casa/apto" />
+
+      <label class="label">Complemento</label>
+      <input id="profileComplementInput" class="input" type="text" placeholder="Bloco, referência" />
+
+      <button id="useProfileOnCheckoutBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
+        Usar dados no checkout
+      </button>
+
+      <button id="saveProfileDataBtn" class="btn" type="button" style="margin-top:10px;">
+        Salvar dados
+      </button>
+
+      <div style="height:16px"></div>
+
+      <div id="profileGuestBox">
+        <div style="font-weight:800; font-size:18px;">Você está como visitante</div>
+        <div class="muted" style="margin-top:6px;">
+          Entre com sua conta para salvar seus dados.
+        </div>
+
+        <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
+          Entrar com Google
+        </button>
+
+        <button id="openEmailAuthBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
+          Entrar com email
+        </button>
+      </div>
+
+      <div id="profileUserBox" class="hidden">
+        <div style="font-weight:800; font-size:18px;" id="profileUserName">Conta conectada</div>
+        <div class="muted" id="profileUserEmail" style="margin-top:6px;"></div>
+
+        <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px;width:100%;">
+          Sair
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+<div id="levelsGuideModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal__backdrop" id="closeLevelsGuideBackdrop"></div>
+
+  <div class="modal__panel levelsModalPanel">
+    <div class="modal__header">
+      <strong>Benefícios dos níveis</strong>
+      <button id="closeLevelsGuideBtn" class="ghost" type="button">Fechar</button>
+    </div>
+
+    <div class="levelsGuideIntro">
+      Arraste para o lado para ver todos os níveis e entender como funciona.
+    </div>
+
+    <div id="levelsGuideTrack" class="levelsGuideTrack">
+      <article class="levelSlide bronze">
+        <div class="levelSlide__badge">Bronze</div>
+        <h3>Começo da jornada</h3>
+        <p>Entrou no app e começou a pedir.</p>
+        <ul>
+          <li>Acesso normal ao app</li>
+          <li>Participa da progressão</li>
+          <li>Primeiros pontos acumulados</li>
+        </ul>
+      </article>
+
+      <article class="levelSlide prata">
+        <div class="levelSlide__badge">Prata</div>
+        <h3>Cliente frequente</h3>
+        <p>Já pediu algumas vezes e está evoluindo.</p>
+        <ul>
+          <li>Benefícios melhores</li>
+          <li>Pode receber promoções especiais</li>
+          <li>Mais perto dos níveis altos</li>
+        </ul>
+      </article>
+
+      <article class="levelSlide ouro">
+        <div class="levelSlide__badge">Ouro</div>
+        <h3>Cliente fiel</h3>
+        <p>Nível para quem compra bastante.</p>
+        <ul>
+          <li>Vantagens mais fortes</li>
+          <li>Pode ter prioridade em ações promocionais</li>
+          <li>Mais destaque dentro do programa</li>
+        </ul>
+      </article>
+
+      <article class="levelSlide diamante">
+        <div class="levelSlide__badge">Diamante</div>
+        <h3>Nível máximo</h3>
+        <p>Para os clientes mais ativos.</p>
+        <ul>
+          <li>Melhores benefícios do programa</li>
+          <li>Pode receber vantagens exclusivas</li>
+          <li>Status premium</li>
+        </ul>
+      </article>
+
+      <article class="levelSlide info">
+        <div class="levelSlide__badge">Como funciona</div>
+        <h3>Ganhe XP com seus pedidos</h3>
+        <p>Seu XP sobe conforme você usa o app e faz compras.</p>
+        <ul>
+          <li>Cada pedido pode gerar progresso</li>
+          <li>Quanto mais usar, mais evolui</li>
+          <li>Os benefícios melhoram conforme o nível</li>
+        </ul>
+      </article>
+    </div>
+
+    <div class="levelsGuideDots">
+      <span class="levelsDot active"></span>
+      <span class="levelsDot"></span>
+      <span class="levelsDot"></span>
+      <span class="levelsDot"></span>
+      <span class="levelsDot"></span>
+    </div>
+  </div>
+</div>
 </body>
 </html>
