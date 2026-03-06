@@ -204,7 +204,7 @@
 
         <div class="setGrid">
 
-          <div class="setCard">
+        <div class="setCard" id="settingsInfoCard">
             <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Identidade</div>
@@ -251,11 +251,11 @@
               <div class="setRow2">
                 <label class="setField">
                   <span>Abre (HH:MM)</span>
-                  <input id="setOpen" class="input" placeholder="18:00" />
+                  <input id="setOpen" class="input" type="time" />
                 </label>
                 <label class="setField">
                   <span>Fecha (HH:MM)</span>
-                  <input id="setClose" class="input" placeholder="23:30" />
+                  <input id="setClose" class="input" type="time" />
                 </label>
               </div>
 
@@ -282,7 +282,44 @@
                 <span class="setSwitchUi"></span>
                 <span class="setSwitchText">Confirmar pedido automaticamente</span>
               </label>
+              <div>
+                <div class="setCardTitle">Pagamentos</div>
+                <div class="setCardHint">PIX, dinheiro e observações.</div>
+              </div>
+              <div class="setIcon">💳</div>
             </div>
+
+            <div class="setForm">
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Chave PIX (opcional)</span>
+                  <input id="setPixKey" class="input" placeholder="email, telefone ou aleatória" />
+                </label>
+                <label class="setField">
+                  <span>Nome do titular PIX</span>
+                  <input id="setPixName" class="input" placeholder="Nome do titular" />
+                </label>
+              </div>
+
+              <label class="setSwitch">
+                <input id="setCash" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Aceitar dinheiro</span>
+              </label>
+
+              <label class="setSwitch">
+                <input id="setCard" type="checkbox" />
+                <span class="setSwitchUi"></span>
+                <span class="setSwitchText">Aceitar cartão na entrega</span>
+              </label>
+
+              <label class="setField">
+                <span>Texto de observação (checkout)</span>
+                <input id="setPayNote" class="input" placeholder="Ex: Troco para? / Aceitamos cartão via maquininha." />
+              </label>
+            </div>
+            </div>
+            
           </div>
 
           <div class="setCard">
@@ -293,6 +330,7 @@
               </div>
               <div class="setIcon">🛵</div>
             </div>
+            
 
             <div class="setForm">
               <div class="setRow2">
@@ -332,42 +370,7 @@
 
           <div class="setCard">
             <div class="setCardHead">
-              <div>
-                <div class="setCardTitle">Pagamentos</div>
-                <div class="setCardHint">PIX, dinheiro e observações.</div>
-              </div>
-              <div class="setIcon">💳</div>
-            </div>
-
-            <div class="setForm">
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Chave PIX (opcional)</span>
-                  <input id="setPixKey" class="input" placeholder="email, telefone ou aleatória" />
-                </label>
-                <label class="setField">
-                  <span>Nome do titular PIX</span>
-                  <input id="setPixName" class="input" placeholder="Nome do titular" />
-                </label>
-              </div>
-
-              <label class="setSwitch">
-                <input id="setCash" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Aceitar dinheiro</span>
-              </label>
-
-              <label class="setSwitch">
-                <input id="setCard" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Aceitar cartão na entrega</span>
-              </label>
-
-              <label class="setField">
-                <span>Texto de observação (checkout)</span>
-                <input id="setPayNote" class="input" placeholder="Ex: Troco para? / Aceitamos cartão via maquininha." />
-              </label>
-            </div>
+              
           </div>
 
           <div class="setCard">
@@ -384,6 +387,7 @@
                 <input id="setPromoOn" type="checkbox" />
                 <span class="setSwitchUi"></span>
                 <span class="setSwitchText">Ativar promoção</span>
+                
               </label>
 
               <div class="setRow2">
@@ -391,6 +395,7 @@
                   <span>Título da promoção</span>
                   <input id="setPromoTitle" class="input" placeholder="Ex: Frete grátis hoje" />
                 </label>
+                
                 <label class="setField">
                   <span>Subtítulo</span>
                   <input id="setPromoSub" class="input" placeholder="Ex: acima de R$ 35" />
@@ -407,128 +412,44 @@
                   <input id="setCouponPct" class="input" placeholder="10" inputmode="numeric" />
                 </label>
               </div>
+              <label class="label">Expira em</label>
+<input id="setPromoEndsAt" class="input" type="datetime-local" />
 
-              <label class="setField">
-                <span>Aviso (opcional)</span>
-                <input id="setNotice" class="input" placeholder="Ex: Hoje fechamos às 22:00" />
+  <div class="promoBanner" id="promoBannerPreview">
+    <div class="promoGlow"></div>
+
+    <div class="promoTop">
+      <div class="promoTag" id="promoTag">PROMO</div>
+      <div class="promoIcon">🔥</div>
+    </div>
+
+    <div class="promoTitle" id="promoPrevTitle">Título da promoção</div>
+    <div class="promoSub" id="promoPrevSub">Subtítulo aqui</div>
+
+    <div class="promoBottom">
+      <div class="promoPill" id="promoPrevCoupon">CUPOM: —</div>
+      <div class="promoPill ghost" id="promoPrevNotice">Aviso: —</div>
+    </div>
+  </div>
+
+  <div class="muted" style="font-size:12px;margin-top:8px">
+    Prévia do banner que aparece no cardápio do cliente.
+  </div>
+</div>
               </label>
+              
             </div>
           </div>
 
-          <div class="setCard">
-            <div class="setCardHead">
-              <div>
-                <div class="setCardTitle">Notificações</div>
-                <div class="setCardHint">Som, vibração e badge.</div>
-              </div>
-              <div class="setIcon">🔔</div>
-            </div>
+     
+                
 
-            <div class="setForm">
-              <label class="setSwitch">
-                <input id="setSoundNewOrder" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Som ao chegar pedido</span>
-              </label>
+            
 
-              <label class="setSwitch">
-                <input id="setSoundChat" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Som ao chegar mensagem</span>
-              </label>
+            
 
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Volume (0 a 1)</span>
-                  <input id="setVolume" class="input" placeholder="0.7" inputmode="decimal" />
-                </label>
-                <label class="setField">
-                  <span>Popup (toast)</span>
-                  <select id="setToasts" class="input">
-                    <option value="on">Ligado</option>
-                    <option value="off">Desligado</option>
-                  </select>
-                </label>
-              </div>
-            </div>
-          </div>
-
-          <div class="setCard">
-            <div class="setCardHead">
-              <div>
-                <div class="setCardTitle">Aparência</div>
-                <div class="setCardHint">Cor principal e layout do cardápio.</div>
-              </div>
-              <div class="setIcon">🎨</div>
-            </div>
-
-            <div class="setForm">
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Cor principal (hex)</span>
-                  <input id="setPrimary" class="input" placeholder="#16a34a" />
-                </label>
-                <label class="setField">
-                  <span>Moeda</span>
-                  <select id="setCurrency" class="input">
-                    <option value="BRL">BRL (R$)</option>
-                    <option value="EUR">EUR (€)</option>
-                    <option value="USD">USD ($)</option>
-                  </select>
-                </label>
-              </div>
-
-              <label class="setSwitch">
-                <input id="setShowImages" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Mostrar fotos no cardápio</span>
-              </label>
-
-              <label class="setSwitch">
-                <input id="setCompactMenu" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Cardápio compacto (mais itens na tela)</span>
-              </label>
-            </div>
-          </div>
-
-          <div class="setCard setCardWide">
-            <div class="setCardHead">
-              <div>
-                <div class="setCardTitle">Avançado (Cloudinary / Integração)</div>
-                <div class="setCardHint">Somente se quiser trocar depois.</div>
-              </div>
-              <div class="setIcon">⚙️</div>
-            </div>
-
-            <div class="setForm">
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Cloudinary Cloud Name</span>
-                  <input id="setCloudName" class="input" placeholder="dbrxftz4q" />
-                </label>
-                <label class="setField">
-                  <span>Upload preset</span>
-                  <input id="setUploadPreset" class="input" placeholder="qikjmjnv" />
-                </label>
-              </div>
-
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Link do cardápio (opcional)</span>
-                  <input id="setMenuUrl" class="input" placeholder="https://seu-dominio.com/?r=rid" />
-                </label>
-                <label class="setField">
-                  <span>Mensagem padrão do WhatsApp</span>
-                  <input id="setWaTemplate" class="input" placeholder="Olá! Quero pedir: {{order}}" />
-                </label>
-              </div>
-
-              <div class="setNote">
-                <strong>Dica:</strong> se você não preencher nada aqui, o sistema continua usando os valores do código (MVP).
-              </div>
-            </div>
-          </div>
+        
+           
 
         </div>
 

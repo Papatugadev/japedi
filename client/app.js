@@ -316,6 +316,11 @@ function _setOnPrimary(primaryHex){
   }catch(_){}
 }
 
+/**
+ * ✅ Banner PROMO (única fonte de verdade)
+ * - Cria abaixo do header.topbar
+ * - applyConfigToClient controla mostrar/ocultar e textos
+ */
 function _ensurePromoBanner(){
   try{
     let banner = document.getElementById("promoBanner");
@@ -327,20 +332,112 @@ function _ensurePromoBanner(){
     banner = document.createElement("div");
     banner.id = "promoBanner";
     banner.className = "promoBanner hidden";
+
     banner.innerHTML = `
-      <div class="promoInner">
-        <div class="promoIcon">🔥</div>
-        <div class="promoText">
-          <div class="promoTitle">Promoção</div>
-          <div class="promoSub"></div>
+      <div class="promoGlow"></div>
+
+      <div class="promoCard promoPro" role="note" aria-label="Promoção">
+        <div class="promoLeft">
+          <div class="promoBadge">🔥 PROMO</div>
+
+          <div class="promoTitle" id="promoTitleText">Promoção</div>
+          <div class="promoSub" id="promoSubText"></div>
+
+          <div class="promoRow">
+            <button class="promoCouponBtn" id="promoCopyBtn" type="button" aria-label="Copiar cupom">
+              <span class="promoCouponLabel" id="promoCouponText">CUPOM: —</span>
+              <span class="promoCopyIcon" aria-hidden="true">📋</span>
+            </button>
+
+            <div class="promoMini" id="promoCountdown" style="display:none"></div>
+          </div>
+        </div>
+
+        <div class="promoRight">
+          <div class="promoIcon">✨</div>
         </div>
       </div>
     `;
+
     header.insertAdjacentElement("afterend", banner);
+
+    // Clique pra copiar
+    const btn = banner.querySelector("#promoCopyBtn");
+    if (btn){
+      btn.addEventListener("click", async () => {
+        const code = (btn.getAttribute("data-coupon") || "").trim();
+        if (!code) return;
+        try{
+          await _copyText(code);
+          _toast(`Cupom copiado: ${code} ✅`);
+          try{ if (navigator.vibrate) navigator.vibrate(30); }catch(_){}
+        }catch(_){
+          _toast("Não deu pra copiar automaticamente. Segure e copie.");
+        }
+      });
+    }
+
     return banner;
   }catch(_){
     return null;
   }
+}
+
+// ===== util: copiar =====
+async function _copyText(text){
+  if (navigator.clipboard && window.isSecureContext){
+    await navigator.clipboard.writeText(text);
+    return true;
+  }
+  // fallback antigo
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
+  const ok = document.execCommand("copy");
+  document.body.removeChild(ta);
+  if (!ok) throw new Error("copy_failed");
+  return true;
+}
+
+// ===== util: toast =====
+let __JPED_TOAST_T = null;
+function _toast(msg){
+  try{
+    let el = document.getElementById("toast");
+    if (!el){
+      el = document.createElement("div");
+      el.id = "toast";
+      el.style.position = "fixed";
+      el.style.left = "50%";
+      el.style.bottom = "18px";
+      el.style.transform = "translateX(-50%)";
+      el.style.zIndex = "99999";
+      el.style.padding = "10px 14px";
+      el.style.borderRadius = "999px";
+      el.style.background = "rgba(15,23,42,.92)";
+      el.style.color = "#fff";
+      el.style.fontWeight = "800";
+      el.style.fontSize = "13px";
+      el.style.boxShadow = "0 12px 30px rgba(0,0,0,.22)";
+      el.style.opacity = "0";
+      el.style.transition = "opacity .18s ease, transform .18s ease";
+      document.body.appendChild(el);
+    }
+    el.textContent = msg;
+    el.style.opacity = "1";
+    el.style.transform = "translateX(-50%) translateY(0)";
+
+    clearTimeout(__JPED_TOAST_T);
+    __JPED_TOAST_T = setTimeout(() => {
+      el.style.opacity = "0";
+      el.style.transform = "translateX(-50%) translateY(10px)";
+    }, 1700);
+  }catch(_){}
 }
 
 function _ensureOpenPill(){
@@ -446,8 +543,62 @@ function applyConfigToClient(cfg){
     if (txt) txt.textContent = state.isOpen ? "Aberto" : "Fechado";
   }
 
-  // banner promo
-  const banner = _ensurePromoBanner();
+  // ✅ banner promo (único)
+// ✅ banner promo (único)
+const banner = _ensurePromoBanner();
+if (banner){
+  const on = !!promo.enabled;
+
+  const title = (promo.title || "").trim();
+  const sub = (promo.subtitle || promo.notice || "").trim();
+  const code = (promo.couponCode || "").trim();
+  const pct = promo.couponPct || "";
+  const endsAtMs = _parsePromoEndsAt(promo.endsAt);
+
+  const expired = !!(endsAtMs && Date.now() >= endsAtMs);
+
+  const t = banner.querySelector("#promoTitleText");
+  const s = banner.querySelector("#promoSubText");
+  const couponText = banner.querySelector("#promoCouponText");
+  const couponBtn = banner.querySelector("#promoCopyBtn");
+
+  const shouldShow = on && !expired && (title || sub || code);
+
+  if (!shouldShow){
+    banner.classList.add("hidden");
+  } else {
+    banner.classList.remove("hidden");
+
+    if (t) t.textContent = title || "Promoção";
+    if (s) s.textContent = sub || "";
+
+    if (couponText){
+      if (code){
+        couponText.textContent = `CUPOM: ${code}${pct ? " • " + pct + "%" : ""}`;
+      } else {
+        couponText.textContent = "";
+      }
+    }
+
+    if (couponBtn){
+      couponBtn.setAttribute("data-coupon", code || "");
+      couponBtn.style.display = code ? "inline-flex" : "none";
+    }
+
+    _startPromoCountdown(endsAtMs);
+  }
+}
+  const couponEl = banner.querySelector("#promoCoupon");
+if (couponEl) {
+  const code = (promo.couponCode || "").trim();
+  const pct = promo.couponPct || "";
+
+  if (code) {
+    couponEl.textContent = `CUPOM: ${code}${pct ? " • " + pct + "%" : ""}`;
+  } else {
+    couponEl.textContent = "";
+  }
+}
   if (banner){
     const on = !!promo.enabled;
     const title = (promo.title || "").trim();
@@ -923,11 +1074,11 @@ function openCheckout() {
   ensureCheckoutUI();
   updateCheckoutUIFromConfig();
   updateCheckoutTotals();
-  document.getElementById("checkoutModal").classList.remove("hidden");
+  document.getElementById("checkoutModal")?.classList?.remove("hidden");
 }
 
 function closeCheckout() {
-  document.getElementById("checkoutModal").classList.add("hidden");
+  document.getElementById("checkoutModal")?.classList?.add("hidden");
 }
 
 function clearCheckoutInputs() {
@@ -1166,15 +1317,19 @@ function validateCouponAndUpdateUI(showAlerts){
   const code = (state.couponCode || "").trim();
   const expected = (promo.couponCode || "").trim();
   const pct = Number(promo.couponPct || 0);
+  const endsAtMs = _parsePromoEndsAt(promo.endsAt);
+  const expired = !!(endsAtMs && Date.now() >= endsAtMs);
 
   let ok = false;
-  if (promo.enabled && expected && pct > 0 && code){
+  if (promo.enabled && !expired && expected && pct > 0 && code){
     ok = code.toLowerCase() === expected.toLowerCase();
   }
 
   if (msg){
     if (!code){
       msg.textContent = "";
+    } else if (expired){
+      msg.textContent = "Cupom expirado ⏰";
     } else if (ok){
       msg.textContent = `Cupom aplicado: ${pct}% OFF ✅`;
     } else {
@@ -1182,10 +1337,14 @@ function validateCouponAndUpdateUI(showAlerts){
     }
   }
 
-  if (showAlerts && code && !ok) alert("Cupom inválido.");
+  if (showAlerts && code && expired) {
+    alert("Esse cupom expirou.");
+  } else if (showAlerts && code && !ok && !expired) {
+    alert("Cupom inválido.");
+  }
+
   updateCheckoutTotals();
 }
-
 function computeOrderTotals(){
   const cfg = state.config || {};
   const delivery = cfg.delivery || {};
@@ -1197,15 +1356,25 @@ function computeOrderTotals(){
   const deliveryFee = (state.checkoutMode === "delivery") ? Number(delivery.fee || 0) : 0;
 
   // cupom (%)
-  let discount = 0;
-  const code = (state.couponCode || "").trim();
-  const expected = (promo.couponCode || "").trim();
-  const pct = Number(promo.couponPct || 0);
-  const couponOk = !!(promo.enabled && expected && pct > 0 && code && code.toLowerCase() === expected.toLowerCase());
+let discount = 0;
+const code = (state.couponCode || "").trim();
+const expected = (promo.couponCode || "").trim();
+const pct = Number(promo.couponPct || 0);
+const endsAtMs = _parsePromoEndsAt(promo.endsAt);
+const expired = !!(endsAtMs && Date.now() >= endsAtMs);
 
-  if (couponOk) {
-    discount = Math.round((subtotal * (pct / 100)) * 100) / 100;
-  }
+const couponOk = !!(
+  promo.enabled &&
+  !expired &&
+  expected &&
+  pct > 0 &&
+  code &&
+  code.toLowerCase() === expected.toLowerCase()
+);
+
+if (couponOk) {
+  discount = Math.round((subtotal * (pct / 100)) * 100) / 100;
+}
 
   const total = Math.max(0, (subtotal + deliveryFee) - discount);
 
@@ -1410,37 +1579,42 @@ function showTab(name){
   const menuView = document.getElementById("menuView");
   const ordersView = document.getElementById("ordersView");
   const cartView = document.getElementById("cartView");
+  const profileView = document.getElementById("profileView");
   const pill = document.querySelector(".bottomnav__pill");
 
   const tabMenu = document.getElementById("tabMenu");
   const tabOrders = document.getElementById("tabOrders");
   const tabCart = document.getElementById("openCartBtn");
+  const tabProfile = document.getElementById("tabProfile");
 
-  // fallback seguro
   const safeName = (name === "orders" && !state.currentOrderId) ? "menu" : name;
 
   const isMenu = safeName === "menu";
   const isOrders = safeName === "orders";
   const isCart = safeName === "cart";
+  const isProfile = safeName === "profile";
 
   menuView?.classList?.toggle("hidden", !isMenu);
   ordersView?.classList?.toggle("hidden", !isOrders);
   cartView?.classList?.toggle("hidden", !isCart);
+  profileView?.classList?.toggle("hidden", !isProfile);
 
   tabMenu?.classList?.toggle("is-active", isMenu);
   tabOrders?.classList?.toggle("is-active", isOrders);
   tabCart?.classList?.toggle("is-active", isCart);
+  tabProfile?.classList?.toggle("is-active", isProfile);
 
   if (pill){
-    pill.setAttribute("data-active", isCart ? "cart" : (isOrders ? "orders" : "menu"));
+    pill.setAttribute(
+      "data-active",
+      isProfile ? "profile" : isCart ? "cart" : isOrders ? "orders" : "menu"
+    );
   }
 
-  // quando entrar no carrinho, garante render atualizado
   if (isCart) {
-    try { renderCart(); } catch(_) {}
+    try { renderCartUI(); } catch(_) {}
   }
 }
-
 function setOrdersUI(hasOrder){
   document.getElementById("ordersEmpty")?.classList?.toggle("hidden", !!hasOrder);
   document.getElementById("orderCard")?.classList?.toggle("hidden", !hasOrder);
@@ -1815,6 +1989,9 @@ async function boot() {
   if (tabOrders) tabOrders.addEventListener("click", () => {
     if (!state.currentOrderId) return showTab("menu");
     showTab("orders");
+    document.getElementById("tabProfile")?.addEventListener("click", () => {
+  showTab("profile");
+});
   });
 
   const goMenuBtn = document.getElementById("goMenuBtn");
@@ -1978,11 +2155,13 @@ boot();
 
 /* =========================
    PWA: Service Worker
-   ========================= */
+   =========================
+   ✅ FIX: NÃO registrar 2 service workers, e NÃO usar await solto no final
+   - /sw.js com scope "/" já cobre o app (inclusive /client/)
+*/
 if ("serviceWorker" in navigator) {
   window.addEventListener("load", async () => {
     try {
-      // ✅ garante que funciona mesmo abrindo em /r/slug (PWA instalado)
       await navigator.serviceWorker.register("/sw.js", { scope: "/" });
       console.log("SW registrado ✅");
     } catch (e) {
@@ -1990,4 +2169,106 @@ if ("serviceWorker" in navigator) {
     }
   });
 }
-await navigator.serviceWorker.register("/client/sw.js", { scope: "/client/" });
+function startPromoListener() {
+
+  const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID, "settings", "promo");
+
+  Firestore.onSnapshot(ref, (snap) => {
+
+    if (!snap.exists()) return;
+
+    const data = snap.data();
+    const cupom = data.cupom || "";
+
+    const el = document.getElementById("promoCupom");
+
+    if (el) el.textContent = cupom;
+
+  });
+
+}
+// ✅ Mostra no banner o cupom digitado no input "promo"
+(function bindPromoToBanner() {
+  const input = document.getElementById("promo"); // <-- ID do seu input do cupom
+  const bannerText = document.getElementById("promoBannerText");
+
+  if (!input || !bannerText) return;
+
+  const render = () => {
+    const code = (input.value || "").trim();
+    bannerText.textContent = code ? code : "Promoção relâmpago";
+  };
+
+  input.addEventListener("input", render);
+  render(); // já atualiza na hora que carrega
+})();
+let __JPED_PROMO_TICK = null;
+
+function _parsePromoEndsAt(raw){
+  const s = String(raw || "").trim();
+  if (!s) return null;
+
+  const t = Date.parse(s);
+  if (Number.isFinite(t)) return t;
+
+  return null;
+}
+
+function _formatCountdown(ms){
+  const total = Math.max(0, Math.floor(ms / 1000));
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+
+  return `${String(h).padStart(2,"0")}:${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`;
+}
+
+function _startPromoCountdown(endsAtMs){
+  if (__JPED_PROMO_TICK){
+    clearInterval(__JPED_PROMO_TICK);
+    __JPED_PROMO_TICK = null;
+  }
+
+  const cd = document.getElementById("promoCountdown");
+  const banner = document.getElementById("promoBanner");
+  if (!cd || !banner || !endsAtMs) return;
+
+  const tick = () => {
+    const left = endsAtMs - Date.now();
+
+    if (left <= 0){
+      cd.textContent = "Expirado";
+      banner.classList.add("hidden");
+      clearInterval(__JPED_PROMO_TICK);
+      __JPED_PROMO_TICK = null;
+      return;
+    }
+
+    cd.style.display = "inline-flex";
+    cd.textContent = `Expira em ${_formatCountdown(left)}`;
+  };
+
+  tick();
+  __JPED_PROMO_TICK = setInterval(tick, 1000);
+}
+const profileBtn = document.getElementById("profileBtn");
+
+if (profileBtn) {
+  profileBtn.addEventListener("click", () => {
+    openProfile();
+  });
+}
+function openProfile() {
+  const modal = document.getElementById("profileModal");
+  if (!modal) return;
+
+  modal.classList.remove("hidden");
+}
+
+function closeProfile() {
+  const modal = document.getElementById("profileModal");
+  if (!modal) return;
+
+  modal.classList.add("hidden");
+}
+lucide.createIcons();

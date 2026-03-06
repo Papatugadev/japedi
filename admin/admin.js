@@ -2068,61 +2068,85 @@ function _ensureIdentityUI(){
   if (document.getElementById("setIdentityCard")) return;
 
   // tenta achar um ponto bom pra inserir (depois do Instagram, ou no fim do bloco settings)
-  const ig = _setEl("setInstagram");
-  const host = (ig && (ig.closest(".formRow") || ig.parentElement)) || document.getElementById("page-settings") || document.body;
+  // insere no bloco de configurações
+const host = document.getElementById("settingsInfoCard");
 
   const wrap = document.createElement("div");
   wrap.id = "setIdentityCard";
   wrap.style.marginTop = "14px";
   wrap.innerHTML = `
-    <div style="padding:14px;border:1px solid #e5e7eb;border-radius:16px;background:#fff">
-      <div style="font-weight:900;color:#0f172a;margin-bottom:8px">Identidade</div>
+    <div style="padding:18px;border:1px solid #e5e7eb;border-radius:20px;background:#fff;max-width:760px;margin:0 0 20px 0;box-shadow:0 10px 30px rgba(15,23,42,.06)">
+     <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+  <div>
+    <div style="font-weight:900;color:#0f172a;font-size:18px;line-height:1.1">Identidade da loja</div>
+    <div style="font-size:13px;color:#64748b;margin-top:4px">Envie a logo e a imagem de capa do seu restaurante.</div>
+  </div>
 
-      <div style="display:flex;gap:12px;flex-wrap:wrap;align-items:flex-start">
-        <div style="flex:1;min-width:240px">
-          <div style="font-size:12px;color:#334155;margin-bottom:6px">Fundo (capa)</div>
-          <input id="setCoverUrl" class="input" placeholder="URL da imagem de fundo (opcional)" />
-          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-            <input id="setCoverFile" type="file" accept="image/*" />
-            <button type="button" class="ghost small" id="setCoverClear">Remover fundo</button>
-            <span id="setCoverStatus" class="muted" style="font-size:12px"></span>
-          </div>
-        </div>
+  <div style="padding:8px 12px;border-radius:999px;background:#f8fafc;border:1px solid #e2e8f0;font-size:12px;font-weight:700;color:#334155">
+    Visual da loja
+  </div>
+</div>
 
-        <div style="flex:1;min-width:240px">
-          <div style="font-size:12px;color:#334155;margin-bottom:6px">Logo (redonda)</div>
-          <input id="setLogoUrl" class="input" placeholder="URL da logo (opcional)" />
-          <div style="display:flex;gap:8px;align-items:center;margin-top:8px;flex-wrap:wrap">
-            <input id="setLogoFile" type="file" accept="image/*" />
-            <button type="button" class="ghost small" id="setLogoClear">Remover logo</button>
-            <span id="setLogoStatus" class="muted" style="font-size:12px"></span>
-          </div>
-        </div>
-      </div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;align-items:start">
+  <div style="min-width:0">
+    <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px">Logo (redonda)</div>
 
-      <div style="margin-top:12px">
-        <div style="font-size:12px;color:#334155;margin-bottom:6px">Prévia</div>
-        <div id="setIdentityPreview" style="position:relative;height:110px;border-radius:18px;overflow:hidden;border:1px solid #e5e7eb;background:#f1f5f9">
-          <div id="setCoverPreview" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05)"></div>
-          <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.05));"></div>
-          <img id="setLogoPreview" alt="Logo" style="position:absolute;left:14px;bottom:14px;width:62px;height:62px;border-radius:999px;object-fit:cover;background:#fff;border:3px solid rgba(255,255,255,0.9);box-shadow:0 10px 25px rgba(0,0,0,.18);display:none" />
-          <div style="position:absolute;left:92px;bottom:22px;color:#fff">
-            <div id="setPreviewName" style="font-weight:900;font-size:16px;line-height:1.1;text-shadow:0 2px 10px rgba(0,0,0,.25)"></div>
-            <div id="setPreviewDesc" style="opacity:.9;font-size:12px;margin-top:2px;text-shadow:0 2px 10px rgba(0,0,0,.25)"></div>
-          </div>
-        </div>
-        <div class="muted" style="font-size:12px;margin-top:8px">Dica: use uma imagem larga para o fundo e uma logo quadrada (ela vira redonda).</div>
+    <label style="display:flex;flex-direction:column;justify-content:center;align-items:center;border:2px dashed #cbd5e1;border-radius:16px;padding:18px;text-align:center;cursor:pointer;background:#f8fafc;min-height:120px;transition:.2s">
+      <div style="font-size:28px;line-height:1">🟢</div>
+      <div style="font-weight:800;color:#0f172a;margin-top:8px">Enviar logo</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px">Clique para selecionar PNG ou JPG</div>
+
+      <input id="setLogoFile" type="file" accept="image/*" style="display:none">
+      <input id="setLogoUrl" type="hidden">
+    </label>
+
+    <div id="setLogoStatus" class="muted" style="font-size:12px;margin-top:8px;color:#64748b"></div>
+  </div>
+
+  <div style="min-width:0">
+    <div style="font-size:12px;font-weight:700;color:#334155;margin-bottom:8px">Fundo (capa)</div>
+
+    <label style="display:flex;flex-direction:column;justify-content:center;align-items:center;border:2px dashed #cbd5e1;border-radius:16px;padding:18px;text-align:center;cursor:pointer;background:#f8fafc;min-height:120px;transition:.2s">
+      <div style="font-size:28px;line-height:1">🖼️</div>
+      <div style="font-weight:800;color:#0f172a;margin-top:8px">Enviar capa</div>
+      <div style="font-size:12px;color:#64748b;margin-top:4px">Clique para selecionar PNG ou JPG</div>
+
+      <input id="setCoverFile" type="file" accept="image/*" style="display:none">
+      <input id="setCoverUrl" type="hidden">
+    </label>
+
+    <div id="setCoverStatus" class="muted" style="font-size:12px;margin-top:8px;color:#64748b"></div>
+  </div>
+</div>
+
+  <div id="setIdentityPreview" style="position:relative;height:170px;border-radius:22px;overflow:hidden;border:1px solid #e5e7eb;background:#f1f5f9;box-shadow:0 10px 25px rgba(15,23,42,.08)">
+    <div id="setCoverPreview" style="position:absolute;inset:0;background-size:cover;background-position:center;filter:saturate(1.05)"></div>
+    <div style="position:absolute;inset:0;background:linear-gradient(180deg, rgba(0,0,0,0.18), rgba(0,0,0,0.48));"></div>
+
+    <div style="position:absolute;left:18px;right:18px;bottom:18px;display:flex;align-items:end;gap:14px">
+      <img id="setLogoPreview" alt="Logo" style="width:74px;height:74px;border-radius:999px;object-fit:cover;background:#fff;border:3px solid rgba(255,255,255,0.92);box-shadow:0 10px 25px rgba(0,0,0,.18);display:none;flex:0 0 auto" />
+
+      <div style="color:#fff;min-width:0">
+        <div id="setPreviewName" style="font-weight:900;font-size:20px;line-height:1.1;text-shadow:0 2px 10px rgba(0,0,0,.25)"></div>
+        <div id="setPreviewDesc" style="opacity:.96;font-size:13px;margin-top:4px;text-shadow:0 2px 10px rgba(0,0,0,.25);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%"></div>
       </div>
     </div>
+  </div>
+
+  <div class="muted" style="font-size:12px;margin-top:8px;color:#64748b">
+    Dica: use uma imagem larga para a capa e uma logo quadrada para melhor resultado.
+  </div>
+</div>
   `;
 
-  // insere depois do Instagram, se possível
-  if (ig && (ig.closest(".formRow") || ig.parentElement)) {
-    const anchor = ig.closest(".formRow") || ig.parentElement;
-    anchor.insertAdjacentElement("afterend", wrap);
-  } else {
-    host.appendChild(wrap);
+host.prepend(wrap);
+try{
+  const ig = _setEl("setInstagram");
+  if (ig) {
+    const row = ig.closest(".formRow") || ig.parentElement;
+    if (row) row.style.display = "none";
   }
+}catch(_){}
 
   // esconde WhatsApp (identidade agora é só logo + fundo)
   try{
@@ -2235,9 +2259,241 @@ function _updateIdentityPreview(){
     }
   }
 }
+function _updatePromoPreview(){
+  const on = _checked("setPromoOn");
+  const title = (_val("setPromoTitle") || "").trim();
+  const sub = (_val("setPromoSub") || "").trim();
+  const code = (_val("setCouponCode") || "").trim();
+  const pct = (_val("setCouponPct") || "").trim();
+  const notice = (_val("setNotice") || "").trim();
+
+  const box = document.getElementById("promoBannerPreview");
+  if (!box) return;
+
+  box.classList.toggle("isOff", !on);
+
+  const t = document.getElementById("promoPrevTitle");
+  const s = document.getElementById("promoPrevSub");
+  const c = document.getElementById("promoPrevCoupon");
+  const n = document.getElementById("promoPrevNotice");
+
+  if (t) t.textContent = title || "Título da promoção";
+  if (s) s.textContent = sub || "Subtítulo da promoção";
+
+  if (c){
+    if (code) c.textContent = `CUPOM: ${code}${pct ? ` • ${pct}%` : ""}`;
+    else c.textContent = "CUPOM: —";
+  }
+
+  if (n){
+    n.textContent = notice ? `Aviso: ${notice}` : "Aviso: —";
+    n.style.display = notice ? "inline-flex" : "none";
+  }
+}
+
+function _wirePromoPreview(){
+  const ids = ["setPromoOn","setPromoTitle","setPromoSub","setCouponCode","setCouponPct","setNotice"];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", _updatePromoPreview);
+    el.addEventListener("change", _updatePromoPreview);
+  });
+  _updatePromoPreview();
+}
 
 
 
+
+
+/* =========================================================
+   HORÁRIOS (ABERTO/FECHADO) — admin entende automaticamente
+   - hours.manualOpen: chave do admin (checkbox)
+   - hours.isOpen: ABERTO efetivo (manualOpen + dentro do horário)
+   - compatível com versões antigas (que só liam hours.isOpen)
+   ========================================================= */
+let __JPED_HOURS_TICK = null;
+let __JPED_HOURS_LAST_EFFECTIVE = null;
+let __JPED_HOURS_LAST_WRITE_AT = 0;
+
+function _normalizeTimeStr(raw){
+  const s = String(raw ?? "").trim();
+  if (!s) return "";
+
+  // aceita: "8", "08", "800", "0800", "8:0", "8:00", "08:00"
+  const m1 = s.match(/^([0-2]?\d)(?::?([0-5]?\d))?$/);
+  if (m1){
+    let hh = parseInt(m1[1],10);
+    let mm = (m1[2] == null) ? 0 : parseInt(m1[2],10);
+    if (!Number.isFinite(hh) || !Number.isFinite(mm)) return s;
+    hh = Math.max(0, Math.min(23, hh));
+    mm = Math.max(0, Math.min(59, mm));
+    return String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  }
+
+  // aceita "08h00"
+  const m2 = s.match(/^([0-2]?\d)\s*[hH]\s*([0-5]?\d)$/);
+  if (m2){
+    let hh = Math.max(0, Math.min(23, parseInt(m2[1],10)));
+    let mm = Math.max(0, Math.min(59, parseInt(m2[2],10)));
+    return String(hh).padStart(2,"0") + ":" + String(mm).padStart(2,"0");
+  }
+
+  return s; // mantém como veio (se for estranho)
+}
+
+function _timeStrToMin(str){
+  const s = _normalizeTimeStr(str);
+  const m = s.match(/^([0-2]\d):([0-5]\d)$/);
+  if (!m) return null;
+  const hh = parseInt(m[1],10);
+  const mm = parseInt(m[2],10);
+  if (hh > 23 || mm > 59) return null;
+  return hh*60 + mm;
+}
+
+function _isWithinOpenHours(openStr, closeStr, now){
+  const o = _timeStrToMin(openStr);
+  const c = _timeStrToMin(closeStr);
+
+  // se não configurou horário, considera "sempre aberto"
+  if (o == null || c == null) return true;
+
+  const cur = now.getHours()*60 + now.getMinutes();
+
+  // mesmo horário -> assume 24h aberto
+  if (o === c) return true;
+
+  // normal (ex: 08:00 -> 18:00)
+  if (o < c) return cur >= o && cur < c;
+
+  // cruza meia-noite (ex: 18:00 -> 02:00)
+  return (cur >= o) || (cur < c);
+}
+
+function _ensureOpenNowPill(){
+  let el = document.getElementById("setOpenNowPill");
+  if (el) return el;
+
+  // tenta colocar perto do pill do RID (se existir)
+  const anchor = document.getElementById("setRidPill") || document.getElementById("setStatus") || document.getElementById("pageTitle") || document.body;
+  el = document.createElement("div");
+  el.id = "setOpenNowPill";
+  el.style.display = "inline-flex";
+  el.style.alignItems = "center";
+  el.style.gap = "8px";
+  el.style.padding = "8px 12px";
+  el.style.borderRadius = "999px";
+  el.style.fontWeight = "700";
+  el.style.fontSize = "12px";
+  el.style.border = "1px solid #e5e7eb";
+  el.style.background = "#fff";
+  el.style.margin = "8px 0";
+  el.textContent = "Status: —";
+
+  try{
+    if (anchor && anchor.parentElement) {
+      anchor.parentElement.insertBefore(el, anchor.nextSibling);
+    } else {
+      document.body.prepend(el);
+    }
+  }catch(_){
+    document.body.prepend(el);
+  }
+  return el;
+}
+
+function _paintOpenNowPill(isOpenEff, reason){
+  const el = _ensureOpenNowPill();
+  if (!el) return;
+  el.textContent = isOpenEff ? `ABERTO agora${reason ? " • " + reason : ""}` : `FECHADO agora${reason ? " • " + reason : ""}`;
+  if (isOpenEff){
+    el.style.borderColor = "#bbf7d0";
+    el.style.background = "#f0fdf4";
+    el.style.color = "#166534";
+  } else {
+    el.style.borderColor = "#fecaca";
+    el.style.background = "#fff1f2";
+    el.style.color = "#991b1b";
+  }
+}
+
+function _effectiveOpenFromHours(hours){
+  const h = hours || {};
+  const openStr = h.open ?? "";
+  const closeStr = h.close ?? "";
+  const within = _isWithinOpenHours(openStr, closeStr, new Date());
+  // compat: antigo hours.isOpen era o "manual". novo: hours.manualOpen
+  const manual = (h.manualOpen != null) ? !!h.manualOpen : (h.isOpen !== false);
+  return {
+    within,
+    manual,
+    effective: (manual && within),
+    openStr: _normalizeTimeStr(openStr),
+    closeStr: _normalizeTimeStr(closeStr)
+  };
+}
+
+async function _maybeSyncEffectiveOpen(hours){
+  if (!RESTAURANT_ID) return;
+  if (!ADMIN_OK) return;
+  if (!SUBSCRIPTION_OK) return;
+
+  const r = _effectiveOpenFromHours(hours);
+  const eff = r.effective;
+
+  // evita loop infinito: só escreve se mudou e não escreveu há pouco
+  const now = Date.now();
+  if (__JPED_HOURS_LAST_EFFECTIVE === eff) return;
+  if (now - __JPED_HOURS_LAST_WRITE_AT < 25_000) return;
+
+  __JPED_HOURS_LAST_EFFECTIVE = eff;
+  __JPED_HOURS_LAST_WRITE_AT = now;
+
+  try{
+    await Firestore.setDoc(_settingsDocRef(), {
+      updatedAt: Firestore.serverTimestamp(),
+      hours: {
+        open: r.openStr,
+        close: r.closeStr,
+        manualOpen: r.manual,
+        isOpen: eff
+      }
+    }, { merge: true });
+  }catch(e){
+    console.warn("Falha ao sincronizar horário (isOpen):", e?.code || e, e?.message || "");
+  }
+}
+
+function _tickOpenNowFromForm(){
+  const openStr = _normalizeTimeStr(_val("setOpen"));
+  const closeStr = _normalizeTimeStr(_val("setClose"));
+  const manual = _checked("setIsOpen");
+  const within = _isWithinOpenHours(openStr, closeStr, new Date());
+  const eff = manual && within;
+
+  const reason = within ? "" : `fora do horário (${openStr||"??"}–${closeStr||"??"})`;
+  _paintOpenNowPill(eff, reason);
+
+  // normaliza inputs sem atrapalhar o usuário
+  try{
+    const elO = _setEl("setOpen");
+    if (elO && openStr && elO.value !== openStr) elO.value = openStr;
+    const elC = _setEl("setClose");
+    if (elC && closeStr && elC.value !== closeStr) elC.value = closeStr;
+  }catch(_){ }
+
+  _maybeSyncEffectiveOpen({ open: openStr, close: closeStr, manualOpen: manual });
+  return eff;
+}
+
+function _startHoursAutoTick(){
+  if (__JPED_HOURS_TICK) return;
+  try{ _tickOpenNowFromForm(); }catch(_){ }
+  __JPED_HOURS_TICK = setInterval(() => {
+    try{ _tickOpenNowFromForm(); }catch(_){ }
+  }, 30_000);
+}
 function _applySettingsToForm(cfg){
   cfg = cfg || {};
   const r = cfg.restaurant || {};
@@ -2252,7 +2508,7 @@ function _applySettingsToForm(cfg){
   _setVal("setName", r.name);
   _setVal("setDesc", r.desc);
   // WhatsApp removido da Identidade (mantém compatibilidade: não exibe/nem salva)
-  _setVal("setInstagram", r.instagram);
+ 
   _setVal("setLogoUrl", r.logoUrl);
   _setVal("setCoverUrl", r.coverUrl);
   try{ _updateIdentityPreview(); }catch(_){ }
@@ -2261,7 +2517,7 @@ function _applySettingsToForm(cfg){
   _setVal("setClose", hours.close);
   _setVal("setPrepMin", hours.prepMin);
   _setVal("setAutoMsg", hours.autoMsg);
-  _setChecked("setIsOpen", hours.isOpen !== false); // default true
+  _setChecked("setIsOpen", (hours.manualOpen ?? hours.isOpen) !== false); // default true
   _setChecked("setAutoConfirm", !!hours.autoConfirm);
 
   _setVal("setDeliveryFee", delivery.fee);
@@ -2283,6 +2539,7 @@ function _applySettingsToForm(cfg){
   _setVal("setCouponCode", promo.couponCode);
   _setVal("setCouponPct", promo.couponPct);
   _setVal("setNotice", promo.notice);
+  _setVal("setPromoEndsAt", _toDatetimeLocalValue(promo.endsAt));
 
   _setChecked("setSoundNewOrder", notif.soundNewOrder !== false); // default true
   _setChecked("setSoundChat", notif.soundChat !== false); // default true
@@ -2301,21 +2558,23 @@ function _applySettingsToForm(cfg){
 }
 
 function _collectSettingsFromForm(){
+  
   const payload = {
     updatedAt: Firestore.serverTimestamp(),
-    restaurant: {
-      name: _val("setName").trim(),
-      desc: _val("setDesc").trim(),
-      instagram: _val("setInstagram").trim(),
-      logoUrl: _val("setLogoUrl").trim(),
-      coverUrl: _val("setCoverUrl").trim(),
-    },
+restaurant: {
+  name: _val("setName").trim(),
+  desc: _val("setDesc").trim(),
+  logoUrl: _val("setLogoUrl").trim(),
+  coverUrl: _val("setCoverUrl").trim(),
+},
+
     hours: {
-      open: _val("setOpen").trim(),
-      close: _val("setClose").trim(),
+      open: _normalizeTimeStr(_val("setOpen")),
+      close: _normalizeTimeStr(_val("setClose")),
       prepMin: _intOrNull(_val("setPrepMin")),
       autoMsg: _val("setAutoMsg").trim(),
-      isOpen: _checked("setIsOpen"),
+      manualOpen: _checked("setIsOpen"),
+      isOpen: (_checked("setIsOpen") && _isWithinOpenHours(_normalizeTimeStr(_val("setOpen")), _normalizeTimeStr(_val("setClose")), new Date())),
       autoConfirm: _checked("setAutoConfirm"),
     },
     delivery: {
@@ -2333,14 +2592,15 @@ function _collectSettingsFromForm(){
       cardOnDelivery: _checked("setCard"),
       note: _val("setPayNote").trim(),
     },
-    promo: {
-      enabled: _checked("setPromoOn"),
-      title: _val("setPromoTitle").trim(),
-      subtitle: _val("setPromoSub").trim(),
-      couponCode: _val("setCouponCode").trim(),
-      couponPct: _intOrNull(_val("setCouponPct")),
-      notice: _val("setNotice").trim(),
-    },
+promo: {
+  enabled: _checked("setPromoOn"),
+  title: _val("setPromoTitle").trim(),
+  subtitle: _val("setPromoSub").trim(),
+  couponCode: _val("setCouponCode").trim(),
+  couponPct: _intOrNull(_val("setCouponPct")),
+  notice: _val("setNotice").trim(),
+  endsAt: _promoEndsAtISOFromInput()
+},
     notifications: {
       soundNewOrder: _checked("setSoundNewOrder"),
       soundChat: _checked("setSoundChat"),
@@ -2416,13 +2676,304 @@ async function _reloadSettingsOnce(){
     const snap = await Firestore.getDoc(_settingsDocRef());
     const data = snap.exists() ? (snap.data() || {}) : {};
     _applySettingsToForm(data);
+    try{
+      const h = (data && data.hours) ? data.hours : {};
+      const r = _effectiveOpenFromHours(h);
+      _paintOpenNowPill(r.effective, r.within ? "" : `fora do horário (${r.openStr||"??"}–${r.closeStr||"??"})`);
+      __JPED_HOURS_LAST_EFFECTIVE = r.effective;
+    }catch(_){ }
     _setText("setStatus", snap.exists() ? "Carregado." : "Ainda não existe config salva (você pode salvar agora).");
   }catch(e){
     console.warn("Falha ao carregar configurações:", e?.code || e, e?.message || e);
     _setText("setStatus", "Erro ao carregar ❌");
   }
+  try {
+  _ensurePromoEndsAtField();
+
+  const promo = (data && data.promo) ? data.promo : {};
+  const inp = document.getElementById("setPromoEndsAt");
+
+  if (inp) {
+    inp.value = _toDatetimeLocalValue(promo.endsAt || "");
+  }
+
+  _updatePromoEndsAtPreview();
+} catch (_) {}
+}
+function _promoFieldHost() {
+  return (
+    document.getElementById("promoSettingsBox") ||
+    document.getElementById("settingsPromo") ||
+    document.getElementById("page-settings") ||
+    document.querySelector('[data-settings-section="promo"]') ||
+    document.getElementById("page-settings")
+  );
 }
 
+function _toDatetimeLocalValue(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "";
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+
+function _promoEndsAtISOFromInput() {
+  const inp = document.getElementById("setPromoEndsAt");
+  if (!inp) return "";
+
+  const v = String(inp.value || "").trim();
+  if (!v) return "";
+
+  const d = new Date(v);
+  if (Number.isNaN(d.getTime())) return "";
+
+  return d.toISOString();
+}
+
+function _formatPromoEndsAtPretty(raw) {
+  const s = String(raw || "").trim();
+  if (!s) return "Sem expiração";
+
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "Data inválida";
+
+  return d.toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  
+}
+
+function _updatePromoEndsAtPreview() {
+  const inp = document.getElementById("setPromoEndsAt");
+  const out = document.getElementById("setPromoEndsAtPreview");
+  const clearBtn = document.getElementById("setPromoEndsAtClear");
+  const quickBtns = document.querySelectorAll("[data-promo-exp]");
+
+  if (!inp || !out) return;
+
+  const iso = _promoEndsAtISOFromInput();
+
+  if (!iso) {
+    out.innerHTML = `
+      <div style="font-size:12px;opacity:.8;font-weight:700">STATUS</div>
+      <div style="margin-top:4px;font-size:16px;font-weight:900">Sem expiração</div>
+      <div style="margin-top:6px;font-size:12px;opacity:.8">O banner continuará ativo até você remover manualmente.</div>
+    `;
+  } else {
+    out.innerHTML = `
+      <div style="font-size:12px;opacity:.8;font-weight:700">EXPIRA EM</div>
+      <div style="margin-top:4px;font-size:16px;font-weight:900">${_formatPromoEndsAtPretty(iso)}</div>
+      <div style="margin-top:6px;font-size:12px;opacity:.8">Quando passar desse horário, o banner some automaticamente.</div>
+    `;
+  }
+
+  if (clearBtn) clearBtn.classList.toggle("hidden", !inp.value);
+
+  quickBtns.forEach((btn) => {
+    btn.classList.remove("is-active");
+    if (btn.dataset.applied === "1") btn.classList.add("is-active");
+  });
+}
+
+function _setPromoExpiration(hoursToAdd) {
+  const inp = document.getElementById("setPromoEndsAt");
+  if (!inp) return;
+
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + Number(hoursToAdd || 0));
+
+  inp.value = _toDatetimeLocalValue(d.toISOString());
+
+  document.querySelectorAll("[data-promo-exp]").forEach((b) => {
+    b.dataset.applied = "0";
+    b.classList.remove("is-active");
+  });
+
+  const active = document.querySelector(`[data-promo-exp="${hoursToAdd}"]`);
+  if (active) {
+    active.dataset.applied = "1";
+    active.classList.add("is-active");
+  }
+
+  _updatePromoEndsAtPreview();
+}
+
+function _ensurePromoEndsAtField() {
+  if (document.getElementById("setPromoEndsAt")) return;
+
+  const host = _promoFieldHost();
+  if (!host) return;
+
+  const wrap = document.createElement("div");
+  wrap.id = "promoEndsAtCard";
+  wrap.style.marginTop = "14px";
+  wrap.style.border = "1px solid #e5e7eb";
+  wrap.style.borderRadius = "22px";
+  wrap.style.background = "linear-gradient(180deg,#ffffff 0%,#f8fafc 100%)";
+  wrap.style.boxShadow = "0 14px 40px rgba(15,23,42,.08)";
+  wrap.style.overflow = "hidden";
+
+  wrap.innerHTML = `
+    <div style="padding:18px 18px 14px 18px;border-bottom:1px solid #eef2f7;background:linear-gradient(180deg,rgba(16,185,129,.08),rgba(16,185,129,0))">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div style="width:36px;height:36px;border-radius:12px;display:flex;align-items:center;justify-content:center;background:#10b981;color:#fff;font-size:18px;box-shadow:0 10px 24px rgba(16,185,129,.25)">
+              ⏰
+            </div>
+            <div>
+              <div style="font-weight:900;font-size:16px;color:#0f172a;line-height:1.1">
+                Expiração da promoção
+              </div>
+              <div style="font-size:12px;color:#64748b;margin-top:4px">
+                Defina até quando o banner e o cupom ficam ativos.
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <button
+          id="setPromoEndsAtClear"
+          type="button"
+          class="ghost small hidden"
+          style="border-radius:999px;padding:10px 14px;font-weight:800;border:1px solid #fecaca;background:#fff;color:#b91c1c"
+        >
+          Remover
+        </button>
+      </div>
+    </div>
+
+    <div style="padding:18px">
+      <div style="display:grid;grid-template-columns:1fr 160px;gap:12px;align-items:end">
+        <label style="display:block">
+          <div style="font-size:12px;font-weight:800;color:#475569;margin-bottom:8px">Data e hora</div>
+          <input
+            id="setPromoEndsAt"
+            type="datetime-local"
+            class="input"
+            style="width:100%;height:54px;border-radius:16px;border:1px solid #dbe3ee;background:#fff;padding:0 14px;font-size:15px;font-weight:800;color:#0f172a;box-shadow:inset 0 1px 0 rgba(255,255,255,.7)"
+          />
+        </label>
+
+        <div>
+          <div style="font-size:12px;font-weight:800;color:#475569;margin-bottom:8px">Ação rápida</div>
+          <button
+            type="button"
+            id="setPromoTomorrow23"
+            class="btn small"
+            style="width:100%;height:54px;border-radius:16px;font-weight:900"
+          >
+            Amanhã 23:59
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top:14px">
+        <div style="font-size:12px;font-weight:800;color:#475569;margin-bottom:8px">Atalhos</div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="ghost small" data-promo-exp="1" style="border-radius:999px;padding:10px 14px;font-weight:800">+1h</button>
+          <button type="button" class="ghost small" data-promo-exp="3" style="border-radius:999px;padding:10px 14px;font-weight:800">+3h</button>
+          <button type="button" class="ghost small" data-promo-exp="6" style="border-radius:999px;padding:10px 14px;font-weight:800">+6h</button>
+          <button type="button" class="ghost small" data-promo-exp="12" style="border-radius:999px;padding:10px 14px;font-weight:800">+12h</button>
+          <button type="button" class="ghost small" data-promo-exp="24" style="border-radius:999px;padding:10px 14px;font-weight:800">+24h</button>
+          <button type="button" class="ghost small" data-promo-exp="48" style="border-radius:999px;padding:10px 14px;font-weight:800">+2 dias</button>
+        </div>
+      </div>
+
+      <div
+        id="setPromoEndsAtPreview"
+        style="margin-top:16px;padding:14px 16px;border-radius:18px;background:linear-gradient(135deg,#0f172a 0%,#1e293b 100%);color:#fff;font-size:14px;font-weight:900;box-shadow:0 14px 28px rgba(15,23,42,.18)"
+      >
+        Sem expiração
+      </div>
+    </div>
+  `;
+
+  host.appendChild(wrap);
+
+  const inp = document.getElementById("setPromoEndsAt");
+  const clearBtn = document.getElementById("setPromoEndsAtClear");
+  const tomorrowBtn = document.getElementById("setPromoTomorrow23");
+
+  if (inp) {
+    inp.addEventListener("input", () => {
+      document.querySelectorAll("[data-promo-exp]").forEach((b) => {
+        b.dataset.applied = "0";
+        b.classList.remove("is-active");
+        b.style.background = "#fff";
+        b.style.color = "";
+        b.style.borderColor = "";
+      });
+      _updatePromoEndsAtPreview();
+    });
+  }
+
+  if (clearBtn) {
+    clearBtn.addEventListener("click", () => {
+      if (inp) inp.value = "";
+      document.querySelectorAll("[data-promo-exp]").forEach((b) => {
+        b.dataset.applied = "0";
+        b.classList.remove("is-active");
+        b.style.background = "#fff";
+        b.style.color = "";
+        b.style.borderColor = "";
+      });
+      _updatePromoEndsAtPreview();
+    });
+  }
+
+  if (tomorrowBtn) {
+    tomorrowBtn.addEventListener("click", () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 1);
+      d.setHours(23, 59, 0, 0);
+
+      if (inp) inp.value = _toDatetimeLocalValue(d.toISOString());
+
+      document.querySelectorAll("[data-promo-exp]").forEach((b) => {
+        b.dataset.applied = "0";
+        b.classList.remove("is-active");
+        b.style.background = "#fff";
+        b.style.color = "";
+        b.style.borderColor = "";
+      });
+
+      _updatePromoEndsAtPreview();
+    });
+  }
+
+  document.querySelectorAll("[data-promo-exp]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      _setPromoExpiration(Number(btn.dataset.promoExp || 0));
+
+      document.querySelectorAll("[data-promo-exp]").forEach((b) => {
+        b.style.background = "#fff";
+        b.style.color = "";
+        b.style.borderColor = "";
+      });
+
+      btn.style.background = "#0f172a";
+      btn.style.color = "#fff";
+      btn.style.borderColor = "#0f172a";
+    });
+  });
+
+  _updatePromoEndsAtPreview();
+}
 function _startSettingsPanel(){
   if (__JPED_SETTINGS_STARTED) return;
   __JPED_SETTINGS_STARTED = true;
@@ -2443,13 +2994,24 @@ function _startSettingsPanel(){
 
   // carrega e escuta em tempo real
   _setText("setStatus", "Carregando...");
+  try { _ensurePromoEndsAtField(); } catch (_) {}
   _reloadSettingsOnce();
+try{ _wirePromoPreview(); }catch(_){}
+  // inicia ticker de horário (aberto/fechado)
+  try{ _startHoursAutoTick(); }catch(_){ }
 
   if (__JPED_SETTINGS_UNSUB) { try{ __JPED_SETTINGS_UNSUB(); }catch(_){} }
   try{
     __JPED_SETTINGS_UNSUB = Firestore.onSnapshot(_settingsDocRef(), (snap) => {
       const data = snap.exists() ? (snap.data() || {}) : {};
       _applySettingsToForm(data);
+      try{ _updatePromoPreview(); }catch(_){}
+      try{
+        const h = (data && data.hours) ? data.hours : {};
+        const r = _effectiveOpenFromHours(h);
+        _paintOpenNowPill(r.effective, r.within ? "" : `fora do horário (${r.openStr||"??"}–${r.closeStr||"??"})`);
+        __JPED_HOURS_LAST_EFFECTIVE = r.effective;
+      }catch(_){ }
       _setText("setStatus", snap.exists() ? "Sincronizado (tempo real)." : "Nenhuma config salva ainda.");
       try{
         const pill = _setEl("setRidPill");
@@ -2462,4 +3024,19 @@ function _startSettingsPanel(){
   }catch(e){
     console.warn("Falha ao iniciar listener settings:", e?.code || e, e?.message || e);
   }
+}
+async function salvarCupom(codigo) {
+  if (!RESTAURANT_ID) return;
+
+  // ✅ mesmo doc de config que você já usa no settings
+  const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID, "config", "app");
+
+  await Firestore.setDoc(ref, {
+    updatedAt: Firestore.serverTimestamp(),
+    promo: {
+      couponCode: (codigo || "").trim()
+    }
+  }, { merge: true });
+
+  alert("Cupom salvo!");
 }

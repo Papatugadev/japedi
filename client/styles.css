@@ -22,7 +22,7 @@ main{
   padding:16px;
   max-width:720px;
   margin:0 auto;
-  padding-bottom:120px; /* espaÃƒÂ§o pra barra do carrinho */
+  padding-bottom:120px;
 }
 
 .topbar{
@@ -204,6 +204,7 @@ main{
   cursor:pointer;
   font-weight:800;
 }
+
 /* Modal checkout */
 .modal{
   position:fixed;
@@ -286,7 +287,6 @@ main{
   overflow:hidden;
 }
 
-/* “animação lateral” (brilho correndo na esquerda) */
 .orderCardPro::before{
   content:"";
   position:absolute;
@@ -314,7 +314,7 @@ main{
   align-items:flex-start;
   justify-content:space-between;
   gap:12px;
-  padding-left:4px; /* respiro do "before" */
+  padding-left:4px;
 }
 
 .statusPill{
@@ -383,7 +383,6 @@ main{
   transition:width .35s cubic-bezier(.2,.9,.2,1);
 }
 
-/* estados */
 .statusStep.is-done .stepDot{
   background:rgba(22,163,74,.15);
   border-color:rgba(22,163,74,.55);
@@ -440,36 +439,41 @@ main{
   border-radius:999px;
   white-space:nowrap;
 }
+
 /* =========================
-   Bottom nav (pÃ­lula)
+   Bottom nav
    ========================= */
 .view{ max-width:720px; margin:0 auto; padding:16px; padding-bottom:150px; }
 .sectionTitle{ max-width:720px; margin:0 auto; padding:0 16px; }
 
 .bottomnav{
   position:fixed;
-  left:0; right:0; bottom:0;
-  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  left:0;
+  right:0;
+  bottom:0;
   z-index:80;
   display:flex;
   justify-content:center;
-  pointer-events:none; /* sÃ³ a pÃ­lula recebe clique */
+  padding:10px 12px calc(10px + env(safe-area-inset-bottom));
+  pointer-events:none;
 }
+
 .bottomnav__pill{
   pointer-events:auto;
   position:relative;
+  width:min(520px, 92vw);
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr !important;
+  gap:0 !important;
+  padding:6px;
   background:rgba(255,255,255,.92);
   border:1px solid rgba(15,23,42,.10);
   box-shadow:0 12px 30px rgba(0,0,0,.12);
   border-radius:999px;
-  padding:6px;
-  width:min(520px, 92vw);
-  display:grid;
-  grid-template-columns:1fr 1fr;
-  gap:6px;
   backdrop-filter:saturate(140%) blur(10px);
   -webkit-backdrop-filter:saturate(140%) blur(10px);
 }
+
 .tabbtn{
   appearance:none;
   border:0;
@@ -484,8 +488,11 @@ main{
   cursor:pointer;
   position:relative;
   z-index:2;
+  opacity:1;
 }
+
 .tabbtn.is-active{ color:var(--text); }
+
 .tabicon{ font-size:18px; }
 .tabtext{ font-size:13px; }
 
@@ -500,19 +507,91 @@ main{
   box-shadow:0 0 0 4px rgba(22,163,74,.18);
 }
 
-/* indicador animado */
+/* bolha verde corrigida */
 .tabIndicator{
   position:absolute;
-  top:6px; bottom:6px;
-  width:calc(50% - 6px);
+  top:6px;
+  left:6px;
+  width:calc((100% - 12px) / 4) !important;
+  height:calc(100% - 12px);
   border-radius:999px;
   background:rgba(22,163,74,.14);
   border:1px solid rgba(22,163,74,.22);
-  transform:translateX(0%);
+  transform:translateX(0);
   transition:transform .28s cubic-bezier(.2,.9,.2,1);
   z-index:1;
 }
-.bottomnav__pill[data-active="orders"] .tabIndicator{ transform:translateX(100%); }
+
+.bottomnav__pill[data-active="orders"] .tabIndicator{
+  transform:translateX(100%) !important;
+}
+.bottomnav__pill[data-active="cart"] .tabIndicator{
+  transform:translateX(200%) !important;
+}
+.bottomnav__pill[data-active="profile"] .tabIndicator{
+  transform:translateX(300%) !important;
+}
+
+/* esconde títulos */
+.bottomnav .tabbtn span{
+  display:none;
+}
+
+/* ícones laranja */
+.bottomnav .tabbtn{
+  font-size:22px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+.bottomnav i{
+  width:22px;
+  height:22px;
+}
+
+.tabbtn i{
+  font-style:normal;
+  font-size:20px;
+  color:#ff5a00 !important;
+}
+
+.bottomnav svg{
+  width:22px;
+  height:22px;
+  stroke-width:2.2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+  color:#ff5a00 !important;
+  stroke:#ff5a00 !important;
+}
+
+.tabbtn.is-active svg{
+  color:#ff5a00 !important;
+  stroke:#ff5a00 !important;
+  transform:scale(1.05);
+}
+
+.icon-menu::before{
+  content:"≡";
+  color:#ff5a00;
+}
+
+.icon-orders::before{
+  content:"▤";
+  color:#ff5a00;
+}
+
+.icon-cart::before{
+  content:"◉";
+  color:#ff5a00;
+}
+
+.icon-profile::before{
+  content:"◎";
+  color:#ff5a00;
+}
 
 /* =========================
    Side chat drawer (lateral)
@@ -558,17 +637,15 @@ main{
   flex:1;
 }
 
-/* FIX: input do chat nÃ£o mostrar o texto */
+/* FIX input */
 .input, input, textarea{
   color: var(--text);
   background: #fff;
   -webkit-text-fill-color: var(--text);
   caret-color: var(--text);
 }
-/* =========================
-   FIX DEFINITIVO: texto do input do chat invisível
-   ========================= */
 
+/* FIX DEFINITIVO */
 #chatText,
 .chatInput input,
 .input,
@@ -576,12 +653,11 @@ input,
 textarea{
   color: #111 !important;
   background: #fff !important;
-  -webkit-text-fill-color: #111 !important; /* iOS/Safari */
+  -webkit-text-fill-color: #111 !important;
   caret-color: #111 !important;
   opacity: 1 !important;
 }
 
-/* placeholder visível */
 #chatText::placeholder,
 .chatInput input::placeholder,
 .input::placeholder,
@@ -591,19 +667,15 @@ textarea::placeholder{
   opacity: 1 !important;
 }
 
-/* iOS/Chrome autofill (às vezes “pinta” o texto estranho) */
 input:-webkit-autofill,
 textarea:-webkit-autofill{
   -webkit-text-fill-color: #111 !important;
   box-shadow: 0 0 0px 1000px #fff inset !important;
 }
 
-/* evita zoom do iPhone ao focar input */
 #chatText{ font-size: 16px !important; }
-/* =========================
-   FIX CHAT: não deixar o botão esmagar o input
-   ========================= */
 
+/* FIX CHAT */
 .chatInput{
   display:flex !important;
   gap:8px !important;
@@ -613,7 +685,7 @@ textarea:-webkit-autofill{
 
 #chatText{
   flex:1 !important;
-  min-width:0 !important;            /* permite encolher corretamente */
+  min-width:0 !important;
   width:auto !important;
   margin:0 !important;
   font-size:16px !important;
@@ -624,44 +696,23 @@ textarea:-webkit-autofill{
 }
 
 #sendChatBtn{
-  width:auto !important;             /* <- ESSENCIAL */
-  margin-top:0 !important;           /* <- ESSENCIAL */
+  width:auto !important;
+  margin-top:0 !important;
   padding:10px 14px !important;
   white-space:nowrap !important;
 }
 
-/* =========================
-   HOTFIX: Bottom nav com 3 abas + cartbar acima da nav
-   (mantém seu visual original)
-   ========================= */
-.bottomnav__pill{
-  grid-template-columns: 1fr 1fr 1fr !important;
-}
-
-.tabIndicator{
-  width: calc(33.333% - 6px) !important;
-}
-
-.bottomnav__pill[data-active="orders"] .tabIndicator{
-  transform: translateX(100%) !important;
-}
-.bottomnav__pill[data-active="cart"] .tabIndicator{
-  transform: translateX(200%) !important;
-}
-
-/* Carrinho fixo (barra) fica acima da nav */
+/* Carrinho acima da nav */
 .cartbar{
   bottom: calc(86px + env(safe-area-inset-bottom)) !important;
 }
 
-/* garante espaço pro conteúdo não ficar atrás da nav */
 main, .view{
   padding-bottom: 180px !important;
 }
 
 /* =========================
-   Chat FAB (bolinha) + badge + popup
-   (adicionado sem remover nada)
+   Chat FAB
    ========================= */
 .chatFab{
   flex: 0 0 auto !important;
@@ -745,6 +796,7 @@ main, .view{
   opacity: 1;
   transform: translateY(0);
 }
+
 /* ===== LAYOUT DELIVERY REAL ===== */
 #products{
   display:grid;
@@ -824,8 +876,8 @@ main, .view{
   transition:.15s;
 }
 .addButton:active{ transform:scale(.88); }
-/* ===== CATEGORIAS ===== */
 
+/* ===== CATEGORIAS ===== */
 .categoryBar{
   position:sticky;
   top:64px;
@@ -862,7 +914,7 @@ main, .view{
 }
 
 /* =========================
-   Modal Produto (tamanho + adicionais)
+   Modal Produto
    ========================= */
 .pmImage{
   width:100%;
@@ -898,16 +950,13 @@ main, .view{
 }
 
 /* =========================
-   CONFIG UI (client) - adicionado
+   CONFIG UI
    ========================= */
-
-/* cor custom vinda da config */
 :root{
   --onPrimary:#ffffff;
   --accent: var(--primary);
 }
 
-/* pill aberto/fechado */
 .openPill{
   display:inline-flex;
   align-items:center;
@@ -1036,7 +1085,7 @@ body.compactMenu .productContent{ padding:12px; }
 .menuUrlBtn:hover{ filter:brightness(.98); }
 
 /* =========================
-   Identidade (logo redonda + fundo no topo)
+   Identidade
    ========================= */
 .topbar{ position:sticky; }
 .brand{ position:relative; z-index:2; }
@@ -1057,7 +1106,7 @@ body.compactMenu .productContent{ padding:12px; }
 }
 
 .topbar.hasCover .brand{
-  padding-top:56px; /* espaço para o fundo aparecer */
+  padding-top:56px;
 }
 
 .topbar.hasCover .brand__text h1,
@@ -1084,4 +1133,279 @@ body.compactMenu .productContent{ padding:12px; }
   border:3px solid rgba(255,255,255,.95);
   box-shadow:0 10px 25px rgba(0,0,0,.18);
   flex:0 0 auto;
+}
+
+/* promo-banner.css */
+:root{
+  --promo-radius: 22px;
+  --promo-border: rgba(15,23,42,.10);
+  --promo-shadow: 0 14px 40px rgba(15,23,42,.10);
+  --promo-bg: linear-gradient(135deg, rgba(34,197,94,.14), rgba(59,130,246,.12), rgba(245,158,11,.12));
+  --promo-card: rgba(255,255,255,.78);
+  --promo-text: #0f172a;
+  --promo-sub: #334155;
+}
+
+.promoBanner{
+  position:relative;
+  border-radius:var(--promo-radius);
+  padding:16px;
+  border:1px solid var(--promo-border);
+  background: var(--promo-bg);
+  overflow:hidden;
+  box-shadow: var(--promo-shadow);
+  transform: translateZ(0);
+  animation: promoFloat 4.2s ease-in-out infinite;
+}
+
+.promoGlow{
+  position:absolute;
+  inset:-40%;
+  background:
+    radial-gradient(circle at 30% 30%, rgba(34,197,94,.35), transparent 55%),
+    radial-gradient(circle at 70% 60%, rgba(59,130,246,.30), transparent 55%),
+    radial-gradient(circle at 50% 80%, rgba(245,158,11,.25), transparent 60%);
+  filter: blur(10px);
+  opacity:.9;
+  animation: promoGlow 6s ease-in-out infinite;
+  pointer-events:none;
+}
+
+.promoTop{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.promoTag{
+  font-weight:950;
+  font-size:12px;
+  letter-spacing:.10em;
+  text-transform:uppercase;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid var(--promo-border);
+  background: var(--promo-card);
+  backdrop-filter: blur(6px);
+}
+
+.promoIcon{
+  width:38px;
+  height:38px;
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid var(--promo-border);
+  background: var(--promo-card);
+}
+
+.promoTitle{
+  position:relative;
+  font-weight:950;
+  font-size:18px;
+  line-height:1.1;
+  color: var(--promo-text);
+}
+
+.promoSub{
+  position:relative;
+  margin-top:6px;
+  font-size:13px;
+  color: var(--promo-sub);
+  opacity:.92;
+}
+
+.promoBottom{
+  position:relative;
+  margin-top:12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.promoPill{
+  font-weight:900;
+  font-size:12px;
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid var(--promo-border);
+  background: var(--promo-card);
+  backdrop-filter: blur(6px);
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.promoPill.ghost{ opacity:.85; }
+
+.promoBanner.isOff{
+  opacity:.55;
+  filter: grayscale(.2);
+  animation: none;
+}
+
+@keyframes promoFloat{
+  0%,100%{ transform: translateY(0); }
+  50%{ transform: translateY(-4px); }
+}
+@keyframes promoGlow{
+  0%,100%{ transform: translate3d(0,0,0) scale(1); opacity:.85; }
+  50%{ transform: translate3d(2%, -2%, 0) scale(1.06); opacity:1; }
+}
+
+.promoBanner{
+  padding:14px 16px;
+}
+
+.promoCard{
+  background:linear-gradient(135deg,#16a34a,#22c55e);
+  color:white;
+  border-radius:18px;
+  padding:16px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  box-shadow:0 10px 25px rgba(0,0,0,.15);
+}
+
+.promoLeft{
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+
+.promoBadge{
+  font-size:12px;
+  font-weight:700;
+  opacity:.9;
+}
+
+.promoTitle{
+  font-size:18px;
+  font-weight:900;
+}
+
+.promoSub{
+  font-size:13px;
+  opacity:.95;
+}
+
+.promoCoupon{
+  margin-top:4px;
+  font-size:13px;
+  font-weight:800;
+  background:rgba(255,255,255,.2);
+  padding:4px 10px;
+  border-radius:999px;
+  width:max-content;
+}
+
+.promoIcon{
+  font-size:32px;
+}
+
+/* ===== Banner Promo PRO ===== */
+.promoBanner{ padding: 12px 16px; }
+
+.promoPro{
+  position: relative;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.promoPro .promoCard{
+  border-radius: 18px;
+}
+
+.promoPro{
+  background: linear-gradient(135deg, #16a34a, #22c55e);
+  color: #fff;
+  box-shadow: 0 14px 35px rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.18);
+}
+
+.promoGlow{
+  position:absolute;
+  inset:-80px;
+  background: radial-gradient(circle at 30% 30%, rgba(255,255,255,.30), rgba(255,255,255,0) 55%);
+  filter: blur(10px);
+  opacity:.9;
+  animation: promoGlowMove 3.4s ease-in-out infinite;
+  pointer-events:none;
+}
+
+@keyframes promoGlowMove{
+  0%{ transform: translate3d(-10px,-8px,0) scale(1); opacity:.75; }
+  50%{ transform: translate3d(18px,12px,0) scale(1.06); opacity:1; }
+  100%{ transform: translate3d(-10px,-8px,0) scale(1); opacity:.75; }
+}
+
+.promoBadge{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  width:max-content;
+  padding: 5px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.18);
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: .2px;
+  margin-bottom: 6px;
+}
+
+.promoRow{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+
+.promoCouponBtn{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  border:0;
+  cursor:pointer;
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,.18);
+  border: 1px solid rgba(255,255,255,.22);
+  color:#fff;
+  font-weight: 900;
+  box-shadow: 0 10px 22px rgba(0,0,0,.12);
+  transition: transform .12s ease, background .12s ease;
+}
+
+.promoCouponBtn:active{
+  transform: scale(.98);
+  background: rgba(255,255,255,.24);
+}
+
+.promoCopyIcon{
+  opacity:.95;
+  font-size: 15px;
+}
+
+.promoMini{
+  display:inline-flex;
+  align-items:center;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(0,0,0,.18);
+  border: 1px solid rgba(255,255,255,.14);
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.promoIcon{
+  font-size: 30px;
+  filter: drop-shadow(0 10px 18px rgba(0,0,0,.18));
 }

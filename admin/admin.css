@@ -1580,3 +1580,114 @@ main{
   margin-top:12px;
   font-weight:800;
 }
+/* ===== Promo banner (preview) ===== */
+.promoBannerWrap{ margin-top:14px; }
+
+.promoBanner{
+  position:relative;
+  border-radius:20px;
+  padding:16px;
+  border:1px solid #e5e7eb;
+  background: linear-gradient(135deg, rgba(34,197,94,.14), rgba(59,130,246,.12), rgba(245,158,11,.12));
+  overflow:hidden;
+  box-shadow: 0 14px 40px rgba(15,23,42,.10);
+  transform: translateZ(0);
+  animation: promoFloat 4.2s ease-in-out infinite;
+}
+
+.promoGlow{
+  position:absolute;
+  inset:-40%;
+  background: radial-gradient(circle at 30% 30%, rgba(34,197,94,.35), transparent 55%),
+              radial-gradient(circle at 70% 60%, rgba(59,130,246,.30), transparent 55%),
+              radial-gradient(circle at 50% 80%, rgba(245,158,11,.25), transparent 60%);
+  filter: blur(10px);
+  opacity:.9;
+  animation: promoGlow 6s ease-in-out infinite;
+  pointer-events:none;
+}
+
+.promoTop{
+  position:relative;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:10px;
+}
+
+.promoTag{
+  font-weight:900;
+  font-size:12px;
+  letter-spacing:.08em;
+  padding:6px 10px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.75);
+  backdrop-filter: blur(6px);
+}
+
+.promoIcon{
+  width:38px;
+  height:38px;
+  border-radius:14px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.75);
+}
+
+.promoTitle{
+  position:relative;
+  font-weight:950;
+  font-size:18px;
+  line-height:1.1;
+  color:#0f172a;
+}
+
+.promoSub{
+  position:relative;
+  margin-top:6px;
+  font-size:13px;
+  color:#334155;
+  opacity:.92;
+}
+
+.promoBottom{
+  position:relative;
+  margin-top:12px;
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+}
+
+.promoPill{
+  font-weight:800;
+  font-size:12px;
+  padding:8px 10px;
+  border-radius:999px;
+  border:1px solid rgba(15,23,42,.10);
+  background: rgba(255,255,255,.78);
+  backdrop-filter: blur(6px);
+  max-width:100%;
+  white-space:nowrap;
+  overflow:hidden;
+  text-overflow:ellipsis;
+}
+.promoPill.ghost{ opacity:.85; }
+
+.promoBanner.isOff{
+  opacity:.55;
+  filter: grayscale(.2);
+  animation: none;
+}
+
+@keyframes promoFloat{
+  0%,100%{ transform: translateY(0); }
+  50%{ transform: translateY(-4px); }
+}
+@keyframes promoGlow{
+  0%,100%{ transform: translate3d(0,0,0) scale(1); opacity:.85; }
+  50%{ transform: translate3d(2%, -2%, 0) scale(1.06); opacity:1; }
+}

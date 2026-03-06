@@ -16,6 +16,7 @@
   <meta name="apple-mobile-web-app-title" content="Cardápio">
 
   <link rel="stylesheet" href="./styles.css">
+  <script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
    
@@ -62,6 +63,7 @@
 <div id="categoryBar" class="categoryBar hidden">
   <div id="categoryList" class="categoryList"></div>
 </div>
+<div id="promoMount"></div>
   <!-- Abas -->
   <main id="menuView" class="view">
     <div id="products"></div>
@@ -181,7 +183,65 @@
       <button id="checkoutBtn" class="btn" type="button" style="margin-top:12px">Finalizar pedido</button>
     </div>
   </main>
+<main id="profileView" class="view hidden">
+  <div class="sectionTitle">
+    <h2 style="margin:0">Perfil</h2>
+    <p class="muted" style="margin:6px 0 0">Entre com sua conta ou continue como visitante.</p>
+  </div>
 
+  <div class="box">
+    <div id="profileGuestBox">
+      <div style="font-weight:800; font-size:18px;">Você está como visitante</div>
+      <div class="muted" style="margin-top:6px;">
+        Você pode continuar usando sem login, ou entrar para salvar seus dados.
+      </div>
+
+      <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
+        Entrar com Google
+      </button>
+
+      <button id="openEmailAuthBtn" class="ghost" type="button" style="margin-top:10px;">
+        Entrar com email
+      </button>
+    </div>
+
+    <div id="profileUserBox" class="hidden">
+      <div style="font-weight:800; font-size:18px;" id="profileUserName">Conta conectada</div>
+      <div class="muted" id="profileUserEmail" style="margin-top:6px;"></div>
+
+      <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px;">
+        Sair
+      </button>
+    </div>
+  </div>
+</main>
+<div id="emailAuthModal" class="modal hidden" role="dialog" aria-modal="true">
+  <div class="modal__backdrop" id="closeEmailAuthBackdrop"></div>
+
+  <div class="modal__panel">
+    <div class="modal__header">
+      <strong>Entrar com email</strong>
+      <button id="closeEmailAuthBtn" class="ghost" type="button">Fechar</button>
+    </div>
+
+    <div class="modal__content">
+      <label class="label">Email</label>
+      <input id="authEmail" class="input" type="email" placeholder="seuemail@gmail.com" />
+
+      <label class="label">Senha</label>
+      <input id="authPassword" class="input" type="password" placeholder="Sua senha" />
+
+      <div class="muted" style="margin-top:10px;">
+        Se o email não existir, a conta será criada.
+      </div>
+    </div>
+
+    <div class="modal__footer" style="display:flex; gap:10px;">
+      <button id="emailLoginBtn" class="btn" type="button">Entrar</button>
+      <button id="emailRegisterBtn" class="ghost" type="button">Criar conta</button>
+    </div>
+  </div>
+</div>
 <!-- Checkout (modal simples) -->
   <div id="checkoutModal" class="modal hidden" role="dialog" aria-modal="true">
     <div class="modal__backdrop" id="closeCheckoutBackdrop"></div>
@@ -241,28 +301,27 @@
 
   <!-- Bottom nav (pílula) -->
   <nav class="bottomnav" role="navigation" aria-label="Navegação inferior">
-    <div class="bottomnav__pill" data-active="menu">
-      <button id="tabMenu" class="tabbtn is-active" type="button" aria-label="Cardápio">
-        <span class="tabicon">🍔</span>
-        <span class="tabtext">Cardápio</span>
-      </button>
+  <div class="bottomnav__pill" data-active="menu">
+ <button id="tabMenu" class="tabbtn" aria-label="Cardápio">
+  <i data-lucide="store"></i>
+</button>
 
-      <button id="tabOrders" class="tabbtn" type="button" aria-label="Pedidos">
-        <span class="tabicon">🧾</span>
-        <span class="tabtext">Pedidos</span>
-        <span id="ordersDot" class="tabdot hidden"></span>
-      </button>
+<button id="tabOrders" class="tabbtn" aria-label="Pedidos">
+  <i data-lucide="receipt"></i>
+  <span id="ordersDot" class="dot hidden"></span>
+</button>
 
+<button id="openCartBtn" class="tabbtn" aria-label="Carrinho">
+  <i data-lucide="shopping-bag"></i>
+  <span id="cartBadge" class="badge hidden">0</span>
+</button>
 
-      <button id="openCartBtn" class="tabbtn tabbtn--cart" type="button" aria-label="Carrinho">
-        <span class="tabicon">🛒</span>
-        <span class="tabtext">Carrinho</span>
-        <span id="cartBadge" class="badge hidden">0</span>
-      </button>
-
-      <span class="tabIndicator" aria-hidden="true"></span>
-    </div>
-  </nav>
+<button id="tabProfile" class="tabbtn" aria-label="Perfil">
+  <i data-lucide="circle-user-round"></i>
+</button>
+    <span class="tabIndicator" aria-hidden="true"></span>
+  </div>
+</nav>
 
   
 
