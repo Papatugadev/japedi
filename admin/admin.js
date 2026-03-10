@@ -687,40 +687,46 @@ function _ensureModal(){
   modal.id = "orderModal";
   modal.className = "orderModal hidden";
   modal.innerHTML = `
-    <div class="orderModalContent" role="dialog" aria-modal="true">
-      <button type="button" class="modalClose" id="orderModalClose" aria-label="Fechar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-      </button>
+    <div class="orderModalScrim" id="orderModalScrim"></div>
 
-      <div class="modalHeader">
-        <div class="modalOrderNum" id="modalOrderNum">#----</div>
-        <div class="modalCustomer" id="modalCustomer">Cliente</div>
-        <div class="modalMeta" id="modalMeta"></div>
+    <div class="orderModalContent" role="dialog" aria-modal="true" aria-label="Detalhes do pedido">
+      <div class="orderModalShell">
+        <div class="modalHeader modalHeaderSide">
+          <div>
+            <div class="modalEyebrow">Detalhes do pedido</div>
+            <div class="modalOrderNum" id="modalOrderNum">#----</div>
+            <div class="modalCustomer" id="modalCustomer">Cliente</div>
+            <div class="modalMeta" id="modalMeta"></div>
+          </div>
+          <button type="button" class="modalClose modalCloseText" id="orderModalClose" aria-label="Fechar">Fechar</button>
+        </div>
+
+        <div class="modalSection">
+          <div class="modalTitle">Itens</div>
+          <div class="modalItems" id="modalItems"></div>
+        </div>
+
+        <div class="modalSection">
+          <div class="modalTitle">Entrega</div>
+          <div class="modalInfo" id="modalDelivery"></div>
+        </div>
+
+        <div class="modalSection modalSectionCompact">
+          <button type="button" class="modalChatBtn" id="modalOpenChat">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
+            <span>Abrir chat</span>
+            <span class="chatFabBadge hidden" id="chatFabBadge">0</span>
+          </button>
+        </div>
       </div>
-
-      <div class="modalSection">
-        <div class="modalTitle">Itens</div>
-        <div class="modalItems" id="modalItems"></div>
-      </div>
-
-      <div class="modalSection">
-        <div class="modalTitle">Entrega</div>
-        <div class="modalInfo" id="modalDelivery"></div>
-      </div>
-
-      <!-- Chat: botão flutuante + drawer lateral -->
-      <button type="button" class="chatFab" id="chatFab" aria-label="Abrir chat">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3V7a4 4 0 0 1 4-4h10a4 4 0 0 1 4 4z"/></svg>
-        <span class="chatFabBadge hidden" id="chatFabBadge">0</span>
-      </button>
 
       <div class="chatDrawerBackdrop hidden" id="chatDrawerBackdrop" aria-hidden="true"></div>
 
       <aside class="chatDrawer hidden" id="chatDrawer" aria-label="Chat do pedido">
         <div class="chatDrawerHead">
-          <div class="chatDrawerTitle">Chat</div>
+          <div class="chatDrawerTitle">Chat do pedido</div>
           <button type="button" class="chatDrawerClose" id="chatDrawerClose" aria-label="Fechar chat">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+            Fechar
           </button>
         </div>
 
@@ -736,25 +742,37 @@ function _ensureModal(){
           <div class="modalChatHint">O cliente vê em tempo real na tela de acompanhar pedido.</div>
         </div>
       </aside>
-
-
-      <div class="modalFooter">
-        <button type="button" class="btn small" id="modalDispatch">Despachar</button>
-        <button type="button" class="btn small" id="modalDelivered">Entregue</button>
-        <button type="button" class="ghost small danger" id="modalCancel">Cancelar</button>
-      </div>
     </div>
   `;
   document.body.appendChild(modal);
 
   const close = () => closeOrderModal();
-  modal.addEventListener("click", (e) => { if (e.target === modal) close(); });
+  const scrim = modal.querySelector("#orderModalScrim");
+  const content = modal.querySelector(".orderModalContent");
+ if (scrim) {
+  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
+    scrim.addEventListener(evt, (ev) => {
+      if (ev.target === scrim) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        close();
+      }
+    });
+  });
+}
+
+if (content) {
+  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
+    content.addEventListener(evt, (ev) => {
+      ev.stopPropagation();
+    });
+  });
+}
   modal.querySelector("#orderModalClose").addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
 
-
-  // ===== Chat drawer (lateral) =====
-  const fab = modal.querySelector("#chatFab");
+  // ===== Chat drawer (interno ao painel lateral) =====
+  const openChatBtn = modal.querySelector("#modalOpenChat");
   const drawer = modal.querySelector("#chatDrawer");
   const back = modal.querySelector("#chatDrawerBackdrop");
   const btnCloseChat = modal.querySelector("#chatDrawerClose");
@@ -763,10 +781,11 @@ function _ensureModal(){
     if (!drawer || !back) return;
     drawer.classList.remove("hidden");
     back.classList.remove("hidden");
+    modal.classList.add("chatOpen");
+    document.body.classList.add("order-chat-open");
     const bd = modal.querySelector("#chatFabBadge");
     if (bd) { bd.textContent = "0"; bd.classList.add("hidden"); }
 
-    // foca no input
     try{
       const input = modal.querySelector("#modalChatText");
       if (input) setTimeout(() => input.focus(), 0);
@@ -776,14 +795,33 @@ function _ensureModal(){
     if (!drawer || !back) return;
     drawer.classList.add("hidden");
     back.classList.add("hidden");
+    modal.classList.remove("chatOpen");
+    document.body.classList.remove("order-chat-open");
   };
 
-  // deixa disponível para fechar quando fechar o modal
   modal.__closeChat = closeChat;
 
-  if (fab) fab.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openChat(); });
+  if (openChatBtn) openChatBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openChat(); });
   if (btnCloseChat) btnCloseChat.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); closeChat(); });
-  if (back) back.addEventListener("click", closeChat);
+ if (drawer) {
+  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
+    drawer.addEventListener(evt, (ev) => {
+      ev.stopPropagation();
+    });
+  });
+}
+
+if (back) {
+  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
+    back.addEventListener(evt, (ev) => {
+      if (ev.target === back) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeChat();
+      }
+    });
+  });
+}
 
   return modal;
 }
@@ -793,8 +831,8 @@ function closeOrderModal(){
   if (!modal) return;
   try { if (modal.__closeChat) modal.__closeChat(); } catch (_) {}
   modal.classList.add("hidden");
+  document.body.classList.remove("order-side-open", "order-chat-open");
   __JPED_OPEN_ORDER_ID = null;
-  // para o realtime do chat quando fecha
   try { stopAdminChat(); } catch (_) {}
 }
 
@@ -923,14 +961,11 @@ async function openOrderModal(orderId){
     : `<div class="modalEmpty">Sem itens</div>`;
 
   modal.querySelector("#modalDelivery").innerHTML = `
-    <div><strong>Whats:</strong> ${phone}</div>
+    <div><strong>Status:</strong> ${statusLabel(status)}</div>
+    <div style="margin-top:6px"><strong>Total:</strong> ${brl(subtotal)}</div>
+    <div style="margin-top:6px"><strong>Whats:</strong> ${phone}</div>
     <div style="margin-top:6px"><strong>Endereço:</strong> ${address}</div>
   `;
-
-  // ações no modal
-  modal.querySelector("#modalDispatch").onclick = async () => { await setOrderStatus(orderId,"saiu_pra_entrega"); closeOrderModal(); };
-  modal.querySelector("#modalDelivered").onclick = async () => { await setOrderStatus(orderId,"entregue"); closeOrderModal(); };
-  modal.querySelector("#modalCancel").onclick = async () => { await setOrderStatus(orderId,"cancelado"); closeOrderModal(); };
 
   // ===== Chat (admin) =====
   try {
@@ -967,6 +1002,7 @@ async function openOrderModal(orderId){
   }
 
   modal.classList.remove("hidden");
+  document.body.classList.add("order-side-open");
 }
 
 /** Clique no card abre modal (botões não abrem) */

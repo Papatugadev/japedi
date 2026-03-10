@@ -1691,3 +1691,344 @@ main{
   0%,100%{ transform: translate3d(0,0,0) scale(1); opacity:.85; }
   50%{ transform: translate3d(2%, -2%, 0) scale(1.06); opacity:1; }
 }
+
+/* =========================================================
+   MODAL LATERAL DOS PEDIDOS — override final
+========================================================= */
+body{
+  overflow-x:hidden;
+}
+
+.top,
+.adminLayout,
+.contentArea,
+.kanban,
+.kanCol{
+  transition: margin .28s ease, transform .28s ease, filter .28s ease, width .28s ease;
+}
+
+body.order-side-open .contentArea{
+  margin-right: min(430px, 32vw);
+  transform: scale(.985);
+  transform-origin: left center;
+}
+
+body.order-side-open .kanban{
+  filter: saturate(.96);
+}
+
+.orderModal{
+  position: fixed !important;
+  inset: 0 !important;
+  display: block !important;
+  background: transparent !important;
+  pointer-events: none;
+  z-index: 9999;
+}
+
+.orderModal.hidden{
+  display:none !important;
+}
+
+.orderModalScrim{
+  position:absolute;
+  inset:0;
+  background: rgba(15,23,42,.18);
+  opacity:0;
+  transition: opacity .24s ease;
+  pointer-events:auto;
+}
+
+.orderModalContent{
+  position:absolute !important;
+  top:0;
+  right:0;
+  bottom:0;
+  width:min(430px, 92vw) !important;
+  max-height:100vh !important;
+  height:100vh;
+  border-radius:24px 0 0 24px !important;
+  padding:0 !important;
+  overflow:hidden !important;
+  background:#ffffff !important;
+  box-shadow: -24px 0 60px rgba(15,23,42,.16) !important;
+  transform: translateX(100%);
+  transition: transform .28s ease;
+  pointer-events:auto;
+}
+
+.orderModal:not(.hidden) .orderModalScrim{
+  opacity:1;
+}
+
+.orderModal:not(.hidden) .orderModalContent{
+  transform: translateX(0);
+}
+
+.orderModalShell{
+  height:100%;
+  overflow:auto;
+  padding:18px 18px 24px 18px;
+}
+
+.modalHeaderSide{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  padding:0 0 14px 0 !important;
+  margin-bottom:2px;
+}
+
+.modalEyebrow{
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.7px;
+  color:#64748b;
+  font-weight:800;
+  margin-bottom:8px;
+}
+
+.modalCloseText{
+  position:static !important;
+  width:auto !important;
+  height:auto !important;
+  min-height:42px;
+  padding:0 14px !important;
+  border-radius:14px !important;
+  background:#f8fafc !important;
+  color:#0f172a !important;
+  font-weight:800;
+}
+
+.modalSection{
+  padding:16px 0 !important;
+  border-bottom:1px solid rgba(15,23,42,.08) !important;
+}
+
+.modalSectionCompact{
+  border-bottom:0 !important;
+  padding-top:18px !important;
+}
+
+.modalItem{
+  background:#f8fafc !important;
+}
+
+.modalInfo{
+  color:#334155;
+  line-height:1.5;
+  font-weight:600;
+}
+
+.modalChatBtn{
+  width:100%;
+  min-height:54px;
+  padding:14px 16px;
+  border:0;
+  border-radius:16px;
+  background:#16a34a;
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  font-size:15px;
+  font-weight:800;
+  cursor:pointer;
+  box-shadow: 0 12px 28px rgba(22,163,74,.22);
+}
+
+.modalChatBtn svg,
+.chatDrawerClose svg{
+  width:20px;
+  height:20px;
+  stroke:currentColor;
+  fill:none;
+  stroke-width:2;
+  stroke-linecap:round;
+  stroke-linejoin:round;
+}
+
+.modalChatBtn .chatFabBadge{
+  position:static !important;
+  min-width:22px;
+  height:22px;
+  padding:0 6px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:#ffffff;
+  color:#16a34a;
+  font-size:11px;
+  font-weight:900;
+}
+
+.chatDrawerBackdrop{
+  position:absolute !important;
+  inset:0 !important;
+  background:rgba(15,23,42,.28) !important;
+}
+
+.chatDrawer{
+  position:absolute !important;
+  inset:0 0 0 0 !important;
+  width:100% !important;
+  height:100% !important;
+  max-height:none !important;
+  border-radius:24px 0 0 24px !important;
+  border-left:0 !important;
+  background:#ffffff !important;
+  box-shadow:none !important;
+  transform: translateX(100%);
+  transition: transform .24s ease;
+  z-index:4;
+}
+
+.orderModal.chatOpen .chatDrawer{
+  transform: translateX(0);
+}
+
+.chatDrawer.hidden,
+.chatDrawerBackdrop.hidden{
+  display:block !important;
+  visibility:hidden;
+  opacity:0;
+  pointer-events:none;
+}
+
+.orderModal.chatOpen .chatDrawer,
+.orderModal.chatOpen .chatDrawerBackdrop{
+  visibility:visible;
+  opacity:1;
+  pointer-events:auto;
+}
+
+.chatDrawerHead,
+.chatDrawerFoot{
+  padding-left:18px !important;
+  padding-right:18px !important;
+}
+
+.chatDrawerBody{
+  padding:16px 18px !important;
+}
+
+.chatDrawerClose{
+  width:auto !important;
+  min-width:92px;
+  padding:0 14px !important;
+  border-radius:14px !important;
+  font-weight:800;
+}
+
+#orderModal .chatFab{
+  display:none !important;
+}
+
+#orderModal .modalFooter{
+  display:none !important;
+}
+
+@media (max-width: 980px){
+  body.order-side-open .contentArea{
+    margin-right:0;
+    transform:none;
+  }
+
+  .orderModalScrim{
+    background: rgba(15,23,42,.28);
+  }
+
+  .orderModalContent{
+    width:min(100vw, 100vw) !important;
+    border-radius:20px 20px 0 0 !important;
+  }
+
+  .chatDrawer,
+  .orderModalContent{
+    border-radius:20px 20px 0 0 !important;
+  }
+}
+/* ===== FIX DEFINITIVO CHAT DO MODAL ===== */
+
+#orderModal{
+  position: fixed;
+  inset: 0;
+  z-index: 99999;
+}
+
+#orderModal .orderModalScrim{
+  position: fixed;
+  inset: 0;
+  background: rgba(2,6,23,.45);
+  z-index: 1;
+}
+
+#orderModal .orderModalContent{
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 92vw);
+  max-width: 92vw;
+  height: 100vh;
+  margin: 0;
+  border-radius: 22px 0 0 22px;
+  overflow: hidden;
+  background: #fff;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+}
+
+#orderModal .orderModalShell{
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+#orderModal .chatDrawerBackdrop{
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(520px, 92vw);
+  background: rgba(2,6,23,.18);
+  z-index: 3;
+}
+
+#orderModal .chatDrawer{
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: min(360px, 88vw);
+  max-width: 88vw;
+  background: #fff;
+  border-left: 1px solid rgba(15,23,42,.10);
+  box-shadow: -20px 0 60px rgba(0,0,0,.18);
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+}
+
+#orderModal .chatDrawer.hidden,
+#orderModal .chatDrawerBackdrop.hidden{
+  display: none !important;
+}
+
+#orderModal .chatDrawerBody{
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+}
+
+#orderModal .chatDrawer *,
+#orderModal .chatDrawer input,
+#orderModal .chatDrawer button{
+  pointer-events: auto;
+}
