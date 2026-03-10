@@ -749,25 +749,14 @@ function _ensureModal(){
   const close = () => closeOrderModal();
   const scrim = modal.querySelector("#orderModalScrim");
   const content = modal.querySelector(".orderModalContent");
- if (scrim) {
-  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
-    scrim.addEventListener(evt, (ev) => {
-      if (ev.target === scrim) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        close();
-      }
-    });
+  if (scrim) scrim.addEventListener("click", (ev) => {
+    if (ev.target === scrim) close();
   });
-}
-
-if (content) {
-  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
-    content.addEventListener(evt, (ev) => {
-      ev.stopPropagation();
-    });
-  });
-}
+  if (content) {
+    content.addEventListener("click", (ev) => ev.stopPropagation());
+    content.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    content.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+  }
   modal.querySelector("#orderModalClose").addEventListener("click", close);
   document.addEventListener("keydown", (e) => { if (e.key === "Escape") close(); });
 
@@ -803,25 +792,14 @@ if (content) {
 
   if (openChatBtn) openChatBtn.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); openChat(); });
   if (btnCloseChat) btnCloseChat.addEventListener("click", (ev) => { ev.preventDefault(); ev.stopPropagation(); closeChat(); });
- if (drawer) {
-  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
-    drawer.addEventListener(evt, (ev) => {
-      ev.stopPropagation();
-    });
+  if (drawer) {
+    drawer.addEventListener("click", (ev) => ev.stopPropagation());
+    drawer.addEventListener("mousedown", (ev) => ev.stopPropagation());
+    drawer.addEventListener("pointerdown", (ev) => ev.stopPropagation());
+  }
+  if (back) back.addEventListener("click", (ev) => {
+    if (ev.target === back) closeChat();
   });
-}
-
-if (back) {
-  ["click", "mousedown", "pointerdown", "touchstart"].forEach(evt => {
-    back.addEventListener(evt, (ev) => {
-      if (ev.target === back) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        closeChat();
-      }
-    });
-  });
-}
 
   return modal;
 }
@@ -3076,3 +3054,64 @@ async function salvarCupom(codigo) {
 
   alert("Cupom salvo!");
 }
+
+/* ===== Melhorias visuais da aba Configurações (sem alterar regras) ===== */
+(function(){
+  function initSettingsUX(){
+    const page = document.getElementById('page-settings');
+    if (!page || page.dataset.uiReady === '1') return;
+    page.dataset.uiReady = '1';
+
+    const navButtons = Array.from(page.querySelectorAll('.setQuickNavBtn[data-target]'));
+    const cards = Array.from(page.querySelectorAll('[data-settings-card]'));
+
+    function activate(targetId){
+      navButtons.forEach((btn)=> btn.classList.toggle('is-active', btn.dataset.target === targetId));
+    }
+
+    navButtons.forEach((btn)=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.dataset.target;
+        const card = id ? document.getElementById(id) : null;
+        if (!card) return;
+        activate(id);
+        card.scrollIntoView({ behavior: 'smooth', block: 'start', inline: 'nearest' });
+      });
+    });
+
+    const toggleButtons = Array.from(page.querySelectorAll('[data-card-toggle]'));
+    toggleButtons.forEach((btn)=>{
+      btn.addEventListener('click', ()=>{
+        const card = btn.closest('[data-settings-card]');
+        if (!card) return;
+        const collapsed = card.classList.toggle('is-collapsed');
+        btn.textContent = collapsed ? 'Mostrar' : 'Ocultar';
+      });
+    });
+
+    if ('IntersectionObserver' in window && cards.length && navButtons.length){
+      const obs = new IntersectionObserver((entries)=>{
+        const visible = entries
+          .filter((entry)=> entry.isIntersecting)
+          .sort((a,b)=> b.intersectionRatio - a.intersectionRatio)[0];
+        if (visible?.target?.id) activate(visible.target.id);
+      }, { root: null, threshold: [0.25, 0.45, 0.65], rootMargin: '-10% 0px -55% 0px' });
+      cards.forEach((card)=> obs.observe(card));
+    }
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSettingsUX, { once:true });
+  } else {
+    initSettingsUX();
+  }
+
+  const _origSetupSettingsPage = typeof setupSettingsPage === 'function' ? setupSettingsPage : null;
+  if (_origSetupSettingsPage) {
+    setupSettingsPage = async function(...args){
+      const result = await _origSetupSettingsPage.apply(this, args);
+      try { initSettingsUX(); } catch(_) {}
+      return result;
+    };
+  }
+})();

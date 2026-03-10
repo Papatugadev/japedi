@@ -513,7 +513,7 @@ function applyConfigToClient(cfg){
 
   // flags
   state.isOpen = (hours.isOpen !== false);
-  state.showImages = (theme.showImages !== false);
+  state.showImages = (theme.showImages !== true);
 
   // tema (DESATIVADO)
   // Você pediu para NÃO mudar a cor do app pelo painel admin.

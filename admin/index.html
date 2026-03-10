@@ -8,7 +8,6 @@
 </head>
 
 <body>
-
 <div class="login" id="loginScreen">
   <h2>Painel do Restaurante</h2>
 
@@ -183,17 +182,17 @@
         <div class="finFooter muted" id="finStatus">-</div>
       </section>
 
-            <section id="page-settings" class="page">
+                  <section id="page-settings" class="page">
         <h3 class="pageTitle">Configurações</h3>
 
         <div class="setTop">
           <div class="setTopLeft">
             <div class="setKicker">Preferências do restaurante</div>
             <div class="setTitleLine">
-              <div class="setTitle">Configuração geral</div>
+              <div class="setTitle">Central de configurações</div>
               <span class="setPill" id="setRidPill">RID: -</span>
             </div>
-            <div class="muted" id="setSub">Tudo que você salva aqui vale pro cardápio e pro painel.</div>
+            <div class="muted" id="setSub">Tudo que você salvar aqui vale para o cardápio, checkout e painel.</div>
           </div>
 
           <div class="setTopRight">
@@ -202,27 +201,39 @@
           </div>
         </div>
 
-        <div class="setGrid">
+        <div class="setQuickNav" aria-label="Navegação das configurações">
+          <button class="setQuickNavBtn is-active" type="button" data-target="settingsInfoCard">Identidade</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsHoursCard">Atendimento</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsPaymentsCard">Pagamentos</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsDeliveryCard">Entrega</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsPromo">Promoções</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsNotifCard">Avisos</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsThemeCard">Visual</button>
+          <button class="setQuickNavBtn" type="button" data-target="settingsAdvancedCard">Avançado</button>
+        </div>
 
-        <div class="setCard" id="settingsInfoCard">
+        <div class="setGrid">
+          <article class="setCard setCardWide" id="settingsInfoCard" data-settings-card>
             <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Identidade</div>
-                <div class="setCardHint">Nome, descrição e contato público.</div>
+                <div class="setCardHint">Nome, descrição e canais públicos.</div>
               </div>
-              <div class="setIcon">🏷️</div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
             </div>
 
             <div class="setForm">
-              <label class="setField">
-                <span>Nome do restaurante</span>
-                <input id="setName" class="input" placeholder="Ex: Lanche do Jorge" />
-              </label>
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Nome do restaurante</span>
+                  <input id="setName" class="input" placeholder="Ex: Lanche do Jorge" />
+                </label>
 
-              <label class="setField">
-                <span>Descrição</span>
-                <input id="setDesc" class="input" placeholder="Ex: Peça rápido pelo celular" />
-              </label>
+                <label class="setField">
+                  <span>Descrição</span>
+                  <input id="setDesc" class="input" placeholder="Ex: Peça rápido pelo celular" />
+                </label>
+              </div>
 
               <div class="setRow2">
                 <label class="setField">
@@ -236,15 +247,15 @@
                 </label>
               </div>
             </div>
-          </div>
+          </article>
 
-          <div class="setCard">
+          <article class="setCard" id="settingsHoursCard" data-settings-card>
             <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Atendimento</div>
-                <div class="setCardHint">Horário, mensagens e tempo médio.</div>
+                <div class="setCardHint">Horários, tempo médio e automações.</div>
               </div>
-              <div class="setIcon">🕒</div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
             </div>
 
             <div class="setForm">
@@ -264,35 +275,41 @@
                   <span>Tempo médio (min)</span>
                   <input id="setPrepMin" class="input" placeholder="35" inputmode="numeric" />
                 </label>
-
                 <label class="setField">
-                  <span>Mensagem automática (opcional)</span>
-                  <input id="setAutoMsg" class="input" placeholder="Ex: Recebemos seu pedido ✅" />
+                  <span>Mensagem automática</span>
+                  <input id="setAutoMsg" class="input" placeholder="Ex: Recebemos seu pedido" />
                 </label>
               </div>
 
-              <label class="setSwitch">
-                <input id="setIsOpen" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Loja aberta</span>
-              </label>
+              <div class="setSwitchGrid">
+                <label class="setSwitch">
+                  <input id="setIsOpen" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Loja aberta manualmente</span>
+                </label>
 
-              <label class="setSwitch">
-                <input id="setAutoConfirm" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Confirmar pedido automaticamente</span>
-              </label>
+                <label class="setSwitch">
+                  <input id="setAutoConfirm" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Confirmar pedido automaticamente</span>
+                </label>
+              </div>
+            </div>
+          </article>
+
+          <article class="setCard" id="settingsPaymentsCard" data-settings-card>
+            <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Pagamentos</div>
-                <div class="setCardHint">PIX, dinheiro e observações.</div>
+                <div class="setCardHint">PIX, dinheiro, cartão e observações.</div>
               </div>
-              <div class="setIcon">💳</div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
             </div>
 
             <div class="setForm">
               <div class="setRow2">
                 <label class="setField">
-                  <span>Chave PIX (opcional)</span>
+                  <span>Chave PIX</span>
                   <input id="setPixKey" class="input" placeholder="email, telefone ou aleatória" />
                 </label>
                 <label class="setField">
@@ -301,36 +318,35 @@
                 </label>
               </div>
 
-              <label class="setSwitch">
-                <input id="setCash" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Aceitar dinheiro</span>
-              </label>
+              <div class="setSwitchGrid">
+                <label class="setSwitch">
+                  <input id="setCash" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Aceitar dinheiro</span>
+                </label>
 
-              <label class="setSwitch">
-                <input id="setCard" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Aceitar cartão na entrega</span>
-              </label>
+                <label class="setSwitch">
+                  <input id="setCard" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Aceitar cartão na entrega</span>
+                </label>
+              </div>
 
               <label class="setField">
-                <span>Texto de observação (checkout)</span>
-                <input id="setPayNote" class="input" placeholder="Ex: Troco para? / Aceitamos cartão via maquininha." />
+                <span>Texto de observação</span>
+                <input id="setPayNote" class="input" placeholder="Ex: Troco para? / Aceitamos cartão na maquininha." />
               </label>
             </div>
-            </div>
-            
-          </div>
+          </article>
 
-          <div class="setCard">
+          <article class="setCard" id="settingsDeliveryCard" data-settings-card>
             <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Entrega</div>
-                <div class="setCardHint">Taxas, raio e pedido mínimo.</div>
+                <div class="setCardHint">Taxas, raio, tempo extra e bairros.</div>
               </div>
-              <div class="setIcon">🛵</div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
             </div>
-            
 
             <div class="setForm">
               <div class="setRow2">
@@ -356,7 +372,7 @@
               </div>
 
               <label class="setField">
-                <span>Bairros atendidos (separar por vírgula)</span>
+                <span>Bairros atendidos</span>
                 <input id="setNeighborhoods" class="input" placeholder="Centro, Vila Mariana, ..." />
               </label>
 
@@ -366,93 +382,123 @@
                 <span class="setSwitchText">Permitir retirada no balcão</span>
               </label>
             </div>
-          </div>
+          </article>
 
-          <div class="setCard">
-            <div class="setCardHead">
-              
-          </div>
-
-          <div class="setCard">
+          <article class="setCard setCardWide" id="settingsPromo" data-settings-card>
             <div class="setCardHead">
               <div>
                 <div class="setCardTitle">Promoções e destaques</div>
-                <div class="setCardHint">Banner, cupom e aviso no topo.</div>
+                <div class="setCardHint">Banner, cupom, aviso e expiração.</div>
               </div>
-              <div class="setIcon">🔥</div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
             </div>
 
             <div class="setForm">
-              <label class="setSwitch">
-                <input id="setPromoOn" type="checkbox" />
-                <span class="setSwitchUi"></span>
-                <span class="setSwitchText">Ativar promoção</span>
-                
-              </label>
+              <div class="setSwitchGrid">
+                <label class="setSwitch">
+                  <input id="setPromoOn" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Ativar promoção</span>
+                </label>
+              </div>
 
               <div class="setRow2">
                 <label class="setField">
                   <span>Título da promoção</span>
                   <input id="setPromoTitle" class="input" placeholder="Ex: Frete grátis hoje" />
                 </label>
-                
                 <label class="setField">
                   <span>Subtítulo</span>
                   <input id="setPromoSub" class="input" placeholder="Ex: acima de R$ 35" />
                 </label>
               </div>
 
-              <div class="setRow2">
+              <div class="setRow3">
                 <label class="setField">
-                  <span>Cupom (opcional)</span>
-                  <input id="setCouponCode" class="input" placeholder="EX: JPED10" />
+                  <span>Cupom</span>
+                  <input id="setCouponCode" class="input" placeholder="Ex: JPED10" />
                 </label>
                 <label class="setField">
                   <span>Desconto (%)</span>
                   <input id="setCouponPct" class="input" placeholder="10" inputmode="numeric" />
                 </label>
+                <label class="setField">
+                  <span>Aviso no topo</span>
+                  <input id="setNotice" class="input" placeholder="Ex: Válido só hoje" />
+                </label>
               </div>
-              <label class="label">Expira em</label>
-<input id="setPromoEndsAt" class="input" type="datetime-local" />
 
-  <div class="promoBanner" id="promoBannerPreview">
-    <div class="promoGlow"></div>
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Expira em</span>
+                  <input id="setPromoEndsAt" class="input" type="datetime-local" />
+                </label>
+                <div class="setAssistCard">
+                  <div class="setAssistTitle">Dica rápida</div>
+                  <div class="setAssistText">Você pode deixar a promoção sem expiração ou usar o botão automático que já existe no sistema.</div>
+                  <div id="setPromoEndsAtPreview" class="setMiniStatus">Sem expiração</div>
+                </div>
+              </div>
 
-    <div class="promoTop">
-      <div class="promoTag" id="promoTag">PROMO</div>
-      <div class="promoIcon">🔥</div>
-    </div>
-
-    <div class="promoTitle" id="promoPrevTitle">Título da promoção</div>
-    <div class="promoSub" id="promoPrevSub">Subtítulo aqui</div>
-
-    <div class="promoBottom">
-      <div class="promoPill" id="promoPrevCoupon">CUPOM: —</div>
-      <div class="promoPill ghost" id="promoPrevNotice">Aviso: —</div>
-    </div>
-  </div>
-
-  <div class="muted" style="font-size:12px;margin-top:8px">
-    Prévia do banner que aparece no cardápio do cliente.
-  </div>
-</div>
-              </label>
-              
+              <div class="promoBanner" id="promoBannerPreview">
+                <div class="promoGlow"></div>
+                <div class="promoTop">
+                  <div class="promoTag" id="promoTag">PROMO</div>
+                  <div class="promoIcon">OF</div>
+                </div>
+                <div class="promoTitle" id="promoPrevTitle">Título da promoção</div>
+                <div class="promoSub" id="promoPrevSub">Subtítulo aqui</div>
+                <div class="promoBottom">
+                  <div class="promoPill" id="promoPrevCoupon">CUPOM: —</div>
+                  <div class="promoPill ghost" id="promoPrevNotice">Aviso: —</div>
+                </div>
+              </div>
             </div>
-          </div>
+          </article>
 
-     
-                
+          <article class="setCard" id="settingsNotifCard" data-settings-card>
+            <div class="setCardHead">
+              <div>
+                <div class="setCardTitle">Avisos e som</div>
+                <div class="setCardHint">Alertas do painel e comportamento do áudio.</div>
+              </div>
+              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
+            </div>
 
-            
+            <div class="setForm">
+              <div class="setSwitchGrid">
+                <label class="setSwitch">
+                  <input id="setSoundNewOrder" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Som de novo pedido</span>
+                </label>
 
-            
+                <label class="setSwitch">
+                  <input id="setSoundChat" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Som de mensagem no chat</span>
+                </label>
+              </div>
 
-        
-           
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Volume</span>
+                  <input id="setVolume" class="input" type="number" min="0" max="1" step="0.1" placeholder="1" />
+                </label>
+                <label class="setField">
+                  <span>Toasts</span>
+                  <select id="setToasts" class="input">
+                    <option value="on">Ativados</option>
+                    <option value="off">Desativados</option>
+                  </select>
+                </label>
+              </div>
+            </div>
+          </article>
 
-        </div>
+         
 
+         
         <div class="setFooter muted" id="setStatus">-</div>
       </section>
     </main>
