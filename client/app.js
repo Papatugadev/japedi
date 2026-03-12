@@ -48,7 +48,17 @@ const state = {
   chatUnread: 0,
   chatInitialized: false,
   chatLastSeenRestaurantMs: 0,
-  chatToastTimer: null
+  chatToastTimer: null,
+
+  // entrega dinâmica
+  deliveryQuote: {
+    status: "idle",
+    fee: null,
+    distanceKm: null,
+    addressKey: "",
+    error: ""
+  },
+  deliveryQuoteCache: new Map()
 };
 
 /* =========================
@@ -1076,6 +1086,7 @@ function openCheckout() {
 
   ensureCheckoutUI();
   updateCheckoutUIFromConfig();
+  try{ _bindDeliveryAddressEvents(); }catch(_){ }
   updateCheckoutTotals();
   fillCheckoutWithProfile();
   document.getElementById("checkoutModal")?.classList?.remove("hidden");
@@ -1099,6 +1110,7 @@ function ensureCheckoutUI(){
 
   const content = document.querySelector("#checkoutModal .modal__content");
   if (!content) return;
+  _bindDeliveryAddressEvents();
 
   // Bloco: Entrega / Retirada
   if (!document.getElementById("coModeBox")){
@@ -1215,7 +1227,16 @@ function updateCheckoutUIFromConfig(){
       modeHint.textContent = "Retirada no balcão.";
     } else {
       const parts = [];
-      if (fee > 0) parts.push(`Taxa: ${moneyBRL(fee)}`);
+      const dynamicRule = Number(delivery.baseKm || 0) > 0 || Number(delivery.extraPerKm || 0) > 0;
+      if (dynamicRule){
+        const untilKm = Number(delivery.baseKm || 0);
+        const extraKm = Number(delivery.extraPerKm || 0);
+        if (fee > 0 && untilKm > 0) parts.push(`${moneyBRL(fee)} até ${untilKm} km`);
+        if (extraKm > 0) parts.push(`+ ${moneyBRL(extraKm)}/km excedente`);
+      } else if (fee > 0) {
+        parts.push(`Taxa: ${moneyBRL(fee)}`);
+      }
+      if (Number(delivery.maxKm || 0) > 0) parts.push(`Máx.: ${delivery.maxKm} km`);
       if (eta > 0) parts.push(`Entrega: ~${eta} min`);
       if (hours.prepMin) parts.push(`Preparo: ~${hours.prepMin} min`);
       modeHint.textContent = parts.join(" • ");
@@ -1349,6 +1370,169 @@ function validateCouponAndUpdateUI(showAlerts){
 
   updateCheckoutTotals();
 }
+
+function _normalizeAddressForQuote(raw){
+  return String(raw || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ")
+    .replace(/[\n\r]+/g, ", ");
+}
+
+function _hasDynamicDeliveryConfig(cfg){
+  const d = cfg?.delivery || {};
+  const g = d.geoapify || {};
+  return !!(String(g.apiKey || "").trim() && Number.isFinite(Number(g.storeLat)) && Number.isFinite(Number(g.storeLng)));
+}
+
+function _calcDeliveryFeeByDistance(distanceKm, delivery){
+  const baseFee = Number(delivery?.fee || 0);
+  const baseKm = Math.max(0, Number(delivery?.baseKm || 0));
+  const extraPerKm = Math.max(0, Number(delivery?.extraPerKm || 0));
+  const km = Math.max(0, Number(distanceKm || 0));
+
+  if (km <= baseKm) return Math.round(baseFee * 100) / 100;
+  const extraKm = km - baseKm;
+  return Math.round((baseFee + (extraKm * extraPerKm)) * 100) / 100;
+}
+
+function _setDeliveryQuoteState(patch){
+  state.deliveryQuote = Object.assign({}, state.deliveryQuote || {}, patch || {});
+}
+
+async function _geoapifyGeocodeAddress(apiKey, address){
+  const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(address)}&format=json&limit=1&apiKey=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Geocode HTTP ${res.status}`);
+  const data = await res.json();
+  const row = data?.results?.[0];
+  const lat = Number(row?.lat);
+  const lon = Number(row?.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) throw new Error("Endereço não encontrado.");
+  return { lat, lng: lon };
+}
+
+async function _geoapifyRouteKm(apiKey, storeLat, storeLng, destLat, destLng){
+  const url = `https://api.geoapify.com/v1/routing?waypoints=${encodeURIComponent(`${storeLat},${storeLng}|${destLat},${destLng}`)}&mode=drive&apiKey=${encodeURIComponent(apiKey)}`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Routing HTTP ${res.status}`);
+  const data = await res.json();
+  const meters = Number(data?.features?.[0]?.properties?.distance);
+  if (!Number.isFinite(meters)) throw new Error("Não foi possível calcular a rota.");
+  return meters / 1000;
+}
+
+async function ensureDeliveryQuote(force = false){
+  const cfg = state.config || {};
+  const delivery = cfg.delivery || {};
+  const dynamic = _hasDynamicDeliveryConfig(cfg);
+  const addressEl = document.getElementById("custAddr");
+  const rawAddress = String(addressEl?.value || "").trim();
+  const addressKey = _normalizeAddressForQuote(rawAddress);
+
+  if (state.checkoutMode !== "delivery"){
+    _setDeliveryQuoteState({ status: "idle", fee: 0, distanceKm: null, addressKey: "", error: "" });
+    return state.deliveryQuote;
+  }
+
+  if (!dynamic){
+    _setDeliveryQuoteState({ status: "fixed", fee: Number(delivery.fee || 0), distanceKm: null, addressKey, error: "" });
+    return state.deliveryQuote;
+  }
+
+  if (!addressKey){
+    _setDeliveryQuoteState({ status: "idle", fee: null, distanceKm: null, addressKey: "", error: "" });
+    return state.deliveryQuote;
+  }
+
+  if (!force && state.deliveryQuote?.status === "ready" && state.deliveryQuote?.addressKey === addressKey){
+    return state.deliveryQuote;
+  }
+
+  if (!force && state.deliveryQuoteCache.has(addressKey)){
+    const cached = state.deliveryQuoteCache.get(addressKey);
+    _setDeliveryQuoteState(Object.assign({}, cached, { addressKey }));
+    return state.deliveryQuote;
+  }
+
+  if (state.deliveryQuote?.status === "loading" && state.deliveryQuote?.addressKey === addressKey && !force){
+    return state.deliveryQuote;
+  }
+
+  _setDeliveryQuoteState({ status: "loading", fee: null, distanceKm: null, addressKey, error: "" });
+  updateCheckoutTotals();
+
+  try{
+    const apiKey = String(delivery?.geoapify?.apiKey || "").trim();
+    const storeLat = Number(delivery?.geoapify?.storeLat);
+    const storeLng = Number(delivery?.geoapify?.storeLng);
+
+    const dest = await _geoapifyGeocodeAddress(apiKey, rawAddress);
+    const distanceKm = await _geoapifyRouteKm(apiKey, storeLat, storeLng, dest.lat, dest.lng);
+
+    const maxKm = Number(delivery.maxKm || 0);
+    if (maxKm > 0 && distanceKm > maxKm){
+      const blocked = {
+        status: "out_of_range",
+        fee: null,
+        distanceKm,
+        addressKey,
+        error: `Endereço fora da área de entrega. Máximo: ${maxKm} km.`
+      };
+      state.deliveryQuoteCache.set(addressKey, blocked);
+      _setDeliveryQuoteState(blocked);
+      updateCheckoutTotals();
+      return state.deliveryQuote;
+    }
+
+    const fee = _calcDeliveryFeeByDistance(distanceKm, delivery);
+    const ready = { status: "ready", fee, distanceKm, addressKey, error: "" };
+    state.deliveryQuoteCache.set(addressKey, ready);
+    _setDeliveryQuoteState(ready);
+    updateCheckoutTotals();
+    return state.deliveryQuote;
+  }catch(e){
+    console.warn("Falha no cálculo da entrega:", e?.message || e);
+    _setDeliveryQuoteState({
+      status: "error",
+      fee: null,
+      distanceKm: null,
+      addressKey,
+      error: "Falha no cálculo da entrega."
+    });
+    updateCheckoutTotals();
+    return state.deliveryQuote;
+  }
+}
+
+function _scheduleDeliveryQuoteFromAddress(){
+  try{
+    clearTimeout(window.__JPED_DELIVERY_DEBOUNCE__);
+  }catch(_){}
+  window.__JPED_DELIVERY_DEBOUNCE__ = setTimeout(() => {
+    ensureDeliveryQuote(false);
+  }, 350);
+}
+
+function _bindDeliveryAddressEvents(){
+  const addr = document.getElementById("custAddr");
+  if (!addr || addr.dataset.geoBound === "1") return;
+  addr.dataset.geoBound = "1";
+
+  addr.addEventListener("blur", () => {
+    _scheduleDeliveryQuoteFromAddress();
+  });
+  addr.addEventListener("change", () => {
+    _scheduleDeliveryQuoteFromAddress();
+  });
+  addr.addEventListener("input", () => {
+    const key = _normalizeAddressForQuote(addr.value);
+    if (key !== (state.deliveryQuote?.addressKey || "")){
+      _setDeliveryQuoteState({ status: "idle", fee: null, distanceKm: null, addressKey: "", error: "" });
+    }
+  });
+}
+
 function computeOrderTotals(){
   const cfg = state.config || {};
   const delivery = cfg.delivery || {};
@@ -1357,7 +1541,14 @@ function computeOrderTotals(){
   const { subtotal, qty } = cartTotals();
 
   // taxa de entrega (só no modo delivery)
-  const deliveryFee = (state.checkoutMode === "delivery") ? Number(delivery.fee || 0) : 0;
+  let deliveryFee = 0;
+  if (state.checkoutMode === "delivery"){
+    if (_hasDynamicDeliveryConfig(cfg)){
+      deliveryFee = Number(state.deliveryQuote?.fee || 0);
+    } else {
+      deliveryFee = Number(delivery.fee || 0);
+    }
+  }
 
   // cupom (%)
 let discount = 0;
@@ -1428,7 +1619,19 @@ function updateCheckoutTotals(){
 
   if (warnEl){
     const min = Number(delivery.minOrder || 0);
-    if (state.checkoutMode === "delivery" && min > 0 && subtotal < min){
+    const quote = state.deliveryQuote || {};
+    if (state.checkoutMode === "delivery" && quote.status === "loading"){
+      warnEl.textContent = "Calculando taxa de entrega...";
+    } else if (state.checkoutMode === "delivery" && quote.status === "out_of_range"){
+      warnEl.textContent = quote.error || "Endereço fora da área de entrega.";
+    } else if (state.checkoutMode === "delivery" && quote.status === "error"){
+      warnEl.textContent = quote.error || "Falha no cálculo da entrega.";
+    } else if (state.checkoutMode === "delivery" && Number.isFinite(Number(quote.distanceKm))){
+      warnEl.textContent = `Distância calculada: ${Number(quote.distanceKm).toFixed(2)} km.`;
+      if (min > 0 && subtotal < min){
+        warnEl.textContent += ` Pedido mínimo: ${moneyBRL(min)} (falta ${moneyBRL(min - subtotal)}).`;
+      }
+    } else if (state.checkoutMode === "delivery" && min > 0 && subtotal < min){
       warnEl.textContent = `Pedido mínimo para entrega: ${moneyBRL(min)} (falta ${moneyBRL(min - subtotal)}).`;
     } else {
       warnEl.textContent = "";
@@ -1476,6 +1679,13 @@ async function createOrder() {
   if (!name) return alert("Digite seu nome.");
   if (state.cart.length === 0) return alert("Carrinho vazio.");
 
+  if (state.checkoutMode === "delivery" && _hasDynamicDeliveryConfig(state.config || {})) {
+    const quote = await ensureDeliveryQuote(true);
+    if (quote.status === "out_of_range") return alert(quote.error || "Endereço fora da área de entrega.");
+    if (quote.status === "error") return alert(quote.error || "Falha no cálculo da entrega.");
+    if (quote.status !== "ready") return alert("Não foi possível calcular a taxa de entrega.");
+  }
+
   const totalsCalc = computeOrderTotals();
   const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, minOk, minOrder } = totalsCalc;
 
@@ -1492,6 +1702,7 @@ async function createOrder() {
     couponOk: !!couponOk,
     couponPct: Number(couponPct || 0),
     deliveryFee: Number(deliveryFee || 0),
+    deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0),
     discount: Number(discount || 0),
     total: Number(total || 0),
     // no modo retirada, usamos o campo "address" como observação opcional
@@ -1515,7 +1726,7 @@ async function createOrder() {
       optionsText: i.optionsText || "",
       meta: i.meta || null
     })),
-    totals: { qty, subtotal, deliveryFee, discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
+    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");

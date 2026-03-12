@@ -2329,6 +2329,7 @@ function _wirePromoPreview(){
 let __JPED_HOURS_TICK = null;
 let __JPED_HOURS_LAST_EFFECTIVE = null;
 let __JPED_HOURS_LAST_WRITE_AT = 0;
+let __JPED_HOURS_READY = false;
 
 function _normalizeTimeStr(raw){
   const s = String(raw ?? "").trim();
@@ -2449,6 +2450,7 @@ function _effectiveOpenFromHours(hours){
 }
 
 async function _maybeSyncEffectiveOpen(hours){
+  if (!__JPED_HOURS_READY) return;
   if (!RESTAURANT_ID) return;
   if (!ADMIN_OK) return;
   if (!SUBSCRIPTION_OK) return;
@@ -2536,10 +2538,18 @@ function _applySettingsToForm(cfg){
 
   _setVal("setDeliveryFee", delivery.fee);
   _setVal("setDeliveryKm", delivery.maxKm);
+  _setVal("setDeliveryBaseKm", delivery.baseKm ?? delivery.fixedUntilKm);
+  _setVal("setDeliveryExtraPerKm", delivery.extraPerKm);
   _setVal("setMinOrder", delivery.minOrder);
   _setVal("setDeliveryEta", delivery.etaMin);
   _setVal("setNeighborhoods", _arrToCsv(delivery.neighborhoods));
   _setChecked("setPickup", !!delivery.pickup);
+
+  const geo = delivery.geoapify || {};
+  _setVal("setGeoapifyKey", geo.apiKey);
+  _setVal("setStoreAddress", geo.storeAddress);
+  _setVal("setStoreLat", geo.storeLat);
+  _setVal("setStoreLng", geo.storeLng);
 
   _setVal("setPixKey", pay.pixKey);
   _setVal("setPixName", pay.pixName);
@@ -2594,10 +2604,19 @@ restaurant: {
     delivery: {
       fee: _numOrNull(_val("setDeliveryFee")),
       maxKm: _numOrNull(_val("setDeliveryKm")),
+      baseKm: _numOrNull(_val("setDeliveryBaseKm")),
+      extraPerKm: _numOrNull(_val("setDeliveryExtraPerKm")),
+      pricingMode: "base_until_km_then_extra",
       minOrder: _numOrNull(_val("setMinOrder")),
       etaMin: _intOrNull(_val("setDeliveryEta")),
       neighborhoods: _csvToArr(_val("setNeighborhoods")),
       pickup: _checked("setPickup"),
+      geoapify: {
+        apiKey: _val("setGeoapifyKey").trim(),
+        storeAddress: _val("setStoreAddress").trim(),
+        storeLat: _numOrNull(_val("setStoreLat")),
+        storeLng: _numOrNull(_val("setStoreLng")),
+      },
     },
     payments: {
       pixKey: _val("setPixKey").trim(),
@@ -2652,6 +2671,55 @@ promo: {
   return clean(payload);
 }
 
+
+async function _lookupStoreGeoFromForm(){
+  const apiKey = _val("setGeoapifyKey").trim();
+  const address = _val("setStoreAddress").trim();
+
+  if (!apiKey) {
+    alert("Digite a Geoapify API Key.");
+    return;
+  }
+  if (!address) {
+    alert("Digite o endereço da loja.");
+    return;
+  }
+
+  const btn = _setEl("setGeoLookup");
+  const prev = btn ? btn.textContent : "";
+  try{
+    if (btn){ btn.disabled = true; btn.textContent = "Buscando..."; }
+    const url = `https://api.geoapify.com/v1/geocode/search?text=${encodeURIComponent(address)}&format=json&limit=1&apiKey=${encodeURIComponent(apiKey)}`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data = await res.json();
+    const row = data?.results?.[0];
+    const lat = Number(row?.lat);
+    const lng = Number(row?.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+      throw new Error("Endereço não encontrado.");
+    }
+    _setVal("setStoreLat", lat);
+    _setVal("setStoreLng", lng);
+    _setText("setStatus", "Localização da loja preenchida.");
+  }catch(e){
+    console.error("Falha ao buscar localização da loja:", e);
+    alert(`Não foi possível localizar a loja. ${e?.message || ""}`.trim());
+  }finally{
+    if (btn){ btn.disabled = false; btn.textContent = prev || "Buscar latitude/longitude"; }
+  }
+}
+
+function _wireGeoLookupButton(){
+  const btn = _setEl("setGeoLookup");
+  if (!btn || btn.dataset.bound === "1") return;
+  btn.dataset.bound = "1";
+  btn.addEventListener("click", (ev) => {
+    ev.preventDefault();
+    _lookupStoreGeoFromForm();
+  });
+}
+
 async function _saveSettings(){
   if (!SUBSCRIPTION_OK) {
     alert("Assinatura expirada. Ative um plano para salvar configurações.");
@@ -2690,6 +2758,7 @@ async function _reloadSettingsOnce(){
     const snap = await Firestore.getDoc(_settingsDocRef());
     const data = snap.exists() ? (snap.data() || {}) : {};
     _applySettingsToForm(data);
+    __JPED_HOURS_READY = true;
     try{
       const h = (data && data.hours) ? data.hours : {};
       const r = _effectiveOpenFromHours(h);
@@ -3009,6 +3078,8 @@ function _startSettingsPanel(){
   // carrega e escuta em tempo real
   _setText("setStatus", "Carregando...");
   try { _ensurePromoEndsAtField(); } catch (_) {}
+  try { _wireGeoLookupButton(); } catch (_) {}
+  __JPED_HOURS_READY = false;
   _reloadSettingsOnce();
 try{ _wirePromoPreview(); }catch(_){}
   // inicia ticker de horário (aberto/fechado)
@@ -3019,6 +3090,7 @@ try{ _wirePromoPreview(); }catch(_){}
     __JPED_SETTINGS_UNSUB = Firestore.onSnapshot(_settingsDocRef(), (snap) => {
       const data = snap.exists() ? (snap.data() || {}) : {};
       _applySettingsToForm(data);
+      __JPED_HOURS_READY = true;
       try{ _updatePromoPreview(); }catch(_){}
       try{
         const h = (data && data.hours) ? data.hours : {};

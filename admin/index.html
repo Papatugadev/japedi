@@ -351,12 +351,23 @@
             <div class="setForm">
               <div class="setRow2">
                 <label class="setField">
-                  <span>Taxa fixa (R$)</span>
-                  <input id="setDeliveryFee" class="input" placeholder="5" inputmode="decimal" />
+                  <span>Taxa fixa até X km (R$)</span>
+                  <input id="setDeliveryFee" class="input" placeholder="8" inputmode="decimal" />
                 </label>
                 <label class="setField">
-                  <span>Raio máximo (km)</span>
-                  <input id="setDeliveryKm" class="input" placeholder="6" inputmode="decimal" />
+                  <span>Máximo de entrega (km)</span>
+                  <input id="setDeliveryKm" class="input" placeholder="10" inputmode="decimal" />
+                </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Até quantos km vale a taxa fixa?</span>
+                  <input id="setDeliveryBaseKm" class="input" placeholder="5" inputmode="decimal" />
+                </label>
+                <label class="setField">
+                  <span>Valor por km excedente (R$)</span>
+                  <input id="setDeliveryExtraPerKm" class="input" placeholder="2" inputmode="decimal" />
                 </label>
               </div>
 
@@ -369,6 +380,33 @@
                   <span>Tempo extra entrega (min)</span>
                   <input id="setDeliveryEta" class="input" placeholder="15" inputmode="numeric" />
                 </label>
+              </div>
+
+              <div class="setRow2">
+                <label class="setField">
+                  <span>Geoapify API Key</span>
+                  <input id="setGeoapifyKey" class="input" placeholder="Cole sua chave aqui" />
+                </label>
+                <label class="setField">
+                  <span>Endereço da loja</span>
+                  <input id="setStoreAddress" class="input" placeholder="Rua, número, bairro, cidade" />
+                </label>
+              </div>
+
+              <div class="setRow3">
+                <label class="setField">
+                  <span>Latitude da loja</span>
+                  <input id="setStoreLat" class="input" placeholder="-22.90" inputmode="decimal" />
+                </label>
+                <label class="setField">
+                  <span>Longitude da loja</span>
+                  <input id="setStoreLng" class="input" placeholder="-47.06" inputmode="decimal" />
+                </label>
+                <div class="setAssistCard">
+                  <div class="setAssistTitle">Localização da loja</div>
+                  <div class="setAssistText">Use o endereço para preencher latitude e longitude automaticamente e salvar no Firebase.</div>
+                  <button id="setGeoLookup" class="ghost" type="button" style="margin-top:10px">Buscar latitude/longitude</button>
+                </div>
               </div>
 
               <label class="setField">
