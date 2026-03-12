@@ -2449,3 +2449,122 @@ body.compactMenu .productContent{ padding:12px; }
     padding:14px;
   }
 }
+
+/* =========================
+   Tracking premium animado
+   ========================= */
+.orderCardPro{
+  padding:0;
+  border-radius:26px;
+  border:1px solid rgba(22,163,74,.14);
+  box-shadow:0 18px 42px rgba(15,23,42,.10);
+  background:linear-gradient(180deg,#ffffff 0%,#fbfffc 100%);
+}
+.orderCardPro > *{ position:relative; z-index:1; }
+.trackHero{
+  position:relative;
+  overflow:hidden;
+  padding:18px 18px 14px;
+  background:linear-gradient(135deg, rgba(22,163,74,.12), rgba(255,255,255,.96) 48%, rgba(255,90,0,.08));
+}
+.trackHero__bg{
+  position:absolute; inset:0;
+  background:
+    radial-gradient(circle at 12% 18%, rgba(22,163,74,.18), transparent 28%),
+    radial-gradient(circle at 82% 0%, rgba(255,90,0,.14), transparent 22%),
+    radial-gradient(circle at 50% 100%, rgba(22,163,74,.08), transparent 30%);
+  pointer-events:none;
+}
+.trackHero__content{ position:relative; z-index:1; }
+.trackHero__top{
+  display:flex; align-items:flex-start; justify-content:space-between; gap:12px;
+}
+.trackKicker{
+  font-size:11px; font-weight:900; letter-spacing:.12em; color:#15803d;
+}
+.trackOrderLine{ display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap; }
+.trackOrderId{ font-size:28px; line-height:1; font-weight:900; letter-spacing:-.03em; }
+.trackLivePill, .chatLiveStatus{
+  display:inline-flex; align-items:center; gap:8px; padding:8px 12px; border-radius:999px;
+  background:rgba(17,24,39,.92); color:#fff; font-size:12px; font-weight:800;
+  box-shadow:0 10px 24px rgba(17,24,39,.18);
+}
+.trackLiveDot{
+  width:9px; height:9px; border-radius:999px; background:#22c55e;
+  box-shadow:0 0 0 0 rgba(34,197,94,.55); animation:trackLivePulse 1.5s infinite;
+}
+@keyframes trackLivePulse{ 0%{box-shadow:0 0 0 0 rgba(34,197,94,.45)} 70%{box-shadow:0 0 0 12px rgba(34,197,94,0)} 100%{box-shadow:0 0 0 0 rgba(34,197,94,0)} }
+.trackHero__meta{
+  display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:14px;
+}
+.trackMetaCard, .trackTotalCard{
+  padding:12px 14px; border-radius:18px; background:rgba(255,255,255,.82);
+  border:1px solid rgba(15,23,42,.08); backdrop-filter: blur(10px);
+  box-shadow:0 10px 24px rgba(15,23,42,.06);
+}
+.trackMetaLabel{ display:block; font-size:11px; color:var(--muted); font-weight:800; margin-bottom:6px; }
+.trackScene{
+  position:relative; height:132px; margin-top:16px; overflow:hidden;
+  border-radius:20px; background:linear-gradient(180deg,#e9f7ff 0%, #f7fbff 58%, #eefdf4 100%);
+  border:1px solid rgba(15,23,42,.06);
+}
+.trackRoad{ position:absolute; left:0; right:0; bottom:0; height:40px; background:linear-gradient(180deg,#334155 0%, #0f172a 100%); }
+.trackRoadLine{ position:absolute; left:-30%; right:-30%; bottom:18px; height:4px; background:repeating-linear-gradient(90deg,#fff 0 22px, transparent 22px 42px); opacity:.9; animation:roadMove 1.2s linear infinite; }
+@keyframes roadMove{ from{ transform:translateX(0); } to{ transform:translateX(64px); } }
+.trackHouse{ position:absolute; right:18px; bottom:32px; width:52px; height:38px; background:#fff; border:2px solid rgba(15,23,42,.08); border-radius:10px; box-shadow:0 10px 20px rgba(0,0,0,.06); }
+.trackHouse::before{ content:""; position:absolute; left:6px; right:6px; bottom:100%; border-left:20px solid transparent; border-right:20px solid transparent; border-bottom:18px solid #fb923c; }
+.trackHouse::after{ content:""; position:absolute; left:18px; bottom:0; width:12px; height:18px; background:#fde68a; border-radius:8px 8px 0 0; }
+.trackCloud{ position:absolute; top:18px; width:44px; height:16px; background:rgba(255,255,255,.95); border-radius:999px; box-shadow:18px 4px 0 4px rgba(255,255,255,.95), 9px -6px 0 2px rgba(255,255,255,.95); opacity:.9; }
+.trackCloud--one{ left:24px; animation:cloudFloat 9s linear infinite; }
+.trackCloud--two{ left:160px; top:34px; transform:scale(.8); animation:cloudFloat 12s linear infinite; }
+@keyframes cloudFloat{ from{ transform:translateX(0) scale(1);} to{ transform:translateX(140px) scale(1);} }
+.trackCourier{
+  position:absolute; left:18px; bottom:22px; width:90px; height:58px; transition:transform 1.15s cubic-bezier(.2,.9,.2,1);
+}
+.trackCourier__body{ position:absolute; left:16px; bottom:16px; width:46px; height:18px; border-radius:12px 14px 8px 8px; background:linear-gradient(180deg,#22c55e,#15803d); box-shadow:inset 0 -2px 0 rgba(0,0,0,.12); }
+.trackCourier__body::before{ content:""; position:absolute; left:28px; bottom:12px; width:16px; height:16px; border-radius:8px 8px 2px 2px; background:#86efac; }
+.trackCourier__box{ position:absolute; left:52px; bottom:30px; width:24px; height:18px; border-radius:6px; background:linear-gradient(180deg,#fb923c,#ea580c); box-shadow:0 8px 14px rgba(234,88,12,.18); }
+.trackCourier__wheel{ position:absolute; bottom:8px; width:16px; height:16px; border-radius:999px; background:#0f172a; border:3px solid #cbd5e1; animation:wheelSpin .65s linear infinite; }
+.trackCourier__wheel--left{ left:18px; }
+.trackCourier__wheel--right{ left:58px; }
+@keyframes wheelSpin{ from{ transform:rotate(0deg); } to{ transform:rotate(360deg); } }
+.trackCourier__steam{ position:absolute; left:56px; bottom:48px; width:12px; height:24px; border-radius:999px; border:2px solid rgba(255,255,255,.8); border-color:rgba(255,255,255,.85) transparent transparent transparent; transform:rotate(12deg); animation:steamUp 1.5s ease-in-out infinite; opacity:.75; }
+.trackCourier__steam--two{ left:66px; animation-delay:.3s; }
+@keyframes steamUp{ 0%{ transform:translateY(0) rotate(12deg); opacity:0;} 35%{opacity:.75;} 100%{ transform:translateY(-16px) rotate(18deg); opacity:0;} }
+.trackCourier--preparo{ transform:translateX(0); }
+.trackCourier--saiu{ transform:translateX(128px); }
+.trackCourier--entregue{ transform:translateX(230px); }
+.trackCourier--cancelado{ filter:grayscale(1); opacity:.8; }
+.trackProgressWrap{ padding:16px 18px 6px; }
+.trackProgressHeader{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; }
+.trackProgressText{ font-weight:900; font-size:16px; margin-top:4px; }
+.trackPercent{ font-size:22px; font-weight:900; color:#15803d; }
+.trackProgressBar{ position:relative; height:14px; margin-top:14px; border-radius:999px; background:rgba(15,23,42,.08); overflow:hidden; }
+.trackProgressBarFill{ position:absolute; inset:0 auto 0 0; width:0%; border-radius:inherit; background:linear-gradient(90deg,#22c55e 0%, #16a34a 55%, #f97316 100%); box-shadow:0 8px 20px rgba(34,197,94,.28); transition:width 1.1s cubic-bezier(.2,.9,.2,1); }
+.trackProgressGlow{ position:absolute; inset:0; background:linear-gradient(90deg, transparent, rgba(255,255,255,.55), transparent); transform:translateX(-120%); animation:trackShine 2s linear infinite; }
+@keyframes trackShine{ to{ transform:translateX(120%);} }
+.statusTimeline--pro{ margin-top:16px; }
+.orderMeta--pro{ padding:4px 18px 0; display:grid; grid-template-columns:1fr auto; align-items:center; }
+.trackChatBtn{
+  position:relative; margin-top:0; width:auto; min-width:180px; display:inline-flex; align-items:center; justify-content:center; gap:10px;
+  padding:14px 18px; border-radius:18px; box-shadow:0 16px 28px rgba(22,163,74,.22);
+}
+.orderItems--pro{ padding:14px 18px 18px; margin-top:2px; }
+.orderItems__head{ display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
+.orderGhostBtn{ margin-top:0; }
+.chatUnreadBadge{ top:-8px; right:-8px; }
+.chatLiveStatus{ margin-top:6px; width:max-content; }
+#chatMessages{ scroll-behavior:smooth; background:linear-gradient(180deg,#ffffff 0%,#f8fafc 100%) !important; }
+.msg{ box-shadow:0 8px 20px rgba(15,23,42,.06); }
+.msg.them{ background:#fff !important; }
+.msg.me{ box-shadow:0 12px 24px rgba(22,163,74,.18); }
+@media (max-width:640px){
+  .trackHero__top, .orderMeta--pro{ grid-template-columns:1fr; display:flex; flex-direction:column; align-items:stretch; }
+  .trackHero__meta{ grid-template-columns:1fr; }
+  .trackChatBtn{ width:100%; min-width:0; }
+  .trackCourier--saiu{ transform:translateX(84px); }
+  .trackCourier--entregue{ transform:translateX(150px); }
+  .trackProgressHeader{ align-items:center; }
+  .trackOrderId{ font-size:24px; }
+  .trackScene{ height:120px; }
+}

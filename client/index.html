@@ -82,68 +82,111 @@
     </div>
 
     <div id="orderCard" class="box orderCardPro hidden">
-      <div style="display:flex; align-items:center; justify-content:space-between; gap:12px;">
-        <div>
-          <div class="muted" style="font-size:12px;font-weight:800;">PEDIDO</div>
-          <div style="font-size:22px;font-weight:900;" id="trackOrderId">-</div>
-        </div>
-        <div class="statusPill" id="trackStatusPill">
-          <span class="dot"></span>
-          <span id="trackStatus">-</span>
+      <div class="trackHero">
+        <div class="trackHero__bg"></div>
+        <div class="trackHero__content">
+          <div class="trackHero__top">
+            <div>
+              <div class="trackKicker">ACOMPANHAMENTO AO VIVO</div>
+              <div class="trackOrderLine">
+                <div class="trackOrderId" id="trackOrderId">-</div>
+                <div class="trackLivePill"><span class="trackLiveDot"></span>Ao vivo</div>
+              </div>
+            </div>
+            <div class="statusPill" id="trackStatusPill">
+              <span class="dot"></span>
+              <span id="trackStatus">-</span>
+            </div>
+          </div>
+
+          <div class="trackHero__meta">
+            <div class="trackMetaCard">
+              <span class="trackMetaLabel">Código</span>
+              <strong id="orderCode">-</strong>
+            </div>
+            <div class="trackMetaCard">
+              <span class="trackMetaLabel">Atualização</span>
+              <strong id="trackUpdated">-</strong>
+            </div>
+          </div>
+
+          <div class="trackScene" aria-hidden="true">
+            <div class="trackRoad"></div>
+            <div class="trackRoadLine"></div>
+            <div id="trackCourier" class="trackCourier trackCourier--preparo">
+              <div class="trackCourier__steam"></div>
+              <div class="trackCourier__steam trackCourier__steam--two"></div>
+              <div class="trackCourier__box"></div>
+              <div class="trackCourier__body"></div>
+              <div class="trackCourier__wheel trackCourier__wheel--left"></div>
+              <div class="trackCourier__wheel trackCourier__wheel--right"></div>
+            </div>
+            <div class="trackHouse"></div>
+            <div class="trackCloud trackCloud--one"></div>
+            <div class="trackCloud trackCloud--two"></div>
+          </div>
         </div>
       </div>
 
-      <div class="muted" id="trackUpdated" style="margin-top:10px">-</div>
-
-      <div class="muted" style="margin-top:6px">
-        Código: <strong id="orderCode">-</strong>
-      </div>
-
-      <!-- Timeline animada -->
-      <div id="statusTimeline" class="statusTimeline" aria-label="Status do pedido">
-        <div class="statusStep" data-step="em_preparo">
-          <div class="stepDot"></div>
-          <div class="stepLabel">Em preparo</div>
+      <div class="trackProgressWrap">
+        <div class="trackProgressHeader">
+          <div>
+            <div class="muted" style="font-size:12px;font-weight:800;">Progresso do pedido</div>
+            <div id="trackProgressText" class="trackProgressText">Estamos iniciando seu pedido</div>
+          </div>
+          <div id="trackPercent" class="trackPercent">0%</div>
         </div>
 
-        <div class="statusLine" aria-hidden="true"><div id="statusLineFill" class="statusLineFill"></div></div>
-
-        <div class="statusStep" data-step="saiu_pra_entrega">
-          <div class="stepDot"></div>
-          <div class="stepLabel">Saiu pra entrega</div>
+        <div class="trackProgressBar" aria-hidden="true">
+          <div id="trackProgressBarFill" class="trackProgressBarFill"></div>
+          <div class="trackProgressGlow"></div>
         </div>
 
-        <div class="statusLine" aria-hidden="true"><div id="statusLineFill2" class="statusLineFill"></div></div>
+        <div id="statusTimeline" class="statusTimeline statusTimeline--pro" aria-label="Status do pedido">
+          <div class="statusStep" data-step="em_preparo">
+            <div class="stepDot"></div>
+            <div class="stepLabel">Em preparo</div>
+          </div>
 
-        <div class="statusStep" data-step="entregue">
-          <div class="stepDot"></div>
-          <div class="stepLabel">Entregue</div>
+          <div class="statusLine" aria-hidden="true"><div id="statusLineFill" class="statusLineFill"></div></div>
+
+          <div class="statusStep" data-step="saiu_pra_entrega">
+            <div class="stepDot"></div>
+            <div class="stepLabel">Saiu pra entrega</div>
+          </div>
+
+          <div class="statusLine" aria-hidden="true"><div id="statusLineFill2" class="statusLineFill"></div></div>
+
+          <div class="statusStep" data-step="entregue">
+            <div class="stepDot"></div>
+            <div class="stepLabel">Entregue</div>
+          </div>
         </div>
       </div>
 
-      <div class="orderMeta">
-        <div class="muted" style="font-weight:800;">Total</div>
-        <div id="orderTotal" class="orderTotal">-</div>
-      </div>
-
-      <div class="orderItems">
-        <div class="muted" style="font-weight:800;">Itens</div>
-        <div id="orderItemsList" class="orderItemsList"></div>
-      </div>
-
-
-      <div style="display:flex; gap:10px; margin-top:14px;">
-        <button id="openChatBtn" class="btn chatFab" type="button" style="flex:1" aria-label="Abrir chat">
+      <div class="orderMeta orderMeta--pro">
+        <div class="trackTotalCard">
+          <div class="muted" style="font-weight:800;">Total</div>
+          <div id="orderTotal" class="orderTotal">-</div>
+        </div>
+        <button id="openChatBtn" class="btn trackChatBtn" type="button" aria-label="Abrir chat">
           <span class="chatFab__icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" width="22" height="22" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M7 8h10M7 12h6m-1 9-4-3H7a5 5 0 0 1-5-5V8a5 5 0 0 1 5-5h10a5 5 0 0 1 5 5v5a5 5 0 0 1-5 5h-1l-4 3Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
             </svg>
           </span>
-          <span class="chatFab__sr">Abrir chat</span>
+          <span>Chat do pedido</span>
           <span id="chatUnreadBadge" class="chatUnreadBadge hidden" aria-hidden="true">0</span>
           <div id="chatToast" class="chatToast hidden" role="status" aria-live="polite">Nova mensagem</div>
         </button>
-        <button id="forgetOrderBtn" class="ghost" type="button" style="white-space:nowrap;">Esquecer</button>
+      </div>
+
+      <div class="orderItems orderItems--pro">
+        <div class="orderItems__head">
+          <div class="muted" style="font-weight:800;">Itens do pedido</div>
+          <button id="forgetOrderBtn" class="ghost orderGhostBtn" type="button">Esquecer</button>
+        </div>
+        <div id="orderItemsList" class="orderItemsList"></div>
       </div>
     </div>
   </main>
@@ -343,6 +386,7 @@
         <div style="display:flex; flex-direction:column;">
           <strong>Chat</strong>
           <span class="muted" style="font-size:12px">Pedido <span id="chatOrderLabel">-</span></span>
+          <span id="chatLiveStatus" class="chatLiveStatus">Atendimento online</span>
         </div>
         <button id="closeChatBtn" class="ghost" type="button">Fechar</button>
       </div>
