@@ -141,9 +141,6 @@ function isChatDrawerOpen() {
 function setChatUnread(n) {
   state.chatUnread = Math.max(0, Number(n || 0));
   const badge = document.getElementById("chatUnreadBadge");
-  const btn = document.getElementById("openChatBtn");
-  const btnText = btn ? btn.querySelector("span:not(.chatFab__icon):not(.chatUnreadBadge)") : null;
-  if (btnText) btnText.textContent = state.chatUnread > 0 ? `Chat do pedido (${state.chatUnread})` : "Chat do pedido";
   if (!badge) return;
   if (state.chatUnread > 0) {
     badge.textContent = String(state.chatUnread);
@@ -2053,33 +2050,6 @@ function statusLabel(status){
   return String(status || "-");
 }
 
-function getTrackProgress(status){
-  const s = normalizeOrderStatus(status);
-  if (s === "entregue") return 100;
-  if (s === "saiu_pra_entrega") return 72;
-  if (s === "cancelado") return 100;
-  return 36;
-}
-
-function getTrackProgressText(status){
-  const s = normalizeOrderStatus(status);
-  if (s === "entregue") return "Pedido entregue com sucesso";
-  if (s === "saiu_pra_entrega") return "Seu pedido está a caminho";
-  if (s === "cancelado") return "Pedido cancelado";
-  return "Seu pedido está em preparo";
-}
-
-function updateTrackCourier(status){
-  const courier = document.getElementById("trackCourier");
-  if (!courier) return;
-  const s = normalizeOrderStatus(status);
-  courier.classList.remove("trackCourier--preparo","trackCourier--saiu","trackCourier--entregue","trackCourier--cancelado");
-  if (s === "entregue") courier.classList.add("trackCourier--entregue");
-  else if (s === "saiu_pra_entrega") courier.classList.add("trackCourier--saiu");
-  else if (s === "cancelado") courier.classList.add("trackCourier--cancelado");
-  else courier.classList.add("trackCourier--preparo");
-}
-
 function renderStatusTimeline(status){
   const s = normalizeOrderStatus(status);
   const steps = ["em_preparo", "saiu_pra_entrega", "entregue"];
@@ -2099,24 +2069,44 @@ function renderStatusTimeline(status){
 
   const fill1 = document.getElementById("statusLineFill");
   const fill2 = document.getElementById("statusLineFill2");
-  if (fill1) fill1.style.width = (idx >= 1 ? "100%" : s === "em_preparo" ? "40%" : "0%");
-  if (fill2) fill2.style.width = (idx >= 2 ? "100%" : s === "saiu_pra_entrega" ? "46%" : "0%");
+  if (fill1) fill1.style.width = (idx >= 1 ? "100%" : "0%");
+  if (fill2) fill2.style.width = (idx >= 2 ? "100%" : "0%");
 
-  const pct = getTrackProgress(status);
+  const courier = document.getElementById("trackCourier");
+  if (courier) {
+    courier.classList.remove("trackCourier--preparo","trackCourier--saiu","trackCourier--entregue","trackCourier--cancelado");
+    if (s === "entregue") courier.classList.add("trackCourier--entregue");
+    else if (s === "saiu_pra_entrega") courier.classList.add("trackCourier--saiu");
+    else if (s === "cancelado") courier.classList.add("trackCourier--cancelado");
+    else courier.classList.add("trackCourier--preparo");
+  }
+
   const pctEl = document.getElementById("trackPercent");
   const txtEl = document.getElementById("trackProgressText");
   const barEl = document.getElementById("trackProgressBarFill");
-  if (pctEl) pctEl.textContent = `${pct}%`;
-  if (txtEl) txtEl.textContent = getTrackProgressText(status);
-  if (barEl) barEl.style.width = `${pct}%`;
+  const statusPill = document.getElementById("trackStatusPill");
 
-  const pill = document.getElementById("trackStatusPill");
-  if (pill) {
-    pill.style.background = s === "cancelado" ? "rgba(239,68,68,.10)" : "rgba(22,163,74,.10)";
-    pill.style.borderColor = s === "cancelado" ? "rgba(239,68,68,.25)" : "rgba(22,163,74,.22)";
+  let percent = 10;
+  let text = "Estamos iniciando seu pedido";
+
+  if (s === "em_preparo") {
+    percent = 38;
+    text = "Seu pedido está sendo preparado agora";
+  } else if (s === "saiu_pra_entrega") {
+    percent = 76;
+    text = "Seu pedido saiu e está a caminho";
+  } else if (s === "entregue") {
+    percent = 100;
+    text = "Pedido entregue com sucesso";
+  } else if (s === "cancelado") {
+    percent = 100;
+    text = "Este pedido foi cancelado";
   }
 
-  updateTrackCourier(status);
+  if (pctEl) pctEl.textContent = `${percent}%`;
+  if (txtEl) txtEl.textContent = text;
+  if (barEl) barEl.style.width = `${percent}%`;
+  if (statusPill) statusPill.classList.toggle("is-cancelled", s === "cancelado");
 }
 
 function renderOrderItems(items){
@@ -2151,18 +2141,25 @@ function renderOrderTotal(totals){
   const el = document.getElementById("orderTotal");
   if (!el) return;
 
-  const finalTotal = Number(
-    totals?.total ??
-    totals?.grandTotal ??
-    totals?.finalTotal ??
-    totals?.amount ??
-    totals?.subtotal ??
-    0
-  );
+  const subtotal = Number(totals?.subtotal ?? 0) || 0;
+  const deliveryFee = Number(totals?.deliveryFee ?? 0) || 0;
+  const discount = Number(totals?.discount ?? 0) || 0;
+  const total = Number(totals?.total ?? subtotal ?? 0) || 0;
 
-  el.textContent = Number.isFinite(finalTotal) && finalTotal > 0
-    ? moneyBRL(finalTotal)
-    : "-";
+  el.textContent = total ? moneyBRL(total) : "-";
+
+  const wrap = document.getElementById("orderTotalBreakdown");
+  const subEl = document.getElementById("orderSubtotalMini");
+  const delEl = document.getElementById("orderDeliveryMini");
+  const discEl = document.getElementById("orderDiscountMini");
+
+  if (subEl) subEl.textContent = `Subtotal: ${moneyBRL(subtotal)}`;
+  if (delEl) delEl.textContent = `Entrega: ${moneyBRL(deliveryFee)}`;
+  if (discEl) {
+    discEl.textContent = `Desconto: -${moneyBRL(discount)}`;
+    discEl.classList.toggle("hidden", !(discount > 0));
+  }
+  if (wrap) wrap.classList.toggle("hidden", !(subtotal > 0 || deliveryFee > 0 || discount > 0));
 }
 
 function startTrackingOrder(orderId) {
@@ -2181,7 +2178,10 @@ function startTrackingOrder(orderId) {
 
       if (data.orderNumber) {
         state.currentOrderNumber = data.orderNumber;
-        document.getElementById("trackOrderId").textContent = "#" + data.orderNumber;
+        const label = "#" + data.orderNumber;
+        document.getElementById("trackOrderId").textContent = label;
+        const codeEl = document.getElementById("orderCode");
+        if (codeEl) codeEl.textContent = label;
       }
 
       const friendly = statusLabel(data.status);
@@ -2190,14 +2190,10 @@ function startTrackingOrder(orderId) {
 
       const updated = data.updatedAt?.toDate ? data.updatedAt.toDate() : null;
       document.getElementById("trackUpdated").textContent =
-        updated ? updated.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" }) : "Agora";
-
-      const codeEl = document.getElementById("orderCode");
-      if (codeEl) codeEl.textContent = data.orderNumber ? ("#" + data.orderNumber) : String(orderId || "-");
+        updated ? updated.toLocaleString("pt-BR") : "Aguardando atualização";
 
       renderOrderTotal(data.totals);
       renderOrderItems(data.items);
-      renderStatusTimeline(data.status);
     },
     (err) => {
       console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
@@ -2311,9 +2307,8 @@ function startChat(orderId) {
             }
             if (newCount > 0) {
               state.chatLastSeenRestaurantMs = newestMs;
-              const totalUnread = (state.chatUnread || 0) + newCount;
-              setChatUnread(totalUnread);
-              showChatToast(newCount > 1 ? `${newCount} novas mensagens` : "Nova mensagem no chat");
+              setChatUnread((state.chatUnread || 0) + newCount);
+              showChatToast("Nova mensagem no chat");
               playChatPing();
             }
           }
@@ -2466,10 +2461,7 @@ if (tabProfile) {
     if (lbl) lbl.textContent =
       (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + state.currentOrderId));
     try { startChat(state.currentOrderId); } catch(_){}
-    const live = document.getElementById("chatLiveStatus");
-    if (live) live.textContent = "Atendimento online";
     openChatDrawer();
-    setTimeout(() => { try { document.getElementById("chatText")?.focus(); } catch(_){} }, 60);
   });
 
   // Chat (enviar)

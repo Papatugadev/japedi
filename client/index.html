@@ -84,6 +84,7 @@
     <div id="orderCard" class="box orderCardPro hidden">
       <div class="trackHero">
         <div class="trackHero__bg"></div>
+        <div class="trackHero__glow"></div>
         <div class="trackHero__content">
           <div class="trackHero__top">
             <div>
@@ -111,17 +112,29 @@
           </div>
 
           <div class="trackScene" aria-hidden="true">
+            <div class="trackScene__stars"></div>
             <div class="trackRoad"></div>
             <div class="trackRoadLine"></div>
+            <div class="trackStore">
+              <span class="trackStore__awning"></span>
+              <span class="trackStore__door"></span>
+            </div>
+            <div class="trackHouse">
+              <span class="trackHouse__roof"></span>
+              <span class="trackHouse__door"></span>
+              <span class="trackHouse__window"></span>
+              <span class="trackHouse__pulse"></span>
+            </div>
             <div id="trackCourier" class="trackCourier trackCourier--preparo">
               <div class="trackCourier__steam"></div>
               <div class="trackCourier__steam trackCourier__steam--two"></div>
+              <div class="trackCourier__spark"></div>
               <div class="trackCourier__box"></div>
               <div class="trackCourier__body"></div>
+              <div class="trackCourier__helmet"></div>
               <div class="trackCourier__wheel trackCourier__wheel--left"></div>
               <div class="trackCourier__wheel trackCourier__wheel--right"></div>
             </div>
-            <div class="trackHouse"></div>
             <div class="trackCloud trackCloud--one"></div>
             <div class="trackCloud trackCloud--two"></div>
           </div>
@@ -131,10 +144,10 @@
       <div class="trackProgressWrap">
         <div class="trackProgressHeader">
           <div>
-            <div class="muted" style="font-size:12px;font-weight:800;">Progresso do pedido</div>
+            <div class="muted trackProgressEyebrow">Progresso do pedido</div>
             <div id="trackProgressText" class="trackProgressText">Estamos iniciando seu pedido</div>
           </div>
-          <div id="trackPercent" class="trackPercent">0%</div>
+          <div id="trackPercent" class="trackPercent">10%</div>
         </div>
 
         <div class="trackProgressBar" aria-hidden="true">
@@ -167,6 +180,11 @@
       <div class="orderMeta orderMeta--pro">
         <div class="trackTotalCard">
           <div class="muted" style="font-weight:800;">Total</div>
+          <div id="orderTotalBreakdown" class="orderTotalBreakdown hidden">
+            <span id="orderSubtotalMini">Subtotal: -</span>
+            <span id="orderDeliveryMini">Entrega: -</span>
+            <span id="orderDiscountMini" class="hidden">Desconto: -</span>
+          </div>
           <div id="orderTotal" class="orderTotal">-</div>
         </div>
         <button id="openChatBtn" class="btn trackChatBtn" type="button" aria-label="Abrir chat">
@@ -386,7 +404,6 @@
         <div style="display:flex; flex-direction:column;">
           <strong>Chat</strong>
           <span class="muted" style="font-size:12px">Pedido <span id="chatOrderLabel">-</span></span>
-          <span id="chatLiveStatus" class="chatLiveStatus">Atendimento online</span>
         </div>
         <button id="closeChatBtn" class="ghost" type="button">Fechar</button>
       </div>
