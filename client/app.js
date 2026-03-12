@@ -1087,28 +1087,91 @@ function openCheckout() {
   ensureCheckoutUI();
   updateCheckoutUIFromConfig();
   try{ _bindDeliveryAddressEvents(); }catch(_){ }
+  renderCheckoutSummary();
   updateCheckoutTotals();
+  updateConfirmOrderButton(false);
   fillCheckoutWithProfile();
-  document.getElementById("checkoutModal")?.classList?.remove("hidden");
+  showTab("checkout");
+  try { window.scrollTo({ top: 0, behavior: "instant" }); } catch(_) { window.scrollTo(0,0); }
 }
 
 function closeCheckout() {
-  document.getElementById("checkoutModal")?.classList?.add("hidden");
+  showTab("cart");
 }
 
 function clearCheckoutInputs() {
   document.getElementById("custName").value = "";
   document.getElementById("custPhone").value = "";
   document.getElementById("custAddr").value = "";
+  const couponInput = document.getElementById("coCouponInput");
+  if (couponInput) couponInput.value = "";
+  state.couponCode = "";
+  updateConfirmOrderButton(false);
 }
 
 let __checkoutUIReady = false;
+
+function checkoutItemCountLabel(){
+  const qty = state.cart.reduce((acc, i) => acc + Number(i.qty || 0), 0);
+  return qty === 1 ? "1 item" : `${qty} itens`;
+}
+
+function renderCheckoutSummary(){
+  const heroBadge = document.querySelector('.checkoutHero__badge');
+  if (heroBadge) heroBadge.textContent = checkoutItemCountLabel();
+
+  let box = document.getElementById('coSummaryBox');
+  const stickyBox = document.getElementById('checkoutStickySummary');
+  if (!box && !stickyBox) return;
+
+  if (!state.cart.length){
+    const empty = `<div class="muted">Seu carrinho está vazio.</div>`;
+    if (box) box.innerHTML = empty;
+    if (stickyBox) stickyBox.innerHTML = empty;
+    return;
+  }
+
+  const summaryHtml = state.cart.map(item => `
+    <div class="checkoutSummaryItem">
+      <div class="checkoutSummaryItem__main">
+        <strong>${item.name || 'Produto'}</strong>
+        ${item.optionsText ? `<div class="checkoutSummaryItem__meta">${item.optionsText}</div>` : ''}
+      </div>
+      <div class="checkoutSummaryItem__side">
+        <span class="checkoutSummaryItem__qty">x${Number(item.qty || 0)}</span>
+        <strong>${moneyBRL(Number(item.price || 0) * Number(item.qty || 0))}</strong>
+      </div>
+    </div>
+  `).join('');
+
+  if (box) box.innerHTML = summaryHtml;
+  if (stickyBox) stickyBox.innerHTML = summaryHtml;
+}
+
+function updateConfirmOrderButton(isLoading = false){
+  const btn = document.getElementById('confirmOrderBtn');
+  if (!btn) return;
+  btn.disabled = !!isLoading;
+  btn.classList.toggle('is-loading', !!isLoading);
+  const main = btn.querySelector('.checkoutConfirmBtn__main');
+  const sub = btn.querySelector('.checkoutConfirmBtn__sub');
+  if (main) main.textContent = isLoading ? 'Enviando pedido...' : 'Confirmar pedido';
+  if (sub) sub.textContent = isLoading ? 'Aguarde, estamos registrando seu pedido' : 'Revise os dados antes de enviar';
+}
+
+function updateCheckoutAddressTip(){
+  const tip = document.getElementById('coAddressTip');
+  if (!tip) return;
+  tip.textContent = state.checkoutMode === 'pickup'
+    ? 'Retirada: use este campo para observações'
+    : 'Entrega: rua, número e bairro';
+}
 
 function ensureCheckoutUI(){
   if (__checkoutUIReady) return;
   __checkoutUIReady = true;
 
-  const content = document.querySelector("#checkoutModal .modal__content");
+  const content = document.querySelector("#checkoutView .checkoutContent");
   if (!content) return;
   _bindDeliveryAddressEvents();
 
@@ -1123,6 +1186,25 @@ function ensureCheckoutUI(){
       <div class="coHint muted" id="coModeHint" style="margin-top:6px"></div>
     `;
     content.insertAdjacentElement("afterbegin", box);
+  }
+
+  // Resumo do pedido
+  if (!document.getElementById("coSummaryWrap")){
+    const box = document.createElement("section");
+    box.id = "coSummaryWrap";
+    box.className = "checkoutSection";
+    box.innerHTML = `
+      <div class="checkoutSection__titleRow">
+        <div>
+          <div class="coTitle">Resumo do pedido</div>
+          <div class="checkoutSection__sub">Confira os itens antes de finalizar.</div>
+        </div>
+      </div>
+      <div id="coSummaryBox" class="checkoutSummaryList"></div>
+    `;
+    const firstSection = content.querySelector('.checkoutSection');
+    if (firstSection) firstSection.insertAdjacentElement("afterend", box);
+    else content.appendChild(box);
   }
 
   // Bloco: Pagamento
@@ -1156,7 +1238,7 @@ function ensureCheckoutUI(){
 
   // Totais (sub + entrega + desconto + total)
   if (!document.getElementById("coTotalsBox")){
-    const footer = document.querySelector("#checkoutModal .modal__footer");
+    const footer = document.querySelector("#checkoutView .checkoutFooter");
     if (footer){
       const totals = document.createElement("div");
       totals.id = "coTotalsBox";
@@ -1617,6 +1699,16 @@ function updateCheckoutTotals(){
   }
   if (totalEl) totalEl.textContent = moneyBRL(total);
 
+  const stickyTotals = document.getElementById("checkoutStickyTotals");
+  if (stickyTotals){
+    stickyTotals.innerHTML = `
+      <div class="drawer__totals"><span class="muted">Subtotal</span><strong>${moneyBRL(subtotal)}</strong></div>
+      ${state.checkoutMode === "delivery" ? `<div class="drawer__totals"><span class="muted">Entrega</span><strong>${deliveryFee ? moneyBRL(deliveryFee) : "R$ 0,00"}</strong></div>` : ""}
+      ${(couponOk && discount > 0) ? `<div class="drawer__totals"><span class="muted">Desconto</span><strong>- ${moneyBRL(discount)} (${couponPct}%)</strong></div>` : ""}
+      <div class="drawer__totals total"><span>Total</span><strong>${moneyBRL(total)}</strong></div>
+    `;
+  }
+
   if (warnEl){
     const min = Number(delivery.minOrder || 0);
     const quote = state.deliveryQuote || {};
@@ -1647,6 +1739,9 @@ function updateCheckoutTotals(){
         : "Rua, número, bairro...";
     }
   }catch(_){}
+
+  updateCheckoutAddressTip();
+  renderCheckoutSummary();
 }
 
 /* =========================
@@ -1795,7 +1890,9 @@ function showTab(name){
   const ordersView = document.getElementById("ordersView");
   const cartView = document.getElementById("cartView");
   const profileView = document.getElementById("profileView");
+  const checkoutView = document.getElementById("checkoutView");
   const pill = document.querySelector(".bottomnav__pill");
+  const bottomnav = document.querySelector(".bottomnav");
 
   const tabMenu = document.getElementById("tabMenu");
   const tabOrders = document.getElementById("tabOrders");
@@ -1808,28 +1905,32 @@ function showTab(name){
   const isOrders = safeName === "orders";
   const isCart = safeName === "cart";
   const isProfile = safeName === "profile";
+  const isCheckout = safeName === "checkout";
 
   menuView?.classList?.toggle("hidden", !isMenu);
   ordersView?.classList?.toggle("hidden", !isOrders);
   cartView?.classList?.toggle("hidden", !isCart);
   profileView?.classList?.toggle("hidden", !isProfile);
+  checkoutView?.classList?.toggle("hidden", !isCheckout);
 
   tabMenu?.classList?.toggle("is-active", isMenu);
   tabOrders?.classList?.toggle("is-active", isOrders);
-  tabCart?.classList?.toggle("is-active", isCart);
+  tabCart?.classList?.toggle("is-active", isCart || isCheckout);
   tabProfile?.classList?.toggle("is-active", isProfile);
 
   if (pill){
     pill.setAttribute(
       "data-active",
-      isProfile ? "profile" : isCart ? "cart" : isOrders ? "orders" : "menu"
+      isProfile ? "profile" : (isCart || isCheckout) ? "cart" : isOrders ? "orders" : "menu"
     );
   }
 
-  // ✅ mostra topo/fundo/logo SOMENTE no cardápio
+  if (bottomnav){
+    bottomnav.classList.toggle("hidden", isCheckout);
+  }
+
   syncMenuChrome();
 
-  // carrinho flutuante só no cardápio
   const cartBar = document.getElementById("cartBar");
   const hasItems = state.cart && state.cart.length > 0;
   if (cartBar){
@@ -2365,8 +2466,13 @@ if (tabProfile) {
 
   // Confirmar pedido
   document.getElementById("confirmOrderBtn")?.addEventListener("click", async () => {
+    updateConfirmOrderButton(true);
     try {
       const orderId = await createOrder();
+      if (!orderId) {
+        updateConfirmOrderButton(false);
+        return;
+      }
 
       state.cart = [];
       renderCartUI();
@@ -2382,6 +2488,8 @@ if (tabProfile) {
     } catch (err) {
       console.error(err);
       alert("Erro ao criar pedido. Veja o console (F12).");
+    } finally {
+      updateConfirmOrderButton(false);
     }
   });
 
