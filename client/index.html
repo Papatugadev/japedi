@@ -197,6 +197,35 @@
           <span id="chatUnreadBadge" class="chatUnreadBadge hidden" aria-hidden="true">0</span>
           <div id="chatToast" class="chatToast hidden" role="status" aria-live="polite">Nova mensagem</div>
         </button>
+        <div id="deliveryReviewGate" class="deliveryReviewGate hidden">
+  <div class="deliveryReviewGate__card">
+    <div class="deliveryReviewGate__icon">⭐</div>
+
+    <div class="deliveryReviewGate__kicker">Pedido entregue</div>
+    <h3 class="deliveryReviewGate__title">Avalie sua entrega</h3>
+    <p class="deliveryReviewGate__text">
+      Sua avaliação é obrigatória para finalizar este acompanhamento.
+    </p>
+
+    <div id="deliveryReviewStars" class="deliveryReviewStars">
+      <button type="button" class="deliveryReviewStar" data-value="1">★</button>
+      <button type="button" class="deliveryReviewStar" data-value="2">★</button>
+      <button type="button" class="deliveryReviewStar" data-value="3">★</button>
+      <button type="button" class="deliveryReviewStar" data-value="4">★</button>
+      <button type="button" class="deliveryReviewStar" data-value="5">★</button>
+    </div>
+
+    <textarea
+      id="deliveryReviewText"
+      class="deliveryReviewText"
+      placeholder="Escreva um comentário sobre a entrega (opcional)"
+    ></textarea>
+
+    <button id="sendDeliveryReviewBtn" class="btn deliveryReviewBtn" type="button">
+      Enviar avaliação
+    </button>
+  </div>
+</div>
       </div>
 
       <div class="orderItems orderItems--pro">

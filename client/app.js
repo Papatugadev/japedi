@@ -49,7 +49,8 @@ const state = {
   chatInitialized: false,
   chatLastSeenRestaurantMs: 0,
   chatToastTimer: null,
-
+  reviewLocked: false,
+reviewStars: 0,
   // entrega dinâmica
   deliveryQuote: {
     status: "idle",
@@ -122,7 +123,119 @@ function loadLastOrder() {
 function forgetLastOrder() {
   try { localStorage.removeItem(lastOrderKey()); } catch (_) {}
 }
+function getReviewStorageKey(orderId){
+  return `japed:review:${state.restaurant?.id || state.slug || "unknown"}:${orderId}`;
+}
 
+function hasReviewedOrder(orderId){
+  if (!orderId) return false;
+  try {
+    return localStorage.getItem(getReviewStorageKey(orderId)) === "1";
+  } catch (_) {
+    return false;
+  }
+}
+
+function markOrderReviewed(orderId){
+  if (!orderId) return;
+  try {
+    localStorage.setItem(getReviewStorageKey(orderId), "1");
+  } catch (_) {}
+}
+
+function showDeliveryReviewGate(orderId){
+  const gate = document.getElementById("deliveryReviewGate");
+  if (!gate) return;
+
+  gate.classList.remove("hidden");
+  gate.setAttribute("data-order-id", orderId || "");
+
+  const stars = gate.querySelectorAll(".deliveryReviewStar");
+  stars.forEach((btn) => {
+    btn.classList.toggle("is-active", Number(btn.dataset.value) <= Number(state.reviewStars || 0));
+  });
+}
+
+
+function hideDeliveryReviewGate(){
+  const gate = document.getElementById("deliveryReviewGate");
+  if (!gate) return;
+  gate.classList.add("hidden");
+}
+
+
+function setReviewStars(value){
+  state.reviewStars = Number(value || 0);
+  const stars = document.querySelectorAll(".deliveryReviewStar");
+  stars.forEach((btn) => {
+    btn.classList.toggle("is-active", Number(btn.dataset.value) <= state.reviewStars);
+  });
+}
+
+async function submitDeliveryReview(){
+  const gate = document.getElementById("deliveryReviewGate");
+  if (!gate) return;
+
+  const orderId = gate.getAttribute("data-order-id") || state.currentOrderId;
+  const comment = (document.getElementById("deliveryReviewText")?.value || "").trim();
+  const rating = Number(state.reviewStars || 0);
+
+  if (!orderId) {
+    alert("Pedido não encontrado para avaliar.");
+    return;
+  }
+
+  if (rating < 1) {
+    alert("Escolha de 1 a 5 estrelas.");
+    return;
+  }
+
+  try {
+    const reviewRef = Firestore.doc(
+      db,
+      "restaurants",
+      state.restaurant.id,
+      "orders_public",
+      orderId
+    );
+
+    await Firestore.setDoc(reviewRef, {
+      deliveryReview: {
+        rating,
+        comment,
+        createdAt: Firestore.serverTimestamp(),
+        customerUid: state.customerUid || null
+      }
+    }, { merge: true });
+
+    markOrderReviewed(orderId);
+    hideDeliveryReviewGate();
+
+    const txt = document.getElementById("deliveryReviewText");
+    if (txt) txt.value = "";
+    setReviewStars(0);
+
+    alert("Avaliação enviada com sucesso.");
+  } catch (err) {
+    console.error("Erro ao salvar avaliação:", err);
+    alert("Não foi possível enviar a avaliação.");
+  }
+}
+
+function bindDeliveryReviewUI(){
+  const stars = document.querySelectorAll(".deliveryReviewStar");
+  stars.forEach((btn) => {
+    if (btn.dataset.bound === "1") return;
+    btn.dataset.bound = "1";
+    btn.addEventListener("click", () => setReviewStars(Number(btn.dataset.value || 0)));
+  });
+
+  const sendBtn = document.getElementById("sendDeliveryReviewBtn");
+  if (sendBtn && sendBtn.dataset.bound !== "1") {
+    sendBtn.dataset.bound = "1";
+    sendBtn.addEventListener("click", submitDeliveryReview);
+  }
+}
 /** Util: formatar BRL */
 function moneyBRL(value) {
   const v = Number(value || 0);
@@ -1810,6 +1923,7 @@ async function createOrder() {
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
+    customerUid: state.customerUid || null,
     customer: { name, phone, address },
     checkout,
     items: state.cart.map(i => ({
@@ -1835,22 +1949,23 @@ async function createOrder() {
   let publicOk = false;
   try {
     const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", newDoc.id);
-    await Firestore.setDoc(
-      publicRef,
-      {
-        status: orderData.status,
-        createdAt: orderData.createdAt,
-        updatedAt: orderData.updatedAt,
-        orderNumber: orderData.orderNumber,
-        totals: orderData.totals,
-        checkout: orderData.checkout, // ✅ agora sempre existe e sem undefined
-        customerName: orderData.customer?.name || "",
-        // ✅ Para o cliente conseguir ver os itens na aba Pedidos
-        // (sem precisar de permissão de leitura no /orders)
-        items: orderData.items
-      },
-      { merge: true }
-    );
+  await Firestore.setDoc(
+  publicRef,
+  {
+    status: orderData.status,
+    createdAt: orderData.createdAt,
+    updatedAt: orderData.updatedAt,
+    orderNumber: orderData.orderNumber,
+    totals: orderData.totals,
+    checkout: orderData.checkout, // ✅ agora sempre existe e sem undefined
+    customerName: orderData.customer?.name || "",
+    customerUid: state.customerUid || null,
+    // ✅ Para o cliente conseguir ver os itens na aba Pedidos
+    // (sem precisar de permissão de leitura no /orders)
+    items: orderData.items
+  },
+  { merge: true }
+);
     publicOk = true;
   } catch (e) {
     console.warn("Não foi possível gravar orders_public (rules):", e?.code || e, e?.message || "");
@@ -2194,6 +2309,17 @@ function startTrackingOrder(orderId) {
 
       renderOrderTotal(data.totals);
       renderOrderItems(data.items);
+
+      if (normalizeOrderStatus(data.status) === "entregue") {
+        if (hasReviewedOrder(orderId)) hideDeliveryReviewGate();
+        else showDeliveryReviewGate(orderId);
+      } else {
+        hideDeliveryReviewGate();
+        setReviewStars(0);
+        const txt = document.getElementById("deliveryReviewText");
+        if (txt) txt.value = "";
+      }
+      
     },
     (err) => {
       console.error("Erro no tracking (snapshot):", err?.code || err, err?.message || "");
@@ -2406,6 +2532,7 @@ function updateProfileHero(){
 
 async function boot() {
   // Fecha chat com ESC (desktop)
+  bindDeliveryReviewUI();
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') { try { closeChatDrawer(); } catch(_) {} }
   });
@@ -2453,16 +2580,23 @@ if (tabProfile) {
   }
   try { setupChatSwipe(); } catch(_) {}
 
-  const openChatBtn = document.getElementById("openChatBtn");
-  if (openChatBtn) openChatBtn.addEventListener("click", () => {
-    resetChatUnread();
-    if (!state.currentOrderId) return;
-    const lbl = document.getElementById("chatOrderLabel");
-    if (lbl) lbl.textContent =
-      (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + state.currentOrderId));
-    try { startChat(state.currentOrderId); } catch(_){}
-    openChatDrawer();
-  });
+ const openChatBtn = document.getElementById("openChatBtn");
+if (openChatBtn) openChatBtn.addEventListener("click", () => {
+  resetChatUnread();
+  if (!state.currentOrderId) return;
+
+  const lbl = document.getElementById("chatOrderLabel");
+  if (lbl) lbl.textContent =
+    (state.currentOrderNumber ? ("#" + state.currentOrderNumber) : ("#" + state.currentOrderId));
+
+  try { startChat(state.currentOrderId); } catch(_){}
+
+  const live = document.getElementById("chatLiveStatus");
+  if (live) live.textContent = "Atendimento online";
+
+  openChatDrawer();
+  setTimeout(() => { try { document.getElementById("chatText")?.focus(); } catch(_){} }, 60);
+});
 
   // Chat (enviar)
   const sendBtn = document.getElementById("sendChatBtn");
