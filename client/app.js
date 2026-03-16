@@ -488,54 +488,27 @@ function _ensurePromoBanner(){
     const header = document.querySelector("header.topbar");
     if (!header) return null;
 
-    banner = document.createElement("div");
+    banner = document.createElement("section");
     banner.id = "promoBanner";
-    banner.className = "promoBanner hidden";
+    banner.className = "promoBanner";
+    banner.setAttribute("aria-label", "Publicidade");
 
     banner.innerHTML = `
-      <div class="promoGlow"></div>
-
-      <div class="promoCard promoPro" role="note" aria-label="Promoção">
-        <div class="promoLeft">
-          <div class="promoBadge">🔥 PROMO</div>
-
-          <div class="promoTitle" id="promoTitleText">Promoção</div>
-          <div class="promoSub" id="promoSubText"></div>
-
-          <div class="promoRow">
-            <button class="promoCouponBtn" id="promoCopyBtn" type="button" aria-label="Copiar cupom">
-              <span class="promoCouponLabel" id="promoCouponText">CUPOM: —</span>
-              <span class="promoCopyIcon" aria-hidden="true">📋</span>
-            </button>
-
-            <div class="promoMini" id="promoCountdown" style="display:none"></div>
+      <div class="adsenseShell" role="complementary" aria-label="Espaço de publicidade">
+        <div class="adsenseLabel">Publicidade</div>
+        <div class="adsenseSlot" id="adsenseSlot">
+          <div class="adsensePlaceholder">
+            <div class="adsenseBadge">AD</div>
+            <div class="adsenseText">
+              <strong>Espaço reservado para AdSense</strong>
+              <span>Insira aqui o bloco oficial do Google AdSense.</span>
+            </div>
           </div>
-        </div>
-
-        <div class="promoRight">
-          <div class="promoIcon">✨</div>
         </div>
       </div>
     `;
 
     header.insertAdjacentElement("afterend", banner);
-
-    // Clique pra copiar
-    const btn = banner.querySelector("#promoCopyBtn");
-    if (btn){
-      btn.addEventListener("click", async () => {
-        const code = (btn.getAttribute("data-coupon") || "").trim();
-        if (!code) return;
-        try{
-          await _copyText(code);
-          _toast(`Cupom copiado: ${code} ✅`);
-          try{ if (navigator.vibrate) navigator.vibrate(30); }catch(_){}
-        }catch(_){
-          _toast("Não deu pra copiar automaticamente. Segure e copie.");
-        }
-      });
-    }
-
     return banner;
   }catch(_){
     return null;
@@ -702,77 +675,11 @@ function applyConfigToClient(cfg){
     if (txt) txt.textContent = state.isOpen ? "Aberto" : "Fechado";
   }
 
-  // ✅ banner promo (único)
-// ✅ banner promo (único)
+  // ✅ espaço fixo para AdSense
 const banner = _ensurePromoBanner();
 if (banner){
-  const on = !!promo.enabled;
-
-  const title = (promo.title || "").trim();
-  const sub = (promo.subtitle || promo.notice || "").trim();
-  const code = (promo.couponCode || "").trim();
-  const pct = promo.couponPct || "";
-  const endsAtMs = _parsePromoEndsAt(promo.endsAt);
-
-  const expired = !!(endsAtMs && Date.now() >= endsAtMs);
-
-  const t = banner.querySelector("#promoTitleText");
-  const s = banner.querySelector("#promoSubText");
-  const couponText = banner.querySelector("#promoCouponText");
-  const couponBtn = banner.querySelector("#promoCopyBtn");
-
-  const shouldShow = on && !expired && (title || sub || code);
-
-  if (!shouldShow){
-    banner.classList.add("hidden");
-  } else {
-    banner.classList.remove("hidden");
-
-    if (t) t.textContent = title || "Promoção";
-    if (s) s.textContent = sub || "";
-
-    if (couponText){
-      if (code){
-        couponText.textContent = `CUPOM: ${code}${pct ? " • " + pct + "%" : ""}`;
-      } else {
-        couponText.textContent = "";
-      }
-    }
-
-    if (couponBtn){
-      couponBtn.setAttribute("data-coupon", code || "");
-      couponBtn.style.display = code ? "inline-flex" : "none";
-    }
-
-    _startPromoCountdown(endsAtMs);
-  }
+  banner.classList.remove("hidden");
 }
-  const couponEl = banner.querySelector("#promoCoupon");
-if (couponEl) {
-  const code = (promo.couponCode || "").trim();
-  const pct = promo.couponPct || "";
-
-  if (code) {
-    couponEl.textContent = `CUPOM: ${code}${pct ? " • " + pct + "%" : ""}`;
-  } else {
-    couponEl.textContent = "";
-  }
-}
-  if (banner){
-    const on = !!promo.enabled;
-    const title = (promo.title || "").trim();
-    const sub = (promo.subtitle || promo.notice || "").trim();
-    if (on && (title || sub)){
-      banner.classList.remove("hidden");
-      const t = banner.querySelector(".promoTitle");
-      const s = banner.querySelector(".promoSub");
-      if (t) t.textContent = title || "Promoção";
-      if (s) s.textContent = sub || "";
-    } else {
-      banner.classList.add("hidden");
-    }
-  }
-
   // defaults do checkout com base nas configs
   // modo: se pickup habilitado, mantém último; se não, força delivery
   if (!delivery.pickup) state.checkoutMode = "delivery";

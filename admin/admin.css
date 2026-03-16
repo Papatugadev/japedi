@@ -2314,7 +2314,7 @@ body.order-side-open .kanban{
 }
 .custPanelWrap{
   display:grid;
-  grid-template-columns:minmax(0, 1.8fr) minmax(280px, .9fr);
+  grid-template-columns:minmax(0, 1fr);
   gap:16px;
 }
 .custPanel{
@@ -2404,22 +2404,6 @@ body.order-side-open .kanban{
 .custOrderBadge{
   background:#ecfccb;
   color:#3f6212;
-}
-.custGoogleBox{
-  min-height:240px;
-}
-.custGoogleEmpty{
-  height:100%;
-  border:1px dashed #cbd5e1;
-  border-radius:18px;
-  padding:18px;
-  background:#f8fafc;
-  color:#334155;
-}
-.custGoogleEmpty p{
-  margin:8px 0 0;
-  line-height:1.5;
-  color:#64748b;
 }
 .custFooter{
   margin-top:14px;

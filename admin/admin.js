@@ -2033,12 +2033,13 @@ async function _startFinancePanel(){
 
 /* =========================================================
    CLIENTES / FEEDBACKS
-   - Relatório com reviews da entrega gravados em orders_public.deliveryReview
+   - Relatório com avaliações da entrega gravadas em orders_public.deliveryReview
    - Contagem de pedidos por cliente
    ========================================================= */
 let __JPED_CUSTOMERS_READY = false;
 let __JPED_CUSTOMERS_LOADING = false;
 let __JPED_CUSTOMERS_DATA = [];
+let __JPED_CUSTOMERS_UNSUB = null;
 
 function _ordersPublicCol(){
   return Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_public");
@@ -2219,21 +2220,47 @@ function _renderCustomers(){
   `).join("");
 }
 
-async function _startCustomersPanel(){
-  if (__JPED_CUSTOMERS_READY) return;
-  __JPED_CUSTOMERS_READY = true;
+function _subscribeCustomersRealtime(){
+  if (__JPED_CUSTOMERS_UNSUB) return;
 
+  const statusEl = document.getElementById("custStatus");
+  const subEl = document.getElementById("custSub");
+  const col = _ordersPublicCol();
+
+  try{
+    __JPED_CUSTOMERS_UNSUB = Firestore.onSnapshot(col, (snap) => {
+      __JPED_CUSTOMERS_DATA = (snap?.docs || []).map(d => ({ id: d.id, ...d.data() }));
+      if (statusEl) statusEl.textContent = `Atualizado em tempo real: ${__JPED_CUSTOMERS_DATA.length} pedido(s).`;
+      if (subEl) subEl.textContent = "Novos pedidos e avaliações aparecem automaticamente.";
+      _renderCustomers();
+    }, (err) => {
+      console.warn("Clientes: falha no tempo real:", err?.code || err, err?.message || "");
+      if (statusEl) statusEl.textContent = "Tempo real indisponível. Usando recarga manual.";
+      if (subEl) subEl.textContent = "Clique em atualizar para recarregar os pedidos.";
+    });
+  }catch(err){
+    console.warn("Clientes: não foi possível iniciar onSnapshot:", err?.code || err, err?.message || "");
+  }
+}
+
+async function _startCustomersPanel(){
   const refreshBtn = document.getElementById("custRefresh");
   const searchInput = document.getElementById("custSearch");
 
-  if (searchInput){
-    searchInput.addEventListener("input", _renderCustomers);
-  }
-  if (refreshBtn){
-    refreshBtn.addEventListener("click", async () => {
-      await _loadCustomersData();
-      _renderCustomers();
-    });
+  if (!__JPED_CUSTOMERS_READY){
+    __JPED_CUSTOMERS_READY = true;
+
+    if (searchInput){
+      searchInput.addEventListener("input", _renderCustomers);
+    }
+    if (refreshBtn){
+      refreshBtn.addEventListener("click", async () => {
+        await _loadCustomersData();
+        _renderCustomers();
+      });
+    }
+
+    _subscribeCustomersRealtime();
   }
 
   await _loadCustomersData();
