@@ -1093,7 +1093,7 @@ Auth.onAuthStateChanged(auth, async (user) => {
     const target = document.getElementById("page-" + page);
     if (target) target.classList.add("active");
     if (titleEl) {
-      const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", settings:"Configurações" };
+      const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", customers:"Clientes", settings:"Configurações" };
       titleEl.textContent = map[page] || "Pedidos";
     }
 
@@ -1105,6 +1105,11 @@ Auth.onAuthStateChanged(auth, async (user) => {
     // ✅ Inicia o Financeiro só quando abre a tela
     if (page === "finance") {
       try { _startFinancePanel(); } catch (_) {}
+    }
+
+    // ✅ Inicia Clientes/Feedbacks só quando abre a tela
+    if (page === "customers") {
+      try { _startCustomersPanel(); } catch (_) {}
     }
 
     // ✅ Inicia Configurações só quando abre a tela
@@ -2023,6 +2028,216 @@ async function _startFinancePanel(){
   // carrega primeira vez
   await _loadFinanceData();
   rerender();
+}
+
+
+/* =========================================================
+   CLIENTES / FEEDBACKS
+   - Relatório com reviews da entrega gravados em orders_public.deliveryReview
+   - Contagem de pedidos por cliente
+   ========================================================= */
+let __JPED_CUSTOMERS_READY = false;
+let __JPED_CUSTOMERS_LOADING = false;
+let __JPED_CUSTOMERS_DATA = [];
+
+function _ordersPublicCol(){
+  return Firestore.collection(db, "restaurants", RESTAURANT_ID, "orders_public");
+}
+
+function _escapeHtml(v){
+  return String(v ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function _fmtDateTime(v){
+  const ms = _safeMs(v);
+  if (!ms) return "-";
+  return new Date(ms).toLocaleString("pt-BR");
+}
+
+function _customerDisplayName(order){
+  return String(
+    order?.customer?.name ||
+    order?.customerName ||
+    order?.checkout?.customerName ||
+    order?.name ||
+    "Cliente sem nome"
+  ).trim() || "Cliente sem nome";
+}
+
+function _customerKey(order){
+  const uid = String(order?.customerUid || "").trim();
+  if (uid) return `uid:${uid}`;
+  const phone = String(order?.customer?.phone || order?.phone || "").replace(/\D+/g, "");
+  if (phone) return `phone:${phone}`;
+  return `name:${_customerDisplayName(order).toLowerCase()}`;
+}
+
+function _starsHtml(n){
+  const rating = Math.max(0, Math.min(5, Number(n || 0)));
+  let html = '<span class="custStars" aria-label="' + rating + ' estrelas">';
+  for (let i = 1; i <= 5; i++) html += `<span class="custStar${i <= rating ? ' is-on' : ''}">★</span>`;
+  html += '</span>';
+  return html;
+}
+
+async function _loadCustomersData(){
+  if (__JPED_CUSTOMERS_LOADING) return;
+  __JPED_CUSTOMERS_LOADING = true;
+
+  const statusEl = document.getElementById("custStatus");
+  const subEl = document.getElementById("custSub");
+
+  try{
+    if (statusEl) statusEl.textContent = "Carregando clientes e feedbacks...";
+    if (subEl) subEl.textContent = "Buscando histórico completo em orders_public.";
+
+    const col = _ordersPublicCol();
+    let docs = [];
+
+    try{
+      const q = Firestore.query(col, Firestore.orderBy("createdAt","desc"), Firestore.limit(1500));
+      const snap = await Firestore.getDocs(q);
+      docs = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+    }catch(err1){
+      try{
+        const q2 = Firestore.query(col, Firestore.orderBy("updatedAt","desc"), Firestore.limit(1500));
+        const snap2 = await Firestore.getDocs(q2);
+        docs = snap2.docs.map(d => ({ id: d.id, ...d.data() }));
+      }catch(err2){
+        const snap3 = await Firestore.getDocs(col);
+        docs = snap3.docs.map(d => ({ id: d.id, ...d.data() }));
+      }
+    }
+
+    __JPED_CUSTOMERS_DATA = docs || [];
+    if (statusEl) statusEl.textContent = `Base carregada: ${__JPED_CUSTOMERS_DATA.length} pedido(s).`;
+    if (subEl) subEl.textContent = "Relatório pronto com pedidos, estrelas e comentários.";
+  }catch(err){
+    console.warn("Clientes: falha ao carregar dados:", err?.code || err, err?.message || "");
+    __JPED_CUSTOMERS_DATA = [];
+    if (statusEl) statusEl.textContent = "Não foi possível carregar os feedbacks (veja o console F12).";
+    if (subEl) subEl.textContent = "Verifique permissões do Firestore para orders_public.";
+  }finally{
+    __JPED_CUSTOMERS_LOADING = false;
+  }
+}
+
+function _buildCustomerFeedbackRows(searchTerm){
+  const orders = Array.isArray(__JPED_CUSTOMERS_DATA) ? __JPED_CUSTOMERS_DATA : [];
+  const counts = new Map();
+  const uniqueKeys = new Set();
+
+  for (const order of orders){
+    const key = _customerKey(order);
+    uniqueKeys.add(key);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+
+  const rows = [];
+  let ratingSum = 0;
+
+  for (const order of orders){
+    const review = order?.deliveryReview;
+    const rating = Number(review?.rating || 0);
+    const comment = String(review?.comment || "").trim();
+    if (!rating && !comment) continue;
+
+    const customerName = _customerDisplayName(order);
+    const key = _customerKey(order);
+    const orderCount = counts.get(key) || 1;
+    const orderNum = order?.orderNumber ? `#${order.orderNumber}` : `#${order.id?.slice?.(0,6) || '-'}`;
+    const when = _fmtDateTime(review?.createdAt || order?.updatedAt || order?.createdAt);
+
+    const hay = `${customerName} ${comment} ${orderNum}`.toLowerCase();
+    if (searchTerm && !hay.includes(searchTerm)) continue;
+
+    rows.push({
+      customerName,
+      orderCount,
+      rating,
+      comment: comment || "Sem comentário.",
+      orderNum,
+      when,
+      sortMs: _safeMs(review?.createdAt) ?? _safeMs(order?.updatedAt) ?? _safeMs(order?.createdAt) ?? 0
+    });
+
+    if (rating > 0) ratingSum += rating;
+  }
+
+  rows.sort((a,b) => b.sortMs - a.sortMs);
+
+  return {
+    rows,
+    uniqueCustomerCount: uniqueKeys.size,
+    totalOrders: orders.length,
+    totalFeedbacks: rows.length,
+    avgRating: rows.length ? (ratingSum / rows.length) : 0
+  };
+}
+
+function _renderCustomers(){
+  const tbody = document.getElementById("customersFeedbackTableBody");
+  const search = (document.getElementById("custSearch")?.value || "").trim().toLowerCase();
+  const data = _buildCustomerFeedbackRows(search);
+
+  const setText = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
+  setText("custUniqueCustomers", String(data.uniqueCustomerCount));
+  setText("custTotalOrders", String(data.totalOrders));
+  setText("custTotalFeedbacks", String(data.totalFeedbacks));
+  setText("custAvgRating", data.totalFeedbacks ? data.avgRating.toFixed(1) : "-");
+  setText("custUniqueMeta", data.uniqueCustomerCount ? "Baseado em clientes únicos identificados." : "Nenhum cliente encontrado ainda.");
+  setText("custOrdersMeta", data.totalOrders ? "Pedidos encontrados no histórico público." : "Sem pedidos carregados." );
+  setText("custFeedbackMeta", data.totalFeedbacks ? "Avaliações enviadas após a entrega." : "Nenhum feedback recebido ainda." );
+  setText("custAvgMeta", data.totalFeedbacks ? "Média das avaliações recebidas." : "Aguardando estrelas dos clientes." );
+  setText("custFeedbackCount", data.totalFeedbacks ? `${data.totalFeedbacks} feedback${data.totalFeedbacks === 1 ? '' : 's'}` : "Sem feedbacks");
+  setText("custStatus", `Atualizado: ${new Date().toLocaleString()} • Fonte: restaurants/${RESTAURANT_ID}/orders_public`);
+
+  if (!tbody) return;
+  if (!data.rows.length){
+    tbody.innerHTML = `<tr><td colspan="6" class="muted">${search ? 'Nenhum feedback encontrado para esta busca.' : 'Nenhuma avaliação de entrega foi enviada ainda.'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = data.rows.map((row) => `
+    <tr>
+      <td>
+        <div class="custClientCell">
+          <strong>${_escapeHtml(row.customerName)}</strong>
+        </div>
+      </td>
+      <td><span class="custCountBadge">${row.orderCount}</span></td>
+      <td>${_starsHtml(row.rating)}</td>
+      <td><div class="custComment">${_escapeHtml(row.comment)}</div></td>
+      <td><span class="custOrderBadge">${_escapeHtml(row.orderNum)}</span></td>
+      <td>${_escapeHtml(row.when)}</td>
+    </tr>
+  `).join("");
+}
+
+async function _startCustomersPanel(){
+  if (__JPED_CUSTOMERS_READY) return;
+  __JPED_CUSTOMERS_READY = true;
+
+  const refreshBtn = document.getElementById("custRefresh");
+  const searchInput = document.getElementById("custSearch");
+
+  if (searchInput){
+    searchInput.addEventListener("input", _renderCustomers);
+  }
+  if (refreshBtn){
+    refreshBtn.addEventListener("click", async () => {
+      await _loadCustomersData();
+      _renderCustomers();
+    });
+  }
+
+  await _loadCustomersData();
+  _renderCustomers();
 }
 
 

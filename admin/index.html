@@ -30,6 +30,7 @@
       <button class="menuItem active" type="button" data-page="orders" aria-label="Pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg></button>
       <button class="menuItem" type="button" data-page="products" aria-label="Produtos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" /><path d="M12 7v14" /></svg></button>
       <button class="menuItem" type="button" data-page="finance" aria-label="Painel financeiro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5" /><path d="M8 17V9" /><path d="M12 19V7" /><path d="M16 17V11" /><path d="M20 19V5" /></svg></button>
+      <button class="menuItem" type="button" data-page="customers" aria-label="Clientes e feedbacks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="9.5" cy="7" r="4" /><path d="M20 8v6" /><path d="M23 11h-6" /></svg></button>
       <button class="menuItem" type="button" data-page="settings" aria-label="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1l-.4-2.6H10l-.4 2.6a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0-.1 1 7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 2.6h4.2l.4-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6z"/></svg></button>
     </aside>
 
@@ -180,6 +181,112 @@
         </div>
 
         <div class="finFooter muted" id="finStatus">-</div>
+      </section>
+
+      <section id="page-customers" class="page">
+        <h3 class="pageTitle">Clientes</h3>
+
+        <div class="custTop">
+          <div class="custTopLeft">
+            <div class="custKicker">Relacionamento</div>
+            <div class="custTitleLine">
+              <div class="custTitle">Relatório de clientes e feedbacks</div>
+              <span class="custPill" id="custFeedbackCount">-</span>
+            </div>
+            <div class="muted custSub" id="custSub">Carregando avaliações e histórico dos clientes…</div>
+          </div>
+
+          <div class="custTopRight">
+            <label class="custControl">
+              <span class="custControlLabel">Buscar</span>
+              <input id="custSearch" class="input" type="search" placeholder="Nome, comentário ou pedido..." />
+            </label>
+            <button id="custRefresh" class="ghost" type="button">Atualizar</button>
+          </div>
+        </div>
+
+        <div class="custGrid">
+          <div class="custCard custCardAccent">
+            <div class="custCardHead">
+              <div class="custCardTitle">Clientes únicos</div>
+              <div class="custIcon">👥</div>
+            </div>
+            <div class="custCardValue" id="custUniqueCustomers">-</div>
+            <div class="custCardMeta" id="custUniqueMeta">-</div>
+          </div>
+
+          <div class="custCard">
+            <div class="custCardHead">
+              <div class="custCardTitle">Pedidos registrados</div>
+              <div class="custIcon">🧾</div>
+            </div>
+            <div class="custCardValue" id="custTotalOrders">-</div>
+            <div class="custCardMeta" id="custOrdersMeta">-</div>
+          </div>
+
+          <div class="custCard">
+            <div class="custCardHead">
+              <div class="custCardTitle">Feedbacks recebidos</div>
+              <div class="custIcon">💬</div>
+            </div>
+            <div class="custCardValue" id="custTotalFeedbacks">-</div>
+            <div class="custCardMeta" id="custFeedbackMeta">-</div>
+          </div>
+
+          <div class="custCard">
+            <div class="custCardHead">
+              <div class="custCardTitle">Média das estrelas</div>
+              <div class="custIcon">⭐</div>
+            </div>
+            <div class="custCardValue" id="custAvgRating">-</div>
+            <div class="custCardMeta" id="custAvgMeta">-</div>
+          </div>
+        </div>
+
+        <div class="custPanelWrap">
+          <div class="custPanel">
+            <div class="custPanelHead">
+              <div>
+                <div class="custPanelTitle">Avaliações de entrega</div>
+                <div class="custPanelHint">Aqui aparecem as avaliações que o cliente deixa no final da entrega.</div>
+              </div>
+            </div>
+            <div id="customersTableWrap" class="custTableWrap">
+              <table class="custTable">
+                <thead>
+                  <tr>
+                    <th>Cliente</th>
+                    <th>Pedidos</th>
+                    <th>Estrelas</th>
+                    <th>Comentário</th>
+                    <th>Pedido</th>
+                    <th>Data</th>
+                  </tr>
+                </thead>
+                <tbody id="customersFeedbackTableBody">
+                  <tr><td colspan="6" class="muted">Carregando…</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <div class="custPanel">
+            <div class="custPanelHead">
+              <div>
+                <div class="custPanelTitle">Feedbacks do Google</div>
+                <div class="custPanelHint">Espaço preparado para integrar avaliações públicas do Google.</div>
+              </div>
+            </div>
+            <div id="googleFeedbackBox" class="custGoogleBox">
+              <div class="custGoogleEmpty">
+                <strong>Integração ainda não configurada.</strong>
+                <p>Se você me passar depois o place ID + chave da API do Google, dá para puxar e listar reviews automaticamente. Sem isso, esta área fica pronta para receber os dados.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="custFooter muted" id="custStatus">-</div>
       </section>
 
                   <section id="page-settings" class="page">

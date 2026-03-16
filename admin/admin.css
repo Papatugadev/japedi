@@ -2206,3 +2206,229 @@ body.order-side-open .kanban{
     min-width: 0;
   }
 }
+
+/* =========================================================
+   CLIENTES / FEEDBACKS
+   ========================================================= */
+.custTop{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-end;
+  gap:14px;
+  margin-bottom:16px;
+  flex-wrap:wrap;
+}
+.custKicker{
+  font-size:12px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#16a34a;
+}
+.custTitleLine{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+  margin-top:4px;
+}
+.custTitle{
+  font-size:22px;
+  font-weight:900;
+  color:#0f172a;
+}
+.custPill{
+  display:inline-flex;
+  align-items:center;
+  padding:6px 10px;
+  border-radius:999px;
+  background:#dcfce7;
+  color:#166534;
+  font-size:12px;
+  font-weight:800;
+}
+.custSub{
+  margin-top:6px;
+}
+.custTopRight{
+  display:flex;
+  align-items:flex-end;
+  gap:10px;
+  flex-wrap:wrap;
+}
+.custControl{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+  min-width:260px;
+}
+.custControlLabel{
+  font-size:12px;
+  font-weight:700;
+  color:#64748b;
+}
+.custGrid{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:14px;
+  margin-bottom:16px;
+}
+.custCard{
+  background:#fff;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:18px;
+  padding:16px;
+  box-shadow:0 10px 24px rgba(15,23,42,.05);
+}
+.custCardAccent{
+  background:linear-gradient(180deg, #16a34a, #15803d);
+  color:#fff;
+}
+.custCardHead{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+}
+.custCardTitle{
+  font-size:13px;
+  font-weight:800;
+}
+.custIcon{
+  font-size:18px;
+}
+.custCardValue{
+  margin-top:12px;
+  font-size:30px;
+  font-weight:900;
+  color:#0f172a;
+}
+.custCardAccent .custCardValue, .custCardAccent .custCardMeta, .custCardAccent .custCardTitle{
+  color:#fff;
+}
+.custCardMeta{
+  margin-top:6px;
+  font-size:12px;
+  color:#64748b;
+  line-height:1.35;
+}
+.custPanelWrap{
+  display:grid;
+  grid-template-columns:minmax(0, 1.8fr) minmax(280px, .9fr);
+  gap:16px;
+}
+.custPanel{
+  background:#fff;
+  border:1px solid rgba(15,23,42,.08);
+  border-radius:20px;
+  padding:16px;
+  box-shadow:0 10px 24px rgba(15,23,42,.05);
+}
+.custPanelHead{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:14px;
+}
+.custPanelTitle{
+  font-size:16px;
+  font-weight:900;
+  color:#0f172a;
+}
+.custPanelHint{
+  margin-top:4px;
+  font-size:12px;
+  color:#64748b;
+}
+.custTableWrap{
+  overflow:auto;
+}
+.custTable{
+  width:100%;
+  border-collapse:separate;
+  border-spacing:0;
+  min-width:760px;
+}
+.custTable thead th{
+  position:sticky;
+  top:0;
+  z-index:1;
+  background:#f8fafc;
+  color:#475569;
+  font-size:12px;
+  text-align:left;
+  padding:12px 10px;
+  border-bottom:1px solid #e2e8f0;
+}
+.custTable tbody td{
+  padding:12px 10px;
+  border-bottom:1px solid #eef2f7;
+  vertical-align:top;
+}
+.custClientCell strong{
+  color:#0f172a;
+}
+.custComment{
+  max-width:380px;
+  white-space:normal;
+  line-height:1.4;
+  color:#334155;
+}
+.custStars{
+  display:inline-flex;
+  gap:2px;
+  font-size:16px;
+  letter-spacing:.02em;
+}
+.custStar{
+  color:#cbd5e1;
+}
+.custStar.is-on{
+  color:#f59e0b;
+}
+.custCountBadge, .custOrderBadge{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  min-width:38px;
+  padding:6px 10px;
+  border-radius:999px;
+  font-weight:800;
+  font-size:12px;
+}
+.custCountBadge{
+  background:#dbeafe;
+  color:#1d4ed8;
+}
+.custOrderBadge{
+  background:#ecfccb;
+  color:#3f6212;
+}
+.custGoogleBox{
+  min-height:240px;
+}
+.custGoogleEmpty{
+  height:100%;
+  border:1px dashed #cbd5e1;
+  border-radius:18px;
+  padding:18px;
+  background:#f8fafc;
+  color:#334155;
+}
+.custGoogleEmpty p{
+  margin:8px 0 0;
+  line-height:1.5;
+  color:#64748b;
+}
+.custFooter{
+  margin-top:14px;
+}
+@media (max-width: 1180px){
+  .custGrid{ grid-template-columns:repeat(2, minmax(0,1fr)); }
+  .custPanelWrap{ grid-template-columns:1fr; }
+}
+@media (max-width: 720px){
+  .custGrid{ grid-template-columns:1fr; }
+  .custControl{ min-width:100%; }
+}
