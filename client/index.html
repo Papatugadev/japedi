@@ -389,6 +389,11 @@
                   <input id="custPhone" class="input" placeholder="Ex: 11999999999" inputmode="tel" autocomplete="tel" />
                 </div>
 
+                <div class="checkoutField">
+                  <label class="label" for="custEmail">E-mail</label>
+                  <input id="custEmail" class="input" placeholder="Ex: voce@email.com" inputmode="email" autocomplete="email" />
+                </div>
+
                 <div class="checkoutField checkoutField--full">
                   <div class="checkoutField__labelRow">
                     <label class="label" for="custAddr">Endereço / Observação</label>
@@ -411,6 +416,27 @@
             </div>
 
             <div id="checkoutStickySummary"></div>
+
+            <div id="mpInlinePaymentBox" class="checkoutSideCard hidden" style="margin-top:12px; padding:14px; border:1px solid rgba(255,255,255,.08); background:rgba(255,255,255,.03);">
+              <div class="coTitle" style="margin-bottom:6px;">Pagamento no próprio checkout</div>
+              <div id="mpPaymentHint" class="checkoutSection__sub" style="margin-bottom:10px;"></div>
+
+              <div id="mpPixBox" class="hidden">
+                <img id="mpPixQrImage" class="hidden" alt="QR Code Pix" style="width:220px;max-width:100%;display:block;margin:10px auto;border-radius:16px;background:#fff;padding:10px;" />
+                <label class="label" for="mpPixCode">Pix copia e cola</label>
+                <textarea id="mpPixCode" class="input" rows="3" readonly placeholder="O código Pix vai aparecer aqui"></textarea>
+                <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;">
+                  <button id="copyPixCodeBtn" class="ghost" type="button">Copiar código Pix</button>
+                  <button id="checkPixStatusBtn" class="btn" type="button">Verificar pagamento</button>
+                </div>
+                <div id="mpPixStatus" class="checkoutSection__sub" style="margin-top:10px;"></div>
+              </div>
+
+              <div id="mpCardBox" class="hidden">
+                <div id="mpCardBrickContainer"></div>
+                <div id="mpCardMsg" class="checkoutSection__sub" style="margin-top:10px;"></div>
+              </div>
+            </div>
 
             <div class="checkoutFooter checkoutFooter--screen">
               <button id="confirmOrderBtn" class="btn checkoutConfirmBtn" type="button">
@@ -506,6 +532,8 @@
     </div>
   </div>
 
+  <script src="https://sdk.mercadopago.com/js/v2"></script>
+  <script>window.MP_PUBLIC_KEY = "APP_USR-38ada3b8-f695-4c2e-913a-17303540452f-af695e9f-2a4a-4d76-a493-74aa74972bc9" || "";</script>
   <script type="module" src="./app.js"></script>
   <script>
   // ✅ iOS Safari: bloquear gesto de pinch zoom
@@ -533,6 +561,9 @@
     <div class="modal__content">
       <label class="label">Nome</label>
       <input id="profileNameInput" class="input" type="text" placeholder="Digite seu nome" />
+
+      <label class="label">E-mail</label>
+      <input id="profileEmailInput" class="input" type="email" placeholder="voce@email.com" />
 
       <label class="label">Endereço</label>
       <input id="profileAddressInput" class="input" type="text" placeholder="Rua, bairro" />

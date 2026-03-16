@@ -21,6 +21,26 @@ const app = FirebaseApp.initializeApp(firebaseConfig);
 const db = Firestore.getFirestore(app);
 const auth = Auth.getAuth(app);
 
+
+const MP_FUNCTIONS_BASE_URL = "http://127.0.0.1:5001/japed-e09f2/us-central1";
+const MP_PUBLIC_KEY_STORAGE_KEY = "japed:mpPublicKey";
+
+function getMercadoPagoPublicKey(){
+  try{
+    const fromWindow = String(globalThis.MP_PUBLIC_KEY || "").trim();
+    const fromStorage = String(localStorage.getItem(MP_PUBLIC_KEY_STORAGE_KEY) || "").trim();
+    const fromConfig = String(state?.config?.payments?.mercadoPagoPublicKey || "").trim();
+    const key = fromWindow || fromStorage || fromConfig;
+    if (key && fromStorage !== key){
+      localStorage.setItem(MP_PUBLIC_KEY_STORAGE_KEY, key);
+    }
+    return key;
+  }catch(_){
+    return String(globalThis.MP_PUBLIC_KEY || "").trim();
+  }
+}
+
+
 /* =========================
    STATE (precisa existir ANTES do onAuthStateChanged)
    ========================= */
@@ -43,6 +63,20 @@ const state = {
   unsubChat: null,
   selectedCategory: "Todos",
   categories: [],
+  mp: {
+    currentOrderId: null,
+    currentPaymentId: null,
+    currentPaymentStatus: "",
+    pixCode: "",
+    qrCodeBase64: "",
+    cardBrickController: null,
+    cardBrickKey: "",
+    activeMethod: "",
+    lastOrderTotal: 0,
+    pixPollTimer: null,
+    pixPollBusy: false,
+    successOverlayTimer: null
+  },
 
   // (adicionado) Chat unread / notificações
   chatUnread: 0,
@@ -1198,23 +1232,26 @@ function openCheckout() {
   }
 
   ensureCheckoutUI();
+  fillCheckoutWithProfile(true);
   updateCheckoutUIFromConfig();
   try{ _bindDeliveryAddressEvents(); }catch(_){ }
   renderCheckoutSummary();
   updateCheckoutTotals();
   updateConfirmOrderButton(false);
-  fillCheckoutWithProfile();
   showTab("checkout");
   try { window.scrollTo({ top: 0, behavior: "instant" }); } catch(_) { window.scrollTo(0,0); }
 }
 
 function closeCheckout() {
+  resetMercadoPagoState();
   showTab("cart");
 }
 
 function clearCheckoutInputs() {
   document.getElementById("custName").value = "";
   document.getElementById("custPhone").value = "";
+  const emailEl = document.getElementById("custEmail");
+  if (emailEl) emailEl.value = "";
   document.getElementById("custAddr").value = "";
   const couponInput = document.getElementById("coCouponInput");
   if (couponInput) couponInput.value = "";
@@ -1261,6 +1298,7 @@ function renderCheckoutSummary(){
   if (stickyBox) stickyBox.innerHTML = summaryHtml;
 }
 
+
 function updateConfirmOrderButton(isLoading = false){
   const btn = document.getElementById('confirmOrderBtn');
   if (!btn) return;
@@ -1268,8 +1306,20 @@ function updateConfirmOrderButton(isLoading = false){
   btn.classList.toggle('is-loading', !!isLoading);
   const main = btn.querySelector('.checkoutConfirmBtn__main');
   const sub = btn.querySelector('.checkoutConfirmBtn__sub');
-  if (main) main.textContent = isLoading ? 'Enviando pedido...' : 'Confirmar pedido';
-  if (sub) sub.textContent = isLoading ? 'Aguarde, estamos registrando seu pedido' : 'Revise os dados antes de enviar';
+
+  let idleMain = 'Confirmar pedido';
+  let idleSub = 'Revise os dados antes de enviar';
+
+  if (state.paymentMethod === 'pix' && shouldUseInlineMercadoPagoPix()){
+    idleMain = state.mp.currentPaymentId ? 'QR PIX gerado' : 'Gerar PIX';
+    idleSub = state.mp.currentPaymentId ? 'O QR Code está logo abaixo' : 'Gerar QR Code e código Pix no checkout';
+  } else if (state.paymentMethod === 'card' && shouldUseInlineMercadoPagoCard()){
+    idleMain = state.mp.currentOrderId ? 'Pagar com cartão' : 'Continuar para cartão';
+    idleSub = state.mp.currentOrderId ? 'Preencha os dados do cartão abaixo' : 'Abrir formulário de cartão nesta tela';
+  }
+
+  if (main) main.textContent = isLoading ? 'Processando...' : idleMain;
+  if (sub) sub.textContent = isLoading ? 'Aguarde, estamos preparando o pagamento' : idleSub;
 }
 
 function updateCheckoutAddressTip(){
@@ -1513,6 +1563,9 @@ function updateCheckoutUIFromConfig(){
     if (pay.note) parts.push(pay.note);
     payNote.textContent = parts.join(" • ");
   }
+
+  renderInlinePaymentUI();
+  updateConfirmOrderButton(false);
 
   // Cupom
   const couponBox = document.getElementById("coCouponBox");
@@ -1861,7 +1914,7 @@ function updateCheckoutTotals(){
    Criar pedido no Firestore
    ========================= */
 
-async function createOrder() {
+async function createOrder(options = {}) {
   await ensureAnonAuth();
 
   // garante uid atual (rules do chat exigem customerUid == request.auth.uid)
@@ -1878,8 +1931,11 @@ async function createOrder() {
   // ✅ rules do chat exigem customerUid == request.auth.uid
   if (!state.customerUid) return alert("Falha no login anônimo. Recarregue a página e tente novamente.");
 
+  saveCheckoutFieldsToProfile();
+
   const name = (document.getElementById("custName").value || "").trim();
   const phone = (document.getElementById("custPhone").value || "").trim();
+  const email = (document.getElementById("custEmail")?.value || "").trim();
   const address = (document.getElementById("custAddr").value || "").trim();
 
   if (state.checkoutMode === "delivery" && !address) return alert("Digite seu endereço.");
@@ -1918,13 +1974,15 @@ async function createOrder() {
     pickupNote: (state.checkoutMode === "pickup" ? (address || "") : null)
   };
 
+  const initialStatus = (options?.status || "recebido");
+
   const orderData = {
-    status: "recebido",
+    status: initialStatus,
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
     customerUid: state.customerUid || null,
-    customer: { name, phone, address },
+    customer: { name, phone, email, address },
     checkout,
     items: state.cart.map(i => ({
       id: i.id,
@@ -1995,6 +2053,400 @@ async function createOrder() {
 
   return newDoc.id;
 }
+
+
+function resetMercadoPagoState(options = {}){
+  stopPixAutoPolling();
+  const keepOrder = !!options.keepOrder;
+  const img = document.getElementById("mpPixQrImage");
+  const code = document.getElementById("mpPixCode");
+  const status = document.getElementById("mpPixStatus");
+  const cardMsg = document.getElementById("mpCardMsg");
+  const hint = document.getElementById("mpPaymentHint");
+
+  if (img) { img.src = ""; img.classList.add("hidden"); }
+  if (code) code.value = "";
+  if (status) status.textContent = "";
+  if (cardMsg) cardMsg.textContent = "";
+  if (hint) hint.textContent = "";
+
+  if (state.mp.cardBrickController?.unmount) {
+    try { state.mp.cardBrickController.unmount(); } catch(_) {}
+  }
+
+  state.mp.cardBrickController = null;
+  state.mp.cardBrickKey = "";
+  state.mp.currentPaymentId = null;
+  state.mp.currentPaymentStatus = "";
+  state.mp.pixCode = "";
+  state.mp.qrCodeBase64 = "";
+  state.mp.activeMethod = state.paymentMethod || "";
+  if (!keepOrder) {
+    state.mp.currentOrderId = null;
+    state.mp.lastOrderTotal = 0;
+  }
+  renderInlinePaymentUI();
+}
+
+function shouldUseInlineMercadoPagoPix(){
+  return state.paymentMethod === "pix";
+}
+
+function shouldUseInlineMercadoPagoCard(){
+  return state.paymentMethod === "card" && !!getMercadoPagoPublicKey() && typeof window.MercadoPago === "function";
+}
+
+function normalizeMercadoPagoEmail(value){
+  const email = String(value || "").trim().toLowerCase();
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(email);
+  return emailOk ? email : "";
+}
+
+function getCheckoutCustomerEmail(){
+  const raw = normalizeMercadoPagoEmail(document.getElementById("custEmail")?.value || "");
+  if (raw) return raw;
+  const profileEmail = normalizeMercadoPagoEmail(loadProfile()?.email || "");
+  if (profileEmail) return profileEmail;
+  const uid = String(auth.currentUser?.uid || state.customerUid || Date.now()).replace(/[^a-zA-Z0-9]/g, "") || Date.now();
+  return `cliente.${uid}@example.com`;
+}
+
+async function updateOrderPaymentState(orderId, patch = {}){
+  if (!orderId || !state.restaurant?.id) return;
+  const orderRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders", orderId);
+  const publicRef = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", orderId);
+  const safePatch = {
+    ...patch,
+    updatedAt: Firestore.serverTimestamp()
+  };
+  try { await Firestore.setDoc(orderRef, safePatch, { merge: true }); } catch(e){ console.warn("Falha ao atualizar order:", e?.message || e); }
+  try { await Firestore.setDoc(publicRef, safePatch, { merge: true }); } catch(e){ console.warn("Falha ao atualizar orders_public:", e?.message || e); }
+}
+
+function stopPixAutoPolling(){
+  if (state.mp.pixPollTimer){
+    clearInterval(state.mp.pixPollTimer);
+    state.mp.pixPollTimer = null;
+  }
+  state.mp.pixPollBusy = false;
+}
+
+function showPaymentSuccessOverlay(message = "Pagamento efetuado com sucesso!"){
+  const existing = document.getElementById("paymentSuccessOverlay");
+  if (existing) existing.remove();
+
+  const overlay = document.createElement("div");
+  overlay.id = "paymentSuccessOverlay";
+  overlay.style.cssText = [
+    "position:fixed",
+    "inset:0",
+    "z-index:99999",
+    "display:flex",
+    "align-items:center",
+    "justify-content:center",
+    "padding:20px",
+    "background:rgba(0,0,0,.55)"
+  ].join(";");
+
+  overlay.innerHTML = `
+    <div style="width:min(420px,100%);background:#111827;border:1px solid rgba(255,255,255,.12);border-radius:24px;padding:28px 22px;box-shadow:0 30px 80px rgba(0,0,0,.45);text-align:center;color:#fff;">
+      <div style="width:78px;height:78px;border-radius:999px;margin:0 auto 16px;background:linear-gradient(135deg,#16a34a,#22c55e);display:flex;align-items:center;justify-content:center;font-size:38px;font-weight:900;">✓</div>
+      <div style="font-size:24px;font-weight:800;line-height:1.1;">Pagamento aprovado</div>
+      <div style="margin-top:10px;font-size:15px;line-height:1.5;color:rgba(255,255,255,.78);">${message}</div>
+    </div>
+  `;
+
+  document.body.appendChild(overlay);
+
+  if (state.mp.successOverlayTimer) clearTimeout(state.mp.successOverlayTimer);
+  state.mp.successOverlayTimer = setTimeout(() => {
+    overlay.remove();
+    state.mp.successOverlayTimer = null;
+  }, 2200);
+}
+
+function startPixAutoPolling(){
+  stopPixAutoPolling();
+  if (!state.mp.currentPaymentId || !state.mp.currentOrderId) return;
+
+  state.mp.pixPollTimer = setInterval(async () => {
+    if (state.mp.pixPollBusy || !state.mp.currentPaymentId || !state.mp.currentOrderId) return;
+    state.mp.pixPollBusy = true;
+    try {
+      await checkInlinePixPaymentStatus({ silent: true, auto: true });
+    } catch (err) {
+      console.warn("Falha ao verificar PIX automaticamente:", err?.message || err);
+    } finally {
+      state.mp.pixPollBusy = false;
+    }
+  }, 4000);
+}
+
+function finishOrderFlow(orderId){
+  stopPixAutoPolling();
+  state.cart = [];
+  renderCartUI();
+
+  closeCheckout();
+  clearCheckoutInputs();
+
+  state.currentOrderId = orderId;
+  setOrdersUI(true);
+  openTrackScreen(orderId);
+  startTrackingOrder(orderId);
+}
+
+function renderInlinePaymentUI(){
+  const wrap = document.getElementById("mpInlinePaymentBox");
+  const pixBox = document.getElementById("mpPixBox");
+  const cardBox = document.getElementById("mpCardBox");
+  const hint = document.getElementById("mpPaymentHint");
+  const cardMsg = document.getElementById("mpCardMsg");
+  if (!wrap || !pixBox || !cardBox) return;
+
+  const usePix = shouldUseInlineMercadoPagoPix();
+  const useCard = state.paymentMethod === "card";
+
+  wrap.classList.toggle("hidden", !(usePix || useCard));
+  pixBox.classList.toggle("hidden", !usePix);
+  cardBox.classList.toggle("hidden", !useCard);
+
+  if (hint){
+    if (usePix){
+      hint.textContent = state.mp.currentPaymentId
+        ? "Use o QR Code ou o código Pix abaixo. O checkout verifica o pagamento automaticamente."
+        : "Ao confirmar, o app gera o QR Code Pix aqui mesmo no checkout e acompanha o pagamento automaticamente.";
+    } else if (useCard){
+      hint.textContent = shouldUseInlineMercadoPagoCard()
+        ? (state.mp.currentOrderId ? "Preencha o cartão abaixo para pagar sem sair do app." : "Ao confirmar, o formulário de cartão aparece aqui nesta tela.")
+        : "Para usar cartão integrado nesta tela, adicione sua Public Key do Mercado Pago no app.";
+    } else {
+      hint.textContent = "";
+    }
+  }
+
+  if (cardMsg && useCard && !shouldUseInlineMercadoPagoCard()){
+    cardMsg.textContent = "Cartão embutido indisponível: falta configurar a Public Key do Mercado Pago.";
+  } else if (cardMsg && !state.mp.currentOrderId){
+    cardMsg.textContent = "";
+  }
+}
+
+async function createInlinePixPayment(orderId, total){
+  const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/createMercadoPagoPixPayment`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      restaurantId: state.restaurant?.id || "",
+      orderId,
+      amount: Number(total || 0),
+      description: `Pedido ${state.currentOrderNumber || orderId}`,
+      payer: {
+        email: getCheckoutCustomerEmail(),
+        first_name: (document.getElementById("custName")?.value || "Cliente").trim(),
+      }
+    })
+  });
+
+  const data = await response.json();
+  if (!response.ok || !data?.paymentId) {
+    throw new Error(data?.error || "Não foi possível gerar o PIX.");
+  }
+
+  state.mp.currentPaymentId = data.paymentId;
+  state.mp.currentPaymentStatus = data.status || "pending";
+  state.mp.pixCode = data.qrCode || "";
+  state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
+
+  const img = document.getElementById("mpPixQrImage");
+  const code = document.getElementById("mpPixCode");
+  const status = document.getElementById("mpPixStatus");
+
+  if (img && data.qrCodeBase64){
+    img.src = `data:image/png;base64,${data.qrCodeBase64}`;
+    img.classList.remove("hidden");
+  }
+  if (code) code.value = data.qrCode || "";
+  if (status) status.textContent = "PIX gerado. Aguardando pagamento...";
+
+  await updateOrderPaymentState(orderId, {
+    status: "aguardando_pagamento",
+    paymentStatus: data.status || "pending",
+    mpPaymentId: data.paymentId,
+    mpPaymentMethod: "pix"
+  });
+
+  updateConfirmOrderButton(false);
+  renderInlinePaymentUI();
+  startPixAutoPolling();
+}
+
+async function checkInlinePixPaymentStatus(options = {}){
+  if (!state.mp.currentPaymentId || !state.mp.currentOrderId) return;
+  const { silent = false, auto = false } = options;
+  const statusEl = document.getElementById("mpPixStatus");
+  if (!silent && statusEl) statusEl.textContent = auto ? "Confirmando pagamento..." : "Verificando pagamento...";
+
+  const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/getMercadoPagoPaymentStatus`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      restaurantId: state.restaurant?.id || "",
+      orderId: state.mp.currentOrderId,
+      paymentId: state.mp.currentPaymentId
+    })
+  });
+  const data = await response.json();
+  if (!response.ok) throw new Error(data?.error || "Falha ao consultar pagamento.");
+
+  state.mp.currentPaymentStatus = data.status || "";
+  if (data.status === "approved"){
+    await updateOrderPaymentState(state.mp.currentOrderId, {
+      status: "recebido",
+      paymentStatus: "approved",
+      mpPaymentId: state.mp.currentPaymentId,
+      mpPaymentMethod: "pix"
+    });
+    if (statusEl) statusEl.textContent = "Pagamento aprovado ✅";
+    const orderId = state.mp.currentOrderId;
+    stopPixAutoPolling();
+    showPaymentSuccessOverlay("Pagamento efetuado com sucesso! Fechando o checkout...");
+    setTimeout(() => {
+      resetMercadoPagoState();
+      finishOrderFlow(orderId);
+    }, 1400);
+    return;
+  }
+
+  if (statusEl && !silent) {
+    statusEl.textContent = data.status === "pending"
+      ? "Pagamento ainda pendente. Assim que cair, o checkout fecha sozinho."
+      : `Status atual: ${data.status || "desconhecido"}`;
+  }
+}
+
+async function ensureInlineCardBrick(orderId, total){
+  if (!shouldUseInlineMercadoPagoCard()) {
+    renderInlinePaymentUI();
+    throw new Error("Public Key do Mercado Pago não configurada para cartão embutido.");
+  }
+
+  const publicKey = getMercadoPagoPublicKey();
+  const brickKey = `${orderId}:${Number(total || 0).toFixed(2)}`;
+
+  if (state.mp.cardBrickKey === brickKey && state.mp.cardBrickController) {
+    renderInlinePaymentUI();
+    return;
+  }
+
+  if (state.mp.cardBrickController?.unmount) {
+    try { state.mp.cardBrickController.unmount(); } catch(_) {}
+  }
+
+  const cardMsg = document.getElementById("mpCardMsg");
+  if (cardMsg) cardMsg.textContent = "Carregando formulário do cartão...";
+
+  const mp = new window.MercadoPago(publicKey, { locale: "pt-BR" });
+  const bricksBuilder = mp.bricks();
+
+  state.mp.cardBrickController = await bricksBuilder.create("cardPayment", "mpCardBrickContainer", {
+    initialization: {
+      amount: Number(total || 0)
+    },
+    customization: {
+      visual: { style: { theme: "default" } }
+    },
+    callbacks: {
+      onReady: () => {
+        if (cardMsg) cardMsg.textContent = "Preencha os dados do cartão para concluir.";
+      },
+      onSubmit: async (cardFormData) => {
+        if (cardMsg) cardMsg.textContent = "Processando cartão...";
+        const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/createMercadoPagoCardPayment`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            restaurantId: state.restaurant?.id || "",
+            orderId,
+            transaction_amount: Number(total || 0),
+            description: `Pedido ${state.currentOrderNumber || orderId}`,
+            payer: {
+              email: getCheckoutCustomerEmail(),
+              first_name: (document.getElementById("custName")?.value || "Cliente").trim(),
+              identification: cardFormData?.payer?.identification || null
+            },
+            formData: cardFormData
+          })
+        });
+
+        const data = await response.json();
+
+        if (!response.ok) {
+          if (cardMsg) cardMsg.textContent = data?.error || "Falha no pagamento com cartão.";
+          throw new Error(data?.error || "Falha no pagamento com cartão.");
+        }
+
+        state.mp.currentPaymentId = data.paymentId || null;
+        state.mp.currentPaymentStatus = data.status || "";
+
+        if (data.status === "approved"){
+          await updateOrderPaymentState(orderId, {
+            status: "recebido",
+            paymentStatus: "approved",
+            mpPaymentId: data.paymentId || null,
+            mpPaymentMethod: "card"
+          });
+          if (cardMsg) cardMsg.textContent = "Pagamento aprovado ✅";
+          resetMercadoPagoState();
+          finishOrderFlow(orderId);
+          return;
+        }
+
+        await updateOrderPaymentState(orderId, {
+          status: "aguardando_pagamento",
+          paymentStatus: data.status || "pending",
+          mpPaymentId: data.paymentId || null,
+          mpPaymentMethod: "card"
+        });
+
+        if (cardMsg) cardMsg.textContent = `Status do pagamento: ${data.status || "pendente"}`;
+      },
+      onError: (error) => {
+        console.error("Card Brick error:", error);
+        if (cardMsg) cardMsg.textContent = "Falha ao carregar o cartão. Confira a Public Key e os dados do comprador.";
+      }
+    }
+  });
+
+  state.mp.cardBrickKey = brickKey;
+  renderInlinePaymentUI();
+}
+
+async function startInlineMercadoPagoFlow(){
+  const totalsCalc = computeOrderTotals();
+  const total = Number(totalsCalc?.total || 0);
+
+  if (!state.mp.currentOrderId){
+    state.mp.currentOrderId = await createOrder({ status: "aguardando_pagamento" });
+    state.mp.lastOrderTotal = total;
+  }
+
+  if (!state.mp.currentOrderId) return;
+
+  renderInlinePaymentUI();
+
+  if (state.paymentMethod === "pix"){
+    if (!state.mp.currentPaymentId){
+      await createInlinePixPayment(state.mp.currentOrderId, total);
+    }
+    return;
+  }
+
+  if (state.paymentMethod === "card"){
+    await ensureInlineCardBrick(state.mp.currentOrderId, total);
+  }
+}
+
 
 /* =========================
    Tabs + Chat Drawer + Tracking
@@ -2655,34 +3107,30 @@ if (openChatBtn) openChatBtn.addEventListener("click", () => {
   document.getElementById("closeProductBackdrop")?.addEventListener("click", closeProductModal);
   document.getElementById("pmAddCart")?.addEventListener("click", addConfiguredToCart);
 
-  // Confirmar pedido
-  document.getElementById("confirmOrderBtn")?.addEventListener("click", async () => {
-    updateConfirmOrderButton(true);
-    try {
-      const orderId = await createOrder();
-      if (!orderId) {
-        updateConfirmOrderButton(false);
-        return;
-      }
-
-      state.cart = [];
-      renderCartUI();
-
-      closeCheckout();
-      clearCheckoutInputs();
-
-      state.currentOrderId = orderId;
-      setOrdersUI(true);
-      openTrackScreen(orderId);
-      startTrackingOrder(orderId);
-
-    } catch (err) {
-      console.error(err);
-      alert("Erro ao criar pedido. Veja o console (F12).");
-    } finally {
-      updateConfirmOrderButton(false);
+// Confirmar pedido
+document.getElementById("confirmOrderBtn")?.addEventListener("click", async () => {
+  updateConfirmOrderButton(true);
+  try {
+    if (shouldUseInlineMercadoPagoPix() || shouldUseInlineMercadoPagoCard()) {
+      await startInlineMercadoPagoFlow();
+      return;
     }
-  });
+
+    const orderId = await createOrder();
+    if (!orderId) {
+      updateConfirmOrderButton(false);
+      return;
+    }
+
+    finishOrderFlow(orderId);
+
+  } catch (err) {
+    console.error(err);
+    alert("Erro ao processar o checkout. Veja o console (F12).");
+  } finally {
+    updateConfirmOrderButton(false);
+  }
+});
 
   // Carregar dados do restaurante
   state.slug = getSlug();
@@ -2874,10 +3322,24 @@ async function logoutProfile(){
 }
 const PROFILE_STORAGE_KEY = "client_profile_v2";
 
+function normalizePhoneBR(value){
+  return String(value || "").replace(/\D+/g, "").trim();
+}
+
+function buildProfileCheckoutAddress(data){
+  return [
+    data?.address || "",
+    data?.number ? `Nº ${data.number}` : "",
+    data?.complement || ""
+  ].filter(Boolean).join(" - ");
+}
+
 function getDefaultProfile(){
   return {
     avatar: "🙂",
     name: "",
+    phone: "",
+    email: "",
     address: "",
     number: "",
     complement: "",
@@ -2901,6 +3363,8 @@ function saveProfile(data){
   const safe = {
     avatar: data?.avatar ?? current.avatar ?? "🙂",
     name: (data?.name ?? current.name ?? "").trim(),
+    phone: normalizePhoneBR(data?.phone ?? current.phone ?? ""),
+    email: String(data?.email ?? current.email ?? "").trim(),
     address: (data?.address ?? current.address ?? "").trim(),
     number: (data?.number ?? current.number ?? "").trim(),
     complement: (data?.complement ?? current.complement ?? "").trim(),
@@ -2921,6 +3385,8 @@ function renderProfileForm(){
   const xpFill = document.getElementById("profileXpBarFill");
 
   const nameInput = document.getElementById("profileNameInput");
+  const phoneInput = document.getElementById("profilePhoneInput");
+  const emailInput = document.getElementById("profileEmailInput");
   const addressInput = document.getElementById("profileAddressInput");
   const numberInput = document.getElementById("profileNumberInput");
   const complementInput = document.getElementById("profileComplementInput");
@@ -2934,6 +3400,8 @@ function renderProfileForm(){
   if (xpHint) xpHint.textContent = `${Number(data.xp || 0)} XP • Toque para ver benefícios e como funciona`;
 
   if (nameInput) nameInput.value = data.name || "";
+  if (phoneInput) phoneInput.value = data.phone || "";
+  if (emailInput) emailInput.value = data.email || "";
   if (addressInput) addressInput.value = data.address || "";
   if (numberInput) numberInput.value = data.number || "";
   if (complementInput) complementInput.value = data.complement || "";
@@ -2965,6 +3433,8 @@ function handleSaveProfileData(){
   const current = loadProfile();
 
   const name = document.getElementById("profileNameInput")?.value || "";
+  const phone = document.getElementById("profilePhoneInput")?.value || "";
+  const email = document.getElementById("profileEmailInput")?.value || "";
   const address = document.getElementById("profileAddressInput")?.value || "";
   const number = document.getElementById("profileNumberInput")?.value || "";
   const complement = document.getElementById("profileComplementInput")?.value || "";
@@ -2972,12 +3442,15 @@ function handleSaveProfileData(){
   saveProfile({
     ...current,
     name,
+    phone,
+    email,
     address,
     number,
     complement
   });
 
   renderProfileForm();
+  syncCheckoutInputsWithProfile(false);
   alert("Dados salvos com sucesso.");
 }
 
@@ -3011,25 +3484,72 @@ function syncLevelsDots(){
   dots.forEach((dot, i) => dot.classList.toggle("active", i === index));
 }
 
-function fillCheckoutWithProfile(){
+function syncCheckoutInputsWithProfile(force = false){
   const data = loadProfile();
 
   const checkoutName = document.getElementById("custName");
+  const checkoutPhone = document.getElementById("custPhone");
+  const checkoutEmail = document.getElementById("custEmail");
   const checkoutAddress = document.getElementById("custAddr");
+  const fullAddress = buildProfileCheckoutAddress(data);
 
-  if (checkoutName && !checkoutName.value.trim()) {
+  if (checkoutName && (force || !checkoutName.value.trim())) {
     checkoutName.value = data.name || "";
   }
 
-  if (checkoutAddress && !checkoutAddress.value.trim()) {
-    checkoutAddress.value = [
-      data.address || "",
-      data.number ? `Nº ${data.number}` : "",
-      data.complement || ""
-    ].filter(Boolean).join(" - ");
+  if (checkoutPhone && (force || !checkoutPhone.value.trim())) {
+    checkoutPhone.value = data.phone || "";
   }
 
-  alert("Dados do perfil aplicados no checkout.");
+  if (checkoutEmail && (force || !checkoutEmail.value.trim())) {
+    checkoutEmail.value = data.email || "";
+  }
+
+  if (checkoutAddress && (force || !checkoutAddress.value.trim())) {
+    checkoutAddress.value = fullAddress;
+  }
+}
+
+function saveCheckoutFieldsToProfile(){
+  const current = loadProfile();
+
+  const name = (document.getElementById("custName")?.value || "").trim();
+  const phone = normalizePhoneBR(document.getElementById("custPhone")?.value || "");
+  const email = String(document.getElementById("custEmail")?.value || "").trim();
+  const rawAddress = (document.getElementById("custAddr")?.value || "").trim();
+
+  const profileAddress = [current.address || "", current.number ? `Nº ${current.number}` : "", current.complement || ""]
+    .filter(Boolean)
+    .join(" - ");
+
+  saveProfile({
+    ...current,
+    name: name || current.name || "",
+    phone: phone || current.phone || "",
+    email: email || current.email || "",
+    address: rawAddress && rawAddress !== profileAddress ? rawAddress : (current.address || ""),
+    number: rawAddress && rawAddress !== profileAddress ? "" : (current.number || ""),
+    complement: rawAddress && rawAddress !== profileAddress ? "" : (current.complement || "")
+  });
+}
+
+function bindCheckoutProfileAutosave(){
+  const ids = ["custName", "custPhone", "custEmail", "custAddr"];
+  ids.forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el || el.dataset.profileBound === "1") return;
+    el.dataset.profileBound = "1";
+
+    const persist = () => saveCheckoutFieldsToProfile();
+    el.addEventListener("input", persist);
+    el.addEventListener("change", persist);
+    el.addEventListener("blur", persist);
+  });
+}
+
+function fillCheckoutWithProfile(force = false){
+  syncCheckoutInputsWithProfile(force);
+  bindCheckoutProfileAutosave();
 }
 
 boot();
@@ -3048,6 +3568,23 @@ document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fi
 
 renderProfileForm();
 bindProfileAvatarPicker();
+fillCheckoutWithProfile(false);
+document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
+  const code = document.getElementById("mpPixCode")?.value || "";
+  if (!code) return;
+  try {
+    await navigator.clipboard.writeText(code);
+    const status = document.getElementById("mpPixStatus");
+    if (status) status.textContent = "Código Pix copiado ✅";
+  } catch(_) {}
+});
+const checkPixStatusBtn = document.getElementById("checkPixStatusBtn");
+if (checkPixStatusBtn) {
+  checkPixStatusBtn.style.display = "none";
+  checkPixStatusBtn.addEventListener("click", async () => {
+    try { await checkInlinePixPaymentStatus(); } catch (err) { console.error(err); alert(err?.message || "Falha ao verificar pagamento."); }
+  });
+}
   document.getElementById("saveProfileBtn")?.addEventListener("click", handleSaveProfileData);
 /* =========================
    PWA: Service Worker
@@ -3205,4 +3742,28 @@ function syncMenuChrome(){
   if (promoMount) {
     promoMount.classList.toggle("hidden", !isMenuActive);
   }
+}
+async function pagarComMercadoPago(total, orderId) {
+  const response = await fetch(
+    "http://127.0.0.1:5001/japed-e09f2/us-central1/createMercadoPagoPreference",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        amount: Number(total),
+        title: "Pedido do restaurante",
+        orderId: String(orderId)
+      })
+    }
+  );
+
+  const data = await response.json();
+
+  if (!response.ok || !data.init_point) {
+    throw new Error(data.error || "Não foi possível iniciar o pagamento");
+  }
+
+  window.location.href = data.init_point;
 }
