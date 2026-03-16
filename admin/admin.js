@@ -1093,7 +1093,7 @@ Auth.onAuthStateChanged(auth, async (user) => {
     const target = document.getElementById("page-" + page);
     if (target) target.classList.add("active");
     if (titleEl) {
-      const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", customers:"Clientes", settings:"Configurações" };
+      const map = { orders:"Pedidos", products:"Produtos", finance:"Financeiro", customers:"Clientes", promos:"Promoções & Cupons", settings:"Configurações" };
       titleEl.textContent = map[page] || "Pedidos";
     }
 
@@ -1110,6 +1110,11 @@ Auth.onAuthStateChanged(auth, async (user) => {
     // ✅ Inicia Clientes/Feedbacks só quando abre a tela
     if (page === "customers") {
       try { _startCustomersPanel(); } catch (_) {}
+    }
+
+    // ✅ Inicia Promoções & Cupons só quando abre a tela
+    if (page === "promos") {
+      try { _startPromosPanel(); } catch (_) {}
     }
 
     // ✅ Inicia Configurações só quando abre a tela
@@ -2807,6 +2812,8 @@ function _applySettingsToForm(cfg){
   _setVal("setNotice", promo.notice);
   _setVal("setPromoEndsAt", _toDatetimeLocalValue(promo.endsAt));
 
+  try { _applyPromosPanelData(cfg); } catch (_) {}
+
   _setChecked("setSoundNewOrder", notif.soundNewOrder !== false); // default true
   _setChecked("setSoundChat", notif.soundChat !== false); // default true
   _setVal("setVolume", (notif.volume ?? "") === "" ? "" : String(notif.volume ?? ""));
@@ -2874,7 +2881,9 @@ promo: {
   couponCode: _val("setCouponCode").trim(),
   couponPct: _intOrNull(_val("setCouponPct")),
   notice: _val("setNotice").trim(),
-  endsAt: _promoEndsAtISOFromInput()
+  endsAt: _promoEndsAtISOFromInput(),
+  campaigns: _buildPromoCampaignsPayload(),
+  featuredCampaignId: (__JPED_PROMO_FEATURED_ID || "")
 },
     notifications: {
       soundNewOrder: _checked("setSoundNewOrder"),
@@ -3353,6 +3362,270 @@ try{ _wirePromoPreview(); }catch(_){}
     console.warn("Falha ao iniciar listener settings:", e?.code || e, e?.message || e);
   }
 }
+
+
+/* ===== Promoções & Cupons (painel dedicado) ===== */
+let __JPED_PROMOS_STARTED = false;
+let __JPED_PROMO_CAMPAIGNS = [];
+let __JPED_PROMO_EDIT_ID = null;
+let __JPED_PROMO_FEATURED_ID = "";
+
+function _promoPanelEl(id){ return document.getElementById(id); }
+function _promoNormId(){ return `promo_${Date.now()}_${Math.random().toString(36).slice(2,8)}`; }
+function _promoFloat(v){
+  const s = String(v ?? "").trim().replace(",", ".");
+  if (!s) return null;
+  const n = Number(s);
+  return Number.isFinite(n) ? n : null;
+}
+function _promoInt(v){
+  const n = parseInt(String(v ?? "").trim(), 10);
+  return Number.isFinite(n) ? n : null;
+}
+function _promoToLocal(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return "";
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const mi = String(d.getMinutes()).padStart(2, "0");
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
+function _promoToISOFromField(id){
+  const v = String(_promoPanelEl(id)?.value || "").trim();
+  if (!v) return "";
+  const d = new Date(v);
+  return Number.isNaN(d.getTime()) ? "" : d.toISOString();
+}
+function _promoBenefitLabel(type, value){
+  if (type === "fixed") return value != null ? `${brl(value)} OFF` : "Desconto fixo";
+  if (type === "free_delivery") return "Frete grátis";
+  return value != null ? `${value}% OFF` : "Desconto";
+}
+function _promoCriteriaText(c){
+  const parts = [];
+  if (c?.inactiveDays) parts.push(`${c.inactiveDays}+ dias sem pedir`);
+  if (c?.minOrder) parts.push(`mín. ${brl(c.minOrder)}`);
+  if (c?.minLevel) parts.push(`nível ${String(c.minLevel).toUpperCase()}`);
+  if (c?.usageLimit) parts.push(`limite ${c.usageLimit}`);
+  return parts.length ? parts.join(" • ") : "Sem critérios obrigatórios";
+}
+function _promoCampaignFromForm(){
+  return {
+    id: __JPED_PROMO_EDIT_ID || _promoNormId(),
+    name: String(_promoPanelEl("promoName")?.value || "").trim(),
+    code: String(_promoPanelEl("promoCode")?.value || "").trim().toUpperCase(),
+    type: String(_promoPanelEl("promoType")?.value || "percent").trim(),
+    value: _promoFloat(_promoPanelEl("promoValue")?.value),
+    minOrder: _promoFloat(_promoPanelEl("promoMinOrder")?.value),
+    inactiveDays: _promoInt(_promoPanelEl("promoInactiveDays")?.value),
+    minLevel: String(_promoPanelEl("promoMinLevel")?.value || "").trim(),
+    usageLimit: _promoInt(_promoPanelEl("promoUsageLimit")?.value),
+    startsAt: _promoToISOFromField("promoStartsAt"),
+    endsAt: _promoToISOFromField("promoEndsAtPanel"),
+    note: String(_promoPanelEl("promoNote")?.value || "").trim(),
+    active: !!_promoPanelEl("promoActive")?.checked,
+    autoApply: !!_promoPanelEl("promoAutoApply")?.checked,
+    featured: !!_promoPanelEl("promoFeatured")?.checked,
+    updatedAt: new Date().toISOString()
+  };
+}
+function _promoMirrorFeaturedToLegacy(){
+  const featured = __JPED_PROMO_CAMPAIGNS.find(x => x.id === __JPED_PROMO_FEATURED_ID) || __JPED_PROMO_CAMPAIGNS.find(x => x.featured) || null;
+  if (!featured) return;
+  try { _setChecked("setPromoOn", !!featured.active); } catch(_) {}
+  try { _setVal("setPromoTitle", featured.name || "Promoção especial"); } catch(_) {}
+  try { _setVal("setPromoSub", featured.note || _promoCriteriaText(featured)); } catch(_) {}
+  try { _setVal("setCouponCode", featured.code || ""); } catch(_) {}
+  try { _setVal("setCouponPct", featured.type === "percent" ? (featured.value ?? "") : ""); } catch(_) {}
+  try { _setVal("setNotice", featured.autoApply ? "Aplicado automaticamente quando elegível" : _promoCriteriaText(featured)); } catch(_) {}
+  try { _setVal("setPromoEndsAt", _promoToLocal(featured.endsAt || "")); } catch(_) {}
+}
+function _buildPromoCampaignsPayload(){
+  return (__JPED_PROMO_CAMPAIGNS || []).map(item => ({
+    id: item.id || _promoNormId(),
+    name: String(item.name || "").trim(),
+    code: String(item.code || "").trim().toUpperCase(),
+    type: String(item.type || "percent").trim(),
+    value: item.value == null ? null : Number(item.value),
+    minOrder: item.minOrder == null ? null : Number(item.minOrder),
+    inactiveDays: item.inactiveDays == null ? null : parseInt(item.inactiveDays,10),
+    minLevel: String(item.minLevel || "").trim(),
+    usageLimit: item.usageLimit == null ? null : parseInt(item.usageLimit,10),
+    startsAt: String(item.startsAt || "").trim(),
+    endsAt: String(item.endsAt || "").trim(),
+    note: String(item.note || "").trim(),
+    active: item.active !== false,
+    autoApply: !!item.autoApply,
+    featured: !!item.featured,
+    updatedAt: String(item.updatedAt || new Date().toISOString())
+  }));
+}
+function _resetPromoForm(){
+  __JPED_PROMO_EDIT_ID = null;
+  ["promoName","promoCode","promoValue","promoMinOrder","promoInactiveDays","promoUsageLimit","promoStartsAt","promoEndsAtPanel","promoNote"].forEach(id => { const el = _promoPanelEl(id); if (el) el.value = ""; });
+  const type = _promoPanelEl("promoType"); if (type) type.value = "percent";
+  const lvl = _promoPanelEl("promoMinLevel"); if (lvl) lvl.value = "";
+  const active = _promoPanelEl("promoActive"); if (active) active.checked = true;
+  const auto = _promoPanelEl("promoAutoApply"); if (auto) auto.checked = false;
+  const feat = _promoPanelEl("promoFeatured"); if (feat) feat.checked = false;
+  const mode = _promoPanelEl("promoEditModeLabel"); if (mode) mode.textContent = "Nova campanha";
+  const st = _promoPanelEl("promoFormStatus"); if (st) st.textContent = "Pronto para criar uma nova campanha.";
+}
+function _fillPromoForm(item){
+  if (!item) return;
+  __JPED_PROMO_EDIT_ID = item.id || null;
+  const map = { promoName:item.name, promoCode:item.code, promoValue:item.value, promoMinOrder:item.minOrder, promoInactiveDays:item.inactiveDays, promoUsageLimit:item.usageLimit, promoNote:item.note };
+  Object.keys(map).forEach(id => { const el = _promoPanelEl(id); if (el) el.value = (map[id] ?? "") === null ? "" : String(map[id] ?? ""); });
+  const type = _promoPanelEl("promoType"); if (type) type.value = item.type || "percent";
+  const lvl = _promoPanelEl("promoMinLevel"); if (lvl) lvl.value = item.minLevel || "";
+  const s = _promoPanelEl("promoStartsAt"); if (s) s.value = _promoToLocal(item.startsAt);
+  const e = _promoPanelEl("promoEndsAtPanel"); if (e) e.value = _promoToLocal(item.endsAt);
+  const active = _promoPanelEl("promoActive"); if (active) active.checked = item.active !== false;
+  const auto = _promoPanelEl("promoAutoApply"); if (auto) auto.checked = !!item.autoApply;
+  const feat = _promoPanelEl("promoFeatured"); if (feat) feat.checked = (__JPED_PROMO_FEATURED_ID === item.id) || !!item.featured;
+  const mode = _promoPanelEl("promoEditModeLabel"); if (mode) mode.textContent = "Editando campanha";
+  const st = _promoPanelEl("promoFormStatus"); if (st) st.textContent = `Editando: ${item.name || item.code || "campanha"}`;
+}
+function _applyPromosPanelData(cfg){
+  const promo = (cfg && cfg.promo) ? cfg.promo : {};
+  __JPED_PROMO_CAMPAIGNS = Array.isArray(promo.campaigns) ? promo.campaigns.map(x => Object.assign({}, x)) : [];
+  __JPED_PROMO_FEATURED_ID = String(promo.featuredCampaignId || ( (__JPED_PROMO_CAMPAIGNS.find(x => x && x.featured) || {}).id || "" ));
+  if (__JPED_PROMO_FEATURED_ID) {
+    __JPED_PROMO_CAMPAIGNS = __JPED_PROMO_CAMPAIGNS.map(x => Object.assign({}, x, { featured: x.id === __JPED_PROMO_FEATURED_ID }));
+  }
+  _renderPromosPanel();
+}
+function _promoPreviewSource(){
+  return (__JPED_PROMO_CAMPAIGNS.find(x => x.id === __JPED_PROMO_FEATURED_ID) || __JPED_PROMO_CAMPAIGNS.find(x => x.featured) || null);
+}
+function _renderPromosPanel(){
+  const host = _promoPanelEl("promoList");
+  const status = _promoPanelEl("promoStatusChip");
+  const sub = _promoPanelEl("promoAdminSub");
+  const total = __JPED_PROMO_CAMPAIGNS.length;
+  const active = __JPED_PROMO_CAMPAIGNS.filter(x => x.active !== false).length;
+  const featuredCount = __JPED_PROMO_CAMPAIGNS.filter(x => x.featured).length;
+  if (_promoPanelEl("promoCount")) _promoPanelEl("promoCount").textContent = String(total);
+  if (_promoPanelEl("promoActiveCount")) _promoPanelEl("promoActiveCount").textContent = String(active);
+  if (_promoPanelEl("promoFeaturedCount")) _promoPanelEl("promoFeaturedCount").textContent = String(featuredCount);
+  if (status) status.textContent = total ? `${total} campanha(s)` : "Sem campanhas";
+  if (sub) sub.textContent = total ? "Tudo salvo no config/app, compatível com o cupom do perfil do cliente." : "Crie campanhas para cupom, reativação e aumento de ticket médio.";
+  const featured = _promoPreviewSource();
+  if (_promoPanelEl("promoPreviewBadge")) _promoPanelEl("promoPreviewBadge").textContent = featured ? "Cupom em destaque ativo" : "Sem destaque";
+  if (_promoPanelEl("promoAdminPrevTitle")) _promoPanelEl("promoAdminPrevTitle").textContent = featured?.name || "Nenhuma campanha em destaque";
+  if (_promoPanelEl("promoAdminPrevSub")) _promoPanelEl("promoAdminPrevSub").textContent = featured?.note || (featured ? _promoCriteriaText(featured) : "Crie ou selecione uma campanha para aparecer aqui.");
+  if (_promoPanelEl("promoAdminPrevCoupon")) _promoPanelEl("promoAdminPrevCoupon").textContent = `CUPOM: ${featured?.code || "—"}`;
+  if (_promoPanelEl("promoAdminPrevNotice")) _promoPanelEl("promoAdminPrevNotice").textContent = `Aviso: ${featured ? _promoBenefitLabel(featured.type, featured.value) : "—"}`;
+  if (_promoPanelEl("promoAdminTag")) _promoPanelEl("promoAdminTag").textContent = featured?.active === false ? "PAUSADO" : "PROMO";
+  if (!host) return;
+  if (!total){ host.innerHTML = '<div class="promoItemEmpty">Nenhuma campanha criada ainda. Use o formulário acima para montar sua primeira promoção premium.</div>'; return; }
+  host.innerHTML = __JPED_PROMO_CAMPAIGNS.map(item => {
+    const criteria = _promoCriteriaText(item);
+    const starts = item.startsAt ? new Date(item.startsAt).toLocaleString("pt-BR") : "Agora";
+    const ends = item.endsAt ? new Date(item.endsAt).toLocaleString("pt-BR") : "Sem expiração";
+    return `
+      <div class="promoItem ${item.active === false ? 'promoMuted' : ''}" data-promo-id="${_escapeHtml(item.id || '')}">
+        <div class="promoItemTop">
+          <div>
+            <div class="promoItemName">${_escapeHtml(item.name || 'Campanha sem nome')}</div>
+            <div class="promoItemCode">${_escapeHtml(item.code || 'SEM-CUPOM')}</div>
+          </div>
+          <div class="promoMetaPill ${item.featured ? 'promoFeaturedRibbon' : ''}">${item.featured ? 'Destaque no cliente' : 'Campanha comum'}</div>
+        </div>
+        <div class="promoItemMeta">
+          <div class="promoMetaPill">${_escapeHtml(_promoBenefitLabel(item.type, item.value))}</div>
+          <div class="promoMetaPill">${_escapeHtml(criteria)}</div>
+          <div class="promoMetaPill">Início: ${_escapeHtml(starts)}</div>
+          <div class="promoMetaPill">Fim: ${_escapeHtml(ends)}</div>
+          <div class="promoMetaPill">${item.autoApply ? 'Auto aplicar' : 'Uso manual'}</div>
+        </div>
+        <div class="promoItemNote">${_escapeHtml(item.note || 'Sem observação adicional.')}</div>
+        <div class="promoItemActions">
+          <button class="ghost small" type="button" data-promo-edit="${_escapeHtml(item.id || '')}">Editar</button>
+          <button class="ghost small" type="button" data-promo-feature="${_escapeHtml(item.id || '')}">${item.featured ? 'Cupom destaque' : 'Definir destaque'}</button>
+          <button class="ghost small danger" type="button" data-promo-delete="${_escapeHtml(item.id || '')}">Excluir</button>
+        </div>
+      </div>`;
+  }).join("");
+}
+async function _savePromosPanel(){
+  if (!SUBSCRIPTION_OK) { alert("Assinatura expirada. Ative um plano para salvar promoções."); return; }
+  if (!ADMIN_OK) { try { await checkAdminAccess(); } catch(_) {} if (!ADMIN_OK) { alert("Sem permissão de admin."); return; } }
+  if (!RESTAURANT_ID) { alert("Sem restaurantId."); return; }
+
+  const draft = _promoCampaignFromForm();
+  if (!draft.name) { alert("Digite o nome da campanha."); return; }
+  if (!draft.code && !draft.autoApply) { alert("Digite um código de cupom ou marque aplicação automática."); return; }
+  if (draft.type !== "free_delivery" && (draft.value == null || draft.value <= 0)) { alert("Informe um valor válido para a campanha."); return; }
+
+  if (draft.featured) __JPED_PROMO_FEATURED_ID = draft.id;
+  __JPED_PROMO_CAMPAIGNS = (__JPED_PROMO_CAMPAIGNS || []).filter(x => x.id !== draft.id);
+  __JPED_PROMO_CAMPAIGNS.unshift(Object.assign({}, draft, { featured: __JPED_PROMO_FEATURED_ID === draft.id }));
+  __JPED_PROMO_CAMPAIGNS = __JPED_PROMO_CAMPAIGNS.map(x => Object.assign({}, x, { featured: x.id === __JPED_PROMO_FEATURED_ID }));
+
+  _promoMirrorFeaturedToLegacy();
+  const btn = _promoPanelEl("promoSaveBtn");
+  if (btn){ btn.disabled = true; btn.textContent = "Salvando..."; }
+  try{
+    const payload = _collectSettingsFromForm();
+    await Firestore.setDoc(_settingsDocRef(), payload, { merge:true });
+    _resetPromoForm();
+    _renderPromosPanel();
+  }catch(e){
+    console.warn("Falha ao salvar promoções:", e?.code || e, e?.message || e);
+    alert(e?.message || "Não foi possível salvar a campanha.");
+  }finally{
+    if (btn){ btn.disabled = false; btn.textContent = "Salvar campanha"; }
+  }
+}
+function _startPromosPanel(){
+  if (__JPED_PROMOS_STARTED) return;
+  __JPED_PROMOS_STARTED = true;
+  const saveBtn = _promoPanelEl("promoSaveBtn");
+  const reloadBtn = _promoPanelEl("promoReloadBtn");
+  const clearBtn = _promoPanelEl("promoClearBtn");
+  if (saveBtn) saveBtn.onclick = _savePromosPanel;
+  if (reloadBtn) reloadBtn.onclick = _reloadSettingsOnce;
+  if (clearBtn) clearBtn.onclick = _resetPromoForm;
+  const list = _promoPanelEl("promoList");
+  if (list && !list.dataset.bound){
+    list.dataset.bound = "1";
+    list.addEventListener("click", async (ev) => {
+      const editBtn = ev.target.closest("[data-promo-edit]");
+      const featBtn = ev.target.closest("[data-promo-feature]");
+      const delBtn = ev.target.closest("[data-promo-delete]");
+      if (editBtn){
+        const id = editBtn.getAttribute("data-promo-edit");
+        const item = __JPED_PROMO_CAMPAIGNS.find(x => x.id === id);
+        _fillPromoForm(item);
+        return;
+      }
+      if (featBtn){
+        const id = featBtn.getAttribute("data-promo-feature");
+        __JPED_PROMO_FEATURED_ID = id || "";
+        __JPED_PROMO_CAMPAIGNS = __JPED_PROMO_CAMPAIGNS.map(x => Object.assign({}, x, { featured: x.id === __JPED_PROMO_FEATURED_ID }));
+        _promoMirrorFeaturedToLegacy();
+        _renderPromosPanel();
+        return;
+      }
+      if (delBtn){
+        const id = delBtn.getAttribute("data-promo-delete");
+        __JPED_PROMO_CAMPAIGNS = __JPED_PROMO_CAMPAIGNS.filter(x => x.id !== id);
+        if (__JPED_PROMO_FEATURED_ID === id) __JPED_PROMO_FEATURED_ID = ((__JPED_PROMO_CAMPAIGNS[0] || {}).id || "");
+        __JPED_PROMO_CAMPAIGNS = __JPED_PROMO_CAMPAIGNS.map(x => Object.assign({}, x, { featured: x.id === __JPED_PROMO_FEATURED_ID }));
+        _promoMirrorFeaturedToLegacy();
+        _renderPromosPanel();
+      }
+    });
+  }
+  _resetPromoForm();
+  _reloadSettingsOnce();
+}
+
 async function salvarCupom(codigo) {
   if (!RESTAURANT_ID) return;
 

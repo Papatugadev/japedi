@@ -274,16 +274,22 @@
     </div>
   </main>
 <main id="profileView" class="view hidden">
-  <section class="profileHeroCard clean">
+  <section class="profileHeroCard clean profileHeroCard--premium">
     <button id="openProfileSettingsBtn" class="profileSettingsIcon" type="button" aria-label="Abrir configurações">
       <i data-lucide="settings-2"></i>
     </button>
 
-    <div class="profileHeroName" id="profileHeroName">Seu perfil</div>
+    <div class="profileHeroTopline">
+      <div class="profileHeroBadge">Cliente premium</div>
+      <div class="profileHeroMini" id="profileHeroMini">Personalize sua conta</div>
+    </div>
 
     <div class="profileHeroAvatarWrap">
-      <div class="profileHeroAvatar" id="profileAvatarPreview">🙂</div>
+      <div class="profileHeroAvatar" id="profileAvatarPreview">J</div>
     </div>
+
+    <div class="profileHeroName" id="profileHeroName">Seu perfil</div>
+    <div class="profileHeroSub" id="profileHeroSub">Faça login, envie sua foto e deixe seu perfil bonito.</div>
 
     <button id="openLevelsGuideBtn" class="profileXpCard" type="button" aria-label="Ver benefícios dos níveis">
       <div class="profileXpTop">
@@ -299,24 +305,104 @@
     </button>
   </section>
 
-  <div class="box profileBox">
-    <div class="profileSectionTitle">Escolha seu avatar</div>
-
-    <div class="avatarGrid" id="avatarGrid">
-      <button class="avatarOption is-active" type="button" data-avatar="🙂">🙂</button>
-      <button class="avatarOption" type="button" data-avatar="😎">😎</button>
-      <button class="avatarOption" type="button" data-avatar="🤠">🤠</button>
-      <button class="avatarOption" type="button" data-avatar="🧑‍🍳">🧑‍🍳</button>
-      <button class="avatarOption" type="button" data-avatar="👨‍💼">👨‍💼</button>
-      <button class="avatarOption" type="button" data-avatar="👩‍🦱">👩‍🦱</button>
-      <button class="avatarOption" type="button" data-avatar="🧔">🧔</button>
-      <button class="avatarOption" type="button" data-avatar="👩‍🎨">👩‍🎨</button>
+  <section class="profileTabsCard box">
+    <div class="profileTabs" id="profileTabs">
+      <button class="profileTab is-active" type="button" data-profile-tab="account">Conta</button>
+      <button class="profileTab" type="button" data-profile-tab="coupons">Cupons</button>
+      <button class="profileTab" type="button" data-profile-tab="photo">Foto</button>
     </div>
 
-    <button id="saveAvatarBtn" class="btn" type="button" style="margin-top:14px;">
-      Salvar avatar
-    </button>
-  </div>
+    <div class="profileTabPanel is-active" data-profile-panel="account">
+      <div class="profileInfoGrid">
+        <button class="profileInfoCard profileInfoCard--action" id="openProfileSettingsCard" type="button">
+          <div class="profileInfoCard__icon"><i data-lucide="user-round"></i></div>
+          <div>
+            <div class="profileInfoCard__title">Seus dados</div>
+            <div class="profileInfoCard__text">Nome, endereço, email e telefone em um só lugar.</div>
+          </div>
+        </button>
+
+        <button class="profileInfoCard profileInfoCard--action" id="useProfileOnCheckoutCard" type="button">
+          <div class="profileInfoCard__icon"><i data-lucide="shopping-bag"></i></div>
+          <div>
+            <div class="profileInfoCard__title">Usar no checkout</div>
+            <div class="profileInfoCard__text">Preenche seus dados automaticamente no pedido.</div>
+          </div>
+        </button>
+      </div>
+
+      <div class="profileLoginCard" id="profileGuestBox">
+        <div class="profileLoginCard__kicker">Acesso</div>
+        <div class="profileLoginCard__title">Entre para salvar seu perfil</div>
+        <div class="profileLoginCard__text">Continue com Google ou email e mantenha seus dados sincronizados.</div>
+
+        <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
+          Entrar com Google
+        </button>
+
+        <button id="openEmailAuthBtn" class="ghost profileGhostFull" type="button" style="margin-top:10px;width:100%;">
+          Entrar com email
+        </button>
+      </div>
+
+      <div id="profileUserBox" class="profileLoginCard profileLoginCard--connected hidden">
+        <div class="profileConnectedTop">
+          <div class="profileConnectedAvatar" id="profileConnectedAvatar">J</div>
+          <div>
+            <div class="profileLoginCard__kicker">Conta conectada</div>
+            <div class="profileLoginCard__title" id="profileUserName">Conta conectada</div>
+            <div class="profileLoginCard__text" id="profileUserEmail"></div>
+          </div>
+        </div>
+
+        <button id="logoutBtn" class="ghost profileGhostFull" type="button" style="margin-top:14px;width:100%;">
+          Sair
+        </button>
+      </div>
+    </div>
+
+    <div class="profileTabPanel" data-profile-panel="coupons">
+      <div class="profileCouponsHero">
+        <div class="profileCouponsHero__eyebrow">Promoções ativas</div>
+        <div class="profileCouponsHero__title">Seus cupons e benefícios</div>
+        <div class="profileCouponsHero__text" id="profileCouponsHeroText">Quando houver promoção ativa, ela vai aparecer aqui para você usar no checkout.</div>
+      </div>
+      <div id="profileCouponsList" class="profileCouponsList"></div>
+    </div>
+
+    <div class="profileTabPanel" data-profile-panel="photo">
+      <div class="profilePhotoCard">
+        <div class="profilePhotoPreviewWrap">
+          <div class="profilePhotoPreview" id="profilePhotoPreview">J</div>
+        </div>
+
+        <div class="profilePhotoText">
+          <div class="profilePhotoTitle">Sua foto de perfil</div>
+          <div class="profilePhotoSub">Sem foto, mostramos a primeira letra do seu nome. Se enviar uma foto, ela aparece no perfil.</div>
+        </div>
+
+        <input id="profilePhotoInput" class="hidden" type="file" accept="image/*" />
+        <button id="uploadProfilePhotoBtn" class="btn" type="button">Enviar foto</button>
+        <button id="removeProfilePhotoBtn" class="ghost profileGhostFull" type="button" style="margin-top:10px;width:100%;">Remover foto</button>
+
+        <div class="profileSectionTitle" style="margin-top:16px;">Avatar rápido</div>
+        <div class="avatarGrid" id="avatarGrid">
+          <button class="avatarOption is-active" type="button" data-avatar="🙂">🙂</button>
+          <button class="avatarOption" type="button" data-avatar="😎">😎</button>
+          <button class="avatarOption" type="button" data-avatar="🤠">🤠</button>
+          <button class="avatarOption" type="button" data-avatar="🧑‍🍳">🧑‍🍳</button>
+          <button class="avatarOption" type="button" data-avatar="👨‍💼">👨‍💼</button>
+          <button class="avatarOption" type="button" data-avatar="👩‍🦱">👩‍🦱</button>
+          <button class="avatarOption" type="button" data-avatar="🧔">🧔</button>
+          <button class="avatarOption" type="button" data-avatar="👩‍🎨">👩‍🎨</button>
+        </div>
+
+        <button id="saveAvatarBtn" class="btn profileSecondaryBtn" type="button" style="margin-top:14px;">
+          Salvar avatar rápido
+        </button>
+      </div>
+    </div>
+  </section>
 </main>
 <div id="emailAuthModal" class="modal hidden" role="dialog" aria-modal="true">
   <div class="modal__backdrop" id="closeEmailAuthBackdrop"></div>
@@ -562,6 +648,9 @@
       <label class="label">Nome</label>
       <input id="profileNameInput" class="input" type="text" placeholder="Digite seu nome" />
 
+      <label class="label">WhatsApp</label>
+      <input id="profilePhoneInput" class="input" type="tel" placeholder="(19) 99999-9999" />
+
       <label class="label">E-mail</label>
       <input id="profileEmailInput" class="input" type="email" placeholder="voce@email.com" />
 
@@ -574,7 +663,7 @@
       <label class="label">Complemento</label>
       <input id="profileComplementInput" class="input" type="text" placeholder="Bloco, referência" />
 
-      <button id="useProfileOnCheckoutBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
+      <button id="useProfileOnCheckoutBtnModal" class="ghost" type="button" style="margin-top:10px;width:100%;">
         Usar dados no checkout
       </button>
 
@@ -584,26 +673,26 @@
 
       <div style="height:16px"></div>
 
-      <div id="profileGuestBox">
+      <div id="profileGuestBoxModal">
         <div style="font-weight:800; font-size:18px;">Você está como visitante</div>
         <div class="muted" style="margin-top:6px;">
           Entre com sua conta para salvar seus dados.
         </div>
 
-        <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
+        <button id="loginGoogleBtnModal" class="btn" type="button" style="margin-top:14px;">
           Entrar com Google
         </button>
 
-        <button id="openEmailAuthBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
+        <button id="openEmailAuthBtnModal" class="ghost" type="button" style="margin-top:10px;width:100%;">
           Entrar com email
         </button>
       </div>
 
-      <div id="profileUserBox" class="hidden">
-        <div style="font-weight:800; font-size:18px;" id="profileUserName">Conta conectada</div>
-        <div class="muted" id="profileUserEmail" style="margin-top:6px;"></div>
+      <div id="profileUserBoxModal" class="hidden">
+        <div style="font-weight:800; font-size:18px;" id="profileUserNameModal">Conta conectada</div>
+        <div class="muted" id="profileUserEmailModal" style="margin-top:6px;"></div>
 
-        <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px;width:100%;">
+        <button id="logoutBtnModal" class="ghost" type="button" style="margin-top:14px;width:100%;">
           Sair
         </button>
       </div>

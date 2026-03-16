@@ -1477,7 +1477,8 @@ function updateCheckoutUIFromConfig(){
   // Cupom
   const couponBox = document.getElementById("coCouponBox");
   if (couponBox){
-    const show = !!(promo.enabled && promo.couponCode && promo.couponPct);
+    const campaigns = _promoCampaignList();
+    const show = campaigns.some((item) => item?.enabled !== false && (_promoCampaignCode(item) || item?.autoApply === true));
     couponBox.classList.toggle("hidden", !show);
     if (!show){
       state.couponCode = "";
@@ -1485,42 +1486,178 @@ function updateCheckoutUIFromConfig(){
       if (inp) inp.value = "";
       const msg = document.getElementById("coCouponMsg");
       if (msg) msg.textContent = "";
+    } else {
+      applyAutoPromoSelection();
     }
   }
 }
 
-function validateCouponAndUpdateUI(showAlerts){
-  const cfg = state.config || {};
-  const promo = cfg.promo || {};
-  const msg = document.getElementById("coCouponMsg");
+function _promoCampaignList(){
+  const promo = state.config?.promo || {};
+  const campaigns = Array.isArray(promo.campaigns) ? promo.campaigns.slice() : [];
 
-  const code = (state.couponCode || "").trim();
-  const expected = (promo.couponCode || "").trim();
-  const pct = Number(promo.couponPct || 0);
-  const endsAtMs = _parsePromoEndsAt(promo.endsAt);
-  const expired = !!(endsAtMs && Date.now() >= endsAtMs);
-
-  let ok = false;
-  if (promo.enabled && !expired && expected && pct > 0 && code){
-    ok = code.toLowerCase() === expected.toLowerCase();
+  if (promo.enabled && String(promo.couponCode || '').trim()) {
+    campaigns.unshift({
+      id: 'legacy_coupon',
+      enabled: true,
+      featured: true,
+      title: promo.title || 'Cupom disponível',
+      subtitle: promo.subtitle || promo.notice || '',
+      couponCode: String(promo.couponCode || '').trim(),
+      discountType: 'percent',
+      discountPct: Number(promo.couponPct || 0),
+      startsAt: promo.startsAt || '',
+      endsAt: promo.endsAt || ''
+    });
   }
 
-  if (msg){
-    if (!code){
-      msg.textContent = "";
-    } else if (expired){
-      msg.textContent = "Cupom expirado ⏰";
-    } else if (ok){
-      msg.textContent = `Cupom aplicado: ${pct}% OFF ✅`;
-    } else {
-      msg.textContent = "Cupom inválido ❌";
+  return campaigns;
+}
+
+function _promoCampaignCode(campaign){
+  return String(campaign?.couponCode || campaign?.code || campaign?.coupon || '').trim();
+}
+
+function _normalizeCampaignDiscountType(campaign){
+  const raw = String(campaign?.discountType || campaign?.type || '').trim().toLowerCase();
+  if (raw === 'free_delivery' || raw === 'frete_gratis' || raw === 'free-delivery') return 'free_delivery';
+  if (raw === 'fixed' || raw === 'valor_fixo' || raw === 'fixed_amount') return 'fixed';
+  return 'percent';
+}
+
+function _campaignDiscountValue(campaign){
+  return Number(campaign?.discountValue ?? campaign?.discountPct ?? campaign?.couponPct ?? campaign?.value ?? 0);
+}
+
+function _campaignDateMs(raw){
+  const s = String(raw || '').trim();
+  if (!s) return null;
+  const t = Date.parse(s);
+  return Number.isFinite(t) ? t : null;
+}
+
+function _profilePromoStats(){
+  const profile = loadProfile?.() || {};
+  return {
+    lastOrderAt: Number(profile.lastOrderAt || 0) || 0,
+    orderCount: Number(profile.orderCount || 0) || 0,
+    totalSpent: Number(profile.totalSpent || 0) || 0,
+    level: String(profile.level || 'Bronze').trim() || 'Bronze'
+  };
+}
+
+function _campaignCriteriaOk(campaign, subtotal){
+  const now = Date.now();
+  const startsAt = _campaignDateMs(campaign?.startsAt);
+  const endsAt = _campaignDateMs(campaign?.endsAt);
+  if (startsAt && now < startsAt) return { ok:false, reason:'Cupom ainda não começou.' };
+  if (endsAt && now >= endsAt) return { ok:false, reason:'Cupom expirado.' };
+  if (campaign?.enabled === false) return { ok:false, reason:'Cupom desativado.' };
+
+  const minOrder = Number(campaign?.minOrder ?? campaign?.minSubtotal ?? campaign?.minimumOrder ?? 0);
+  if (minOrder > 0 && Number(subtotal || 0) < minOrder){
+    return { ok:false, reason:`Pedido mínimo de ${moneyBRL(minOrder)}.` };
+  }
+
+  const stats = _profilePromoStats();
+  const daysInactive = Number(campaign?.daysInactive ?? campaign?.inactiveDays ?? campaign?.daysWithoutOrder ?? 0);
+  if (daysInactive > 0){
+    if (!stats.lastOrderAt) return { ok:false, reason:`Válido para clientes com ${daysInactive} dias sem pedir.` };
+    const diffDays = (Date.now() - stats.lastOrderAt) / 86400000;
+    if (diffDays < daysInactive) return { ok:false, reason:`Válido após ${daysInactive} dias sem pedir.` };
+  }
+
+  const minOrders = Number(campaign?.minOrders ?? campaign?.minOrderCount ?? 0);
+  if (minOrders > 0 && stats.orderCount < minOrders){
+    return { ok:false, reason:`Necessário ter pelo menos ${minOrders} pedidos.` };
+  }
+
+  const minSpent = Number(campaign?.minSpent ?? campaign?.minTotalSpent ?? 0);
+  if (minSpent > 0 && stats.totalSpent < minSpent){
+    return { ok:false, reason:`Válido para clientes com gasto mínimo de ${moneyBRL(minSpent)}.` };
+  }
+
+  const levelOrder = { bronze:1, prata:2, silver:2, ouro:3, gold:3, diamante:4, diamond:4 };
+  const minLevelRaw = String(campaign?.minLevel || campaign?.customerLevel || '').trim().toLowerCase();
+  if (minLevelRaw){
+    const currentLevel = String(stats.level || 'Bronze').trim().toLowerCase();
+    if ((levelOrder[currentLevel] || 0) < (levelOrder[minLevelRaw] || 0)){
+      return { ok:false, reason:`Disponível a partir do nível ${campaign?.minLevel || campaign?.customerLevel}.` };
     }
   }
 
-  if (showAlerts && code && expired) {
-    alert("Esse cupom expirou.");
-  } else if (showAlerts && code && !ok && !expired) {
-    alert("Cupom inválido.");
+  return { ok:true, reason:'' };
+}
+
+function evaluatePromoEngine(){
+  const campaigns = _promoCampaignList().map((campaign, index) => {
+    const normalized = { ...campaign };
+    normalized._idx = index;
+    normalized._code = _promoCampaignCode(normalized);
+    normalized._type = _normalizeCampaignDiscountType(normalized);
+    normalized._value = _campaignDiscountValue(normalized);
+    normalized._criteria = _campaignCriteriaOk(normalized, cartTotals().subtotal);
+    normalized._criteriaReason = normalized._criteria.reason || '';
+    normalized._displayText = normalized._type === 'free_delivery'
+      ? 'frete grátis'
+      : normalized._type === 'fixed'
+        ? `${moneyBRL(normalized._value)} OFF`
+        : `${Number(normalized._value || 0)}% OFF`;
+    return normalized;
+  });
+
+  const code = String(state.couponCode || '').trim().toLowerCase();
+  const manualMatch = code
+    ? campaigns.find((item) => item._code && item._code.toLowerCase() === code && item._criteria.ok)
+    : null;
+
+  const autoMatch = campaigns.find((item) => item._criteria.ok && item.autoApply === true && (!item._code || item._code.toLowerCase() === code || !code)) || null;
+  const featured = campaigns.find((item) => item._criteria.ok && (item.featured === true || item.highlight === true)) || campaigns.find((item) => item._criteria.ok && !!item._code) || null;
+
+  return { campaigns, manualMatch, autoMatch, featured };
+}
+
+function applyAutoPromoSelection(){
+  const evaluation = evaluatePromoEngine();
+  const input = document.getElementById('coCouponInput');
+  if (state.couponCode) return evaluation;
+  if (evaluation.autoMatch?._code){
+    state.couponCode = evaluation.autoMatch._code;
+    if (input) input.value = evaluation.autoMatch._code;
+  }
+  return evaluation;
+}
+
+function validateCouponAndUpdateUI(showAlerts){
+  const msg = document.getElementById("coCouponMsg");
+  const code = (state.couponCode || "").trim();
+  const evaluation = evaluatePromoEngine();
+  const manual = evaluation.manualMatch;
+  const auto = evaluation.autoMatch;
+  const featured = evaluation.featured;
+
+  if (msg){
+    if (!code){
+      if (auto?._code){
+        msg.textContent = `Promoção automática ativa: ${auto.title || auto._code} • ${auto._displayText || 'benefício aplicado'} ✅`;
+      } else if (featured?._displayText) {
+        msg.textContent = featured._code
+          ? `${featured.title || featured._code} • ${featured._displayText}`
+          : `Promoção ativa • ${featured._displayText}`;
+      } else {
+        msg.textContent = "";
+      }
+    } else if (manual){
+      msg.textContent = `Cupom aplicado: ${manual.title || manual._code} • ${manual._displayText || 'benefício liberado'} ✅`;
+    } else {
+      const candidate = evaluation.campaigns.find((item) => item._code && item._code.toLowerCase() === code.toLowerCase());
+      msg.textContent = candidate?._criteriaReason ? `${candidate._criteriaReason} ❌` : "Cupom inválido ❌";
+    }
+  }
+
+  if (showAlerts && code && !manual) {
+    const candidate = evaluation.campaigns.find((item) => item._code && item._code.toLowerCase() === code.toLowerCase());
+    alert(candidate?._criteriaReason || "Cupom inválido.");
   }
 
   updateCheckoutTotals();
@@ -1691,11 +1828,9 @@ function _bindDeliveryAddressEvents(){
 function computeOrderTotals(){
   const cfg = state.config || {};
   const delivery = cfg.delivery || {};
-  const promo = cfg.promo || {};
 
   const { subtotal, qty } = cartTotals();
 
-  // taxa de entrega (só no modo delivery)
   let deliveryFee = 0;
   if (state.checkoutMode === "delivery"){
     if (_hasDynamicDeliveryConfig(cfg)){
@@ -1705,30 +1840,37 @@ function computeOrderTotals(){
     }
   }
 
-  // cupom (%)
-let discount = 0;
-const code = (state.couponCode || "").trim();
-const expected = (promo.couponCode || "").trim();
-const pct = Number(promo.couponPct || 0);
-const endsAtMs = _parsePromoEndsAt(promo.endsAt);
-const expired = !!(endsAtMs && Date.now() >= endsAtMs);
+  let discount = 0;
+  let couponOk = false;
+  let couponPct = 0;
+  let appliedCampaign = null;
+  const evaluation = evaluatePromoEngine();
+  const code = String(state.couponCode || '').trim();
 
-const couponOk = !!(
-  promo.enabled &&
-  !expired &&
-  expected &&
-  pct > 0 &&
-  code &&
-  code.toLowerCase() === expected.toLowerCase()
-);
+  if (evaluation.manualMatch){
+    appliedCampaign = evaluation.manualMatch;
+    couponOk = true;
+  } else if ((!code || (evaluation.autoMatch?._code && code.toLowerCase() === evaluation.autoMatch._code.toLowerCase())) && evaluation.autoMatch){
+    appliedCampaign = evaluation.autoMatch;
+    couponOk = true;
+  }
 
-if (couponOk) {
-  discount = Math.round((subtotal * (pct / 100)) * 100) / 100;
-}
+  if (appliedCampaign){
+    const type = _normalizeCampaignDiscountType(appliedCampaign);
+    const rawValue = _campaignDiscountValue(appliedCampaign);
+    if (type === 'free_delivery'){
+      discount = Math.max(0, deliveryFee);
+      couponPct = 0;
+    } else if (type === 'fixed'){
+      discount = Math.max(0, Math.min(subtotal + deliveryFee, rawValue));
+      couponPct = 0;
+    } else {
+      couponPct = Math.max(0, rawValue);
+      discount = Math.round((subtotal * (couponPct / 100)) * 100) / 100;
+    }
+  }
 
   const total = Math.max(0, (subtotal + deliveryFee) - discount);
-
-  // pedido mínimo (somente delivery)
   const minOrder = Number(delivery.minOrder || 0);
   const minOk = !(state.checkoutMode === "delivery" && minOrder > 0 && subtotal < minOrder);
 
@@ -1739,7 +1881,8 @@ if (couponOk) {
     discount,
     total,
     couponOk,
-    couponPct: couponOk ? pct : 0,
+    couponPct,
+    appliedCampaign,
     minOk,
     minOrder
   };
@@ -1858,7 +2001,7 @@ async function createOrder(options = {}) {
   }
 
   const totalsCalc = computeOrderTotals();
-  const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, minOk, minOrder } = totalsCalc;
+  const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, appliedCampaign, minOk, minOrder } = totalsCalc;
 
   if (!minOk) {
     alert(`Pedido mínimo para entrega: ${moneyBRL(minOrder)}.`);
@@ -1872,6 +2015,8 @@ async function createOrder(options = {}) {
     couponCode: ((state.couponCode || "").trim() || null),
     couponOk: !!couponOk,
     couponPct: Number(couponPct || 0),
+    couponCampaignId: (appliedCampaign?.id || appliedCampaign?._code || null),
+    couponCampaignTitle: (appliedCampaign?.title || null),
     deliveryFee: Number(deliveryFee || 0),
     deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0),
     discount: Number(discount || 0),
@@ -1900,7 +2045,7 @@ async function createOrder(options = {}) {
       optionsText: i.optionsText || "",
       meta: i.meta || null
     })),
-    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
+    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), couponCampaignId: (appliedCampaign?.id || appliedCampaign?._code || null), couponCampaignTitle: (appliedCampaign?.title || null), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
@@ -1909,6 +2054,15 @@ async function createOrder(options = {}) {
   state.currentOrderNumber = orderData.orderNumber;
 
   try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
+  try {
+    const currentProfile = loadProfile();
+    saveProfile({
+      ...currentProfile,
+      lastOrderAt: Date.now(),
+      orderCount: Number(currentProfile.orderCount || 0) + 1,
+      totalSpent: Number(currentProfile.totalSpent || 0) + Number(total || 0)
+    });
+  } catch(_) {}
 
   // ✅ tracking público PRECISA vir antes do chat (rules do chat usa exists(orders_public/{orderId}))
   let publicOk = false;

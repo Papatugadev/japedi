@@ -31,6 +31,7 @@
       <button class="menuItem" type="button" data-page="products" aria-label="Produtos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" /><path d="M12 7v14" /></svg></button>
       <button class="menuItem" type="button" data-page="finance" aria-label="Painel financeiro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5" /><path d="M8 17V9" /><path d="M12 19V7" /><path d="M16 17V11" /><path d="M20 19V5" /></svg></button>
       <button class="menuItem" type="button" data-page="customers" aria-label="Clientes e feedbacks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="9.5" cy="7" r="4" /><path d="M20 8v6" /><path d="M23 11h-6" /></svg></button>
+      <button class="menuItem" type="button" data-page="promos" aria-label="Promoções e cupons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11V7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2" /><path d="M4 11h16v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M12 11v8" /><path d="M9 14h6" /></svg></button>
       <button class="menuItem" type="button" data-page="settings" aria-label="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1l-.4-2.6H10l-.4 2.6a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0-.1 1 7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 2.6h4.2l.4-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6z"/></svg></button>
     </aside>
 
@@ -273,6 +274,176 @@
         </div>
 
         <div class="custFooter muted" id="custStatus">-</div>
+      </section>
+
+      <section id="page-promos" class="page">
+        <h3 class="pageTitle">Promoções &amp; Cupons</h3>
+
+        <div class="promoAdminHero">
+          <div class="promoAdminHeroLeft">
+            <div class="promoAdminKicker">Growth &amp; retenção</div>
+            <div class="promoAdminHeroTitle">Central premium de promoções</div>
+            <div class="muted promoAdminHeroSub" id="promoAdminSub">Crie cupons, campanhas e regras para reativar clientes e aumentar ticket médio.</div>
+          </div>
+          <div class="promoAdminHeroRight">
+            <button id="promoReloadBtn" class="ghost" type="button">Recarregar</button>
+            <button id="promoSaveBtn" class="btn" type="button">Salvar campanha</button>
+          </div>
+        </div>
+
+        <div class="promoAdminGrid">
+          <article class="promoAdminCard promoAdminCardForm">
+            <div class="promoAdminCardHead">
+              <div>
+                <div class="promoAdminCardTitle">Criar ou editar campanha</div>
+                <div class="promoAdminCardHint">Defina o benefício e os critérios que ativam a oferta.</div>
+              </div>
+              <div class="promoAdminChip" id="promoEditModeLabel">Nova campanha</div>
+            </div>
+
+            <div class="promoAdminForm">
+              <div class="promoAdminRow2">
+                <label class="setField">
+                  <span>Nome da campanha</span>
+                  <input id="promoName" class="input" placeholder="Ex: Volta cliente 10 dias" />
+                </label>
+                <label class="setField">
+                  <span>Código do cupom</span>
+                  <input id="promoCode" class="input" placeholder="Ex: VOLTA10" />
+                </label>
+              </div>
+
+              <div class="promoAdminRow3">
+                <label class="setField">
+                  <span>Tipo de benefício</span>
+                  <select id="promoType" class="input">
+                    <option value="percent">Desconto (%)</option>
+                    <option value="fixed">Desconto fixo (R$)</option>
+                    <option value="free_delivery">Frete grátis</option>
+                  </select>
+                </label>
+                <label class="setField">
+                  <span>Valor</span>
+                  <input id="promoValue" class="input" inputmode="decimal" placeholder="10" />
+                </label>
+                <label class="setField">
+                  <span>Pedido mínimo (R$)</span>
+                  <input id="promoMinOrder" class="input" inputmode="decimal" placeholder="35" />
+                </label>
+              </div>
+
+              <div class="promoAdminRow3">
+                <label class="setField">
+                  <span>Sem pedir há (dias)</span>
+                  <input id="promoInactiveDays" class="input" inputmode="numeric" placeholder="10" />
+                </label>
+                <label class="setField">
+                  <span>Nível mínimo do cliente</span>
+                  <select id="promoMinLevel" class="input">
+                    <option value="">Qualquer nível</option>
+                    <option value="bronze">Bronze</option>
+                    <option value="prata">Prata</option>
+                    <option value="ouro">Ouro</option>
+                    <option value="diamante">Diamante</option>
+                  </select>
+                </label>
+                <label class="setField">
+                  <span>Limite total de uso</span>
+                  <input id="promoUsageLimit" class="input" inputmode="numeric" placeholder="100" />
+                </label>
+              </div>
+
+              <div class="promoAdminRow2">
+                <label class="setField">
+                  <span>Começa em</span>
+                  <input id="promoStartsAt" class="input" type="datetime-local" />
+                </label>
+                <label class="setField">
+                  <span>Termina em</span>
+                  <input id="promoEndsAtPanel" class="input" type="datetime-local" />
+                </label>
+              </div>
+
+              <label class="setField">
+                <span>Mensagem / observação</span>
+                <textarea id="promoNote" class="input promoAdminTextarea" placeholder="Ex: válido para clientes que ficaram mais de 10 dias sem pedir e compras a partir de R$ 35"></textarea>
+              </label>
+
+              <div class="promoAdminSwitchGrid">
+                <label class="setSwitch">
+                  <input id="promoActive" type="checkbox" checked />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Campanha ativa</span>
+                </label>
+                <label class="setSwitch">
+                  <input id="promoAutoApply" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Aplicar automaticamente quando bater os critérios</span>
+                </label>
+                <label class="setSwitch">
+                  <input id="promoFeatured" type="checkbox" />
+                  <span class="setSwitchUi"></span>
+                  <span class="setSwitchText">Usar como cupom destaque do cliente</span>
+                </label>
+              </div>
+
+              <div class="promoAdminActions">
+                <button id="promoClearBtn" class="ghost" type="button">Limpar</button>
+                <div class="muted" id="promoFormStatus">Pronto para criar uma nova campanha.</div>
+              </div>
+            </div>
+          </article>
+
+          <article class="promoAdminCard promoAdminCardPreview">
+            <div class="promoAdminCardHead">
+              <div>
+                <div class="promoAdminCardTitle">Prévia do cupom destaque</div>
+                <div class="promoAdminCardHint">O cliente verá esse conteúdo no perfil quando a campanha estiver marcada como destaque.</div>
+              </div>
+              <div class="promoAdminChip" id="promoPreviewBadge">Sem destaque</div>
+            </div>
+
+            <div class="promoBanner promoAdminBannerPreview" id="promoAdminBannerPreview">
+              <div class="promoGlow"></div>
+              <div class="promoTop">
+                <div class="promoTag" id="promoAdminTag">PROMO</div>
+                <div class="promoIcon">OF</div>
+              </div>
+              <div class="promoTitle" id="promoAdminPrevTitle">Nenhuma campanha em destaque</div>
+              <div class="promoSub" id="promoAdminPrevSub">Crie ou selecione uma campanha para aparecer aqui.</div>
+              <div class="promoBottom">
+                <div class="promoPill" id="promoAdminPrevCoupon">CUPOM: —</div>
+                <div class="promoPill ghost" id="promoAdminPrevNotice">Aviso: —</div>
+              </div>
+            </div>
+
+            <div class="promoAdminStats">
+              <div class="promoStatBox">
+                <div class="promoStatLabel">Campanhas</div>
+                <div class="promoStatValue" id="promoCount">0</div>
+              </div>
+              <div class="promoStatBox">
+                <div class="promoStatLabel">Ativas</div>
+                <div class="promoStatValue" id="promoActiveCount">0</div>
+              </div>
+              <div class="promoStatBox">
+                <div class="promoStatLabel">Com destaque</div>
+                <div class="promoStatValue" id="promoFeaturedCount">0</div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <article class="promoAdminCard promoAdminListCard">
+          <div class="promoAdminCardHead">
+            <div>
+              <div class="promoAdminCardTitle">Campanhas salvas</div>
+              <div class="promoAdminCardHint">Edite, destaque ou remova cupons sem mexer no restante do painel.</div>
+            </div>
+            <div class="promoAdminChip" id="promoStatusChip">Sincronizando...</div>
+          </div>
+          <div id="promoList" class="promoList"></div>
+        </article>
       </section>
 
                   <section id="page-settings" class="page">
