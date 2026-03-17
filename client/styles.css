@@ -925,21 +925,23 @@ main, .view{
 
 .chatUnreadBadge{
   position:absolute;
-  top:-6px;
-  right:-6px;
-  min-width: 20px;
-  height: 20px;
+  top:-7px;
+  right:-7px;
+  min-width: 22px;
+  height: 22px;
   padding: 0 6px;
   border-radius: 999px;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 11px;
+  font-weight: 800;
   background: #ef4444;
   color: var(--onPrimary,#fff);
   border: 2px solid #fff;
-  box-shadow: 0 6px 16px rgba(0,0,0,.18);
+  box-shadow: 0 8px 18px rgba(239,68,68,.35), 0 4px 10px rgba(0,0,0,.18);
+  z-index: 2;
+  animation: chatBadgePulse 1.8s ease-in-out infinite;
   pointer-events:none;
 }
 
@@ -2978,419 +2980,423 @@ body.compactMenu .productContent{ padding:12px; }
     font-size: 12px;
   }
 }
-/* =========================
-   Perfil / login premium 2026
-   ========================= */
-.profileHeroCard--premium{
-  padding-top:18px;
-  background:
-    radial-gradient(circle at 20% 15%, rgba(255,255,255,.28), transparent 28%),
-    radial-gradient(circle at 80% 0%, rgba(255,255,255,.18), transparent 26%),
-    linear-gradient(135deg, #111827 0%, #1f2937 38%, #ff6a00 100%);
-  box-shadow:0 20px 50px rgba(17,24,39,.28), 0 10px 28px rgba(255,106,0,.18);
+
+/* Perfil > abas e cupons */
+.profileTabs{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin:14px 0 16px;
 }
-.profileHeroTopline{
+.profileTabBtn{
+  appearance:none;
+  border:1px solid rgba(255,255,255,.08);
+  background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+  color:#e5e7eb;
+  border-radius:16px;
+  padding:14px 16px;
+  font-weight:800;
+  font-size:14px;
+  letter-spacing:.2px;
+  box-shadow:0 10px 22px rgba(0,0,0,.18);
+  transition:transform .18s ease, box-shadow .18s ease, border-color .18s ease, background .18s ease, opacity .18s ease;
+}
+.profileTabBtn:active{ transform:scale(.985); }
+.profileTabBtn.is-active{
+  color:#fff;
+  border-color:rgba(99,102,241,.42);
+  background:linear-gradient(135deg, rgba(99,102,241,.30), rgba(139,92,246,.22), rgba(34,197,94,.16));
+  box-shadow:0 14px 32px rgba(79,70,229,.28), inset 0 1px 0 rgba(255,255,255,.12);
+}
+.profilePane.hidden{ display:none; }
+.profileCouponsList{
+  display:grid;
+  gap:12px;
+}
+.profileCouponCard{
+  position:relative;
+  overflow:hidden;
+  border-radius:20px;
+  padding:16px;
+  border:1px solid rgba(255,255,255,.09);
+  background:linear-gradient(135deg, rgba(17,24,39,.96), rgba(30,41,59,.98));
+  box-shadow:0 16px 36px rgba(0,0,0,.24);
+}
+.profileCouponCard::before{
+  content:"";
+  position:absolute;
+  inset:-1px;
+  background:linear-gradient(120deg, rgba(99,102,241,.16), rgba(34,197,94,.12), rgba(250,204,21,.12));
+  pointer-events:none;
+}
+.profileCouponTop{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.profileCouponTitle{ font-size:16px; font-weight:900; color:#fff; }
+.profileCouponSub{ margin-top:4px; color:#cbd5e1; font-size:13px; }
+.profileCouponBadge{
+  flex:0 0 auto;
+  min-width:76px;
+  text-align:center;
+  border-radius:999px;
+  padding:8px 10px;
+  font-weight:900;
+  font-size:12px;
+  color:#fff;
+  background:linear-gradient(135deg, #22c55e, #16a34a);
+  box-shadow:0 10px 20px rgba(34,197,94,.22);
+}
+.profileCouponCode{
+  position:relative;
   display:flex;
   align-items:center;
   justify-content:space-between;
-  gap:12px;
-  margin-bottom:10px;
-}
-.profileHeroBadge,
-.profileHeroMini{
-  display:inline-flex;
-  align-items:center;
-  min-height:34px;
-  padding:8px 12px;
-  border-radius:999px;
-  background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.14);
-  backdrop-filter:blur(12px);
-}
-.profileHeroBadge{ font-weight:900; font-size:12px; letter-spacing:.04em; text-transform:uppercase; }
-.profileHeroMini{ font-size:12px; color:rgba(255,255,255,.92); }
-.profileHeroSub{
-  margin:-4px auto 14px;
-  max-width:290px;
-  color:rgba(255,255,255,.82);
-  font-size:13px;
-  line-height:1.45;
-}
-.profileHeroAvatar,
-.profilePhotoPreview,
-.profileConnectedAvatar{
-  overflow:hidden;
-}
-.profileHeroAvatar.has-photo,
-.profilePhotoPreview.has-photo,
-.profileConnectedAvatar.has-photo{
-  background:#fff;
-  color:transparent;
-}
-.profileHeroAvatar img,
-.profilePhotoPreview img,
-.profileConnectedAvatar img{
-  width:100%;
-  height:100%;
-  object-fit:cover;
-  display:block;
-}
-.profileTabsCard{
-  padding:12px;
-  border-radius:24px;
-  background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(255,255,255,.94));
-  box-shadow:0 16px 38px rgba(15,23,42,.06);
-}
-.profileTabs{
-  display:grid;
-  grid-template-columns:repeat(3, 1fr);
-  gap:8px;
-  padding:6px;
-  border-radius:18px;
-  background:#f3f4f6;
-  margin-bottom:14px;
-}
-.profileTab{
-  border:0;
-  min-height:44px;
-  border-radius:14px;
-  background:transparent;
-  font-weight:900;
-  color:#475569;
-  cursor:pointer;
-  transition:.18s ease;
-}
-.profileTab.is-active{
-  background:#fff;
-  color:#111827;
-  box-shadow:0 8px 20px rgba(15,23,42,.08);
-}
-.profileTabPanel{ display:none; }
-.profileTabPanel.is-active{ display:block; }
-.profileInfoGrid{
-  display:grid;
-  grid-template-columns:repeat(2, minmax(0,1fr));
   gap:10px;
+  margin-top:14px;
+  padding:12px 12px 12px 14px;
+  border-radius:16px;
+  border:1px dashed rgba(255,255,255,.18);
+  background:rgba(255,255,255,.04);
 }
-.profileInfoCard{
-  width:100%;
-  border:1px solid rgba(15,23,42,.08);
-  border-radius:20px;
-  padding:14px;
-  background:linear-gradient(180deg,#fff,#fbfbfd);
-  text-align:left;
-}
-.profileInfoCard--action{ cursor:pointer; }
-.profileInfoCard__icon{
-  width:42px;
-  height:42px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  border-radius:14px;
-  background:rgba(255,106,0,.12);
-  color:#ff6a00;
-  margin-bottom:12px;
-}
-.profileInfoCard__title{ font-weight:900; color:#111827; }
-.profileInfoCard__text{ margin-top:6px; color:#6b7280; font-size:13px; line-height:1.45; }
-.profileLoginCard,
-.profilePhotoCard{
-  margin-top:12px;
-  border-radius:22px;
-  padding:16px;
-  border:1px solid rgba(15,23,42,.08);
-  background:linear-gradient(180deg,#fff,#fcfcfe);
-}
-.profileLoginCard__kicker{
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:.08em;
-  font-weight:900;
-  color:#ff6a00;
-}
-.profileLoginCard__title,
-.profilePhotoTitle{
-  margin-top:6px;
-  font-weight:900;
-  font-size:20px;
-  color:#111827;
-}
-.profileLoginCard__text,
-.profilePhotoSub{
-  margin-top:6px;
-  font-size:13px;
-  line-height:1.5;
-  color:#6b7280;
-}
-.profileGhostFull{ width:100%; }
-.profileConnectedTop{
-  display:flex;
-  align-items:center;
-  gap:12px;
-}
-.profileConnectedAvatar{
-  width:58px;
-  height:58px;
-  border-radius:18px;
-  background:linear-gradient(135deg,#111827,#374151);
+.profileCouponCode strong{ color:#fff; font-size:15px; letter-spacing:1px; }
+.profileCouponCopyBtn{
+  appearance:none;
+  border:none;
+  border-radius:12px;
+  padding:10px 12px;
+  font-weight:800;
   color:#fff;
-  font-weight:900;
-  font-size:24px;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 12px 22px rgba(17,24,39,.18);
+  background:linear-gradient(135deg, #6366f1, #8b5cf6);
+  box-shadow:0 10px 18px rgba(99,102,241,.28);
 }
-.profileCouponsHero{
+.profileCouponMeta{
+  position:relative;
+  margin-top:10px;
+  color:#94a3b8;
+  font-size:12px;
+}
+.profileCouponsEmpty{
+  border-radius:18px;
+  padding:18px;
+  text-align:center;
+  color:#94a3b8;
+  border:1px dashed rgba(255,255,255,.12);
+  background:rgba(255,255,255,.02);
+}
+
+
+/* ===== Perfil premium ===== */
+.profileViewPro{ padding-top:18px; }
+.profileHeroCardPro{
   position:relative;
   overflow:hidden;
-  margin-top:12px;
-  padding:18px 18px 16px;
-  border-radius:24px;
-  border:1px solid rgba(255,255,255,.18);
+  border:1px solid rgba(255,255,255,.55);
   background:
-    radial-gradient(circle at 12% 18%, rgba(255,255,255,.34), transparent 24%),
-    radial-gradient(circle at 88% 20%, rgba(34,197,94,.22), transparent 28%),
-    linear-gradient(135deg, #0f172a 0%, #1e293b 42%, #ff6a00 100%);
-  color:#fff;
-  box-shadow:0 24px 50px rgba(15,23,42,.22);
-  isolation:isolate;
+    radial-gradient(circle at top left, rgba(255,255,255,.34), transparent 34%),
+    linear-gradient(135deg, #0f172a 0%, #172554 38%, #064e3b 100%);
+  box-shadow:0 24px 50px rgba(15,23,42,.18);
 }
-.profileCouponsHero::before{
+.profileHeroGlow{
+  position:absolute;
+  inset:auto -50px -60px auto;
+  width:220px;
+  height:220px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(34,197,94,.28), transparent 65%);
+  filter:blur(8px);
+  pointer-events:none;
+  animation:profileGlowPulse 4.8s ease-in-out infinite;
+}
+@keyframes profileGlowPulse{
+  0%,100%{ transform:scale(.92); opacity:.8; }
+  50%{ transform:scale(1.08); opacity:1; }
+}
+.profileHeroCardPro .profileHeroName,
+.profileHeroCardPro .profileHeroSub,
+.profileHeroCardPro .profileXpLabel,
+.profileHeroCardPro .profileXpHint,
+.profileHeroCardPro .profileHeroStatLabel{ color:#e2e8f0; }
+.profileHeroCardPro .profileHeroName{ color:#fff; }
+.profileHeroSub{
+  margin-top:8px;
+  text-align:center;
+  font-size:13px;
+  line-height:1.45;
+  max-width:340px;
+}
+.profileHeroQuickStats{
+  margin-top:16px;
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:10px;
+  width:100%;
+}
+.profileHeroStatChip{
+  position:relative;
+  border-radius:18px;
+  padding:12px 10px;
+  background:rgba(255,255,255,.1);
+  border:1px solid rgba(255,255,255,.12);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.12);
+  backdrop-filter:blur(10px);
+  -webkit-backdrop-filter:blur(10px);
+  text-align:left;
+}
+.profileHeroStatChip strong{
+  display:block;
+  margin-top:5px;
+  color:#fff;
+  font-size:15px;
+  font-weight:900;
+}
+.profileHeroStatLabel{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.04em;
+  text-transform:uppercase;
+}
+.profileHighlightsBox,.profileIdentityBox,.profileCouponsBox{
+  border-radius:22px;
+  border:1px solid rgba(15,23,42,.06);
+  box-shadow:0 16px 40px rgba(15,23,42,.06);
+}
+.profileHighlightsGrid{
+  display:grid;
+  grid-template-columns:1fr;
+  gap:12px;
+}
+.profileMiniCard{
+  position:relative;
+  overflow:hidden;
+  border-radius:18px;
+  padding:16px;
+  background:linear-gradient(180deg, rgba(248,250,252,.98), rgba(241,245,249,.94));
+  border:1px solid rgba(15,23,42,.08);
+}
+.profileMiniCard::after{
   content:"";
   position:absolute;
-  inset:-30% auto auto -20%;
+  inset:0;
+  background:linear-gradient(120deg, transparent 20%, rgba(255,255,255,.55) 50%, transparent 80%);
+  transform:translateX(-120%);
+  animation:profileCardShine 5.6s linear infinite;
+}
+@keyframes profileCardShine{ to{ transform:translateX(120%); } }
+.profileMiniCard__label{
+  display:block;
+  font-size:11px;
+  font-weight:900;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:#64748b;
+}
+.profileMiniCard strong{
+  display:block;
+  margin-top:8px;
+  font-size:16px;
+  color:#0f172a;
+}
+.profileMiniCard small{
+  display:block;
+  margin-top:6px;
+  color:#475569;
+  line-height:1.4;
+}
+.profileIdentityRows{ display:grid; gap:10px; }
+.profileIdentityRow{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:14px;
+  padding:12px 14px;
+  border-radius:16px;
+  background:#f8fafc;
+  border:1px solid rgba(15,23,42,.06);
+}
+.profileIdentityRow span{
+  color:#64748b;
+  font-size:12px;
+  font-weight:800;
+  text-transform:uppercase;
+  letter-spacing:.06em;
+}
+.profileIdentityRow strong{
+  max-width:65%;
+  text-align:right;
+  color:#0f172a;
+  line-height:1.35;
+}
+.profileCouponsHeader{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+  margin-bottom:14px;
+  color:#475569;
+}
+.profileCouponsHeader strong{ display:block; color:#0f172a; margin-bottom:4px; }
+.profileCouponsHeader span{ font-size:13px; line-height:1.45; }
+.profileCouponsList{ gap:14px; }
+.profileCouponCard{
+  position:relative;
+  overflow:hidden;
+  border:none;
+  border-radius:22px;
+  padding:18px;
+  background:linear-gradient(135deg, #020617 0%, #172554 45%, #0f766e 100%);
+  box-shadow:0 22px 42px rgba(15,23,42,.18);
+  transform:translateY(0);
+  transition:transform .18s ease, box-shadow .18s ease;
+}
+.profileCouponCard:hover{ transform:translateY(-2px); box-shadow:0 28px 48px rgba(15,23,42,.22); }
+.profileCouponCard::before{
+  content:"";
+  position:absolute;
+  inset:-20% auto auto -25%;
   width:180px;
   height:180px;
   border-radius:999px;
-  background:radial-gradient(circle, rgba(255,255,255,.26), transparent 70%);
-  filter:blur(8px);
-  animation:profileCouponHeroFloat 5.5s ease-in-out infinite;
-  pointer-events:none;
+  background:radial-gradient(circle, rgba(34,197,94,.34), transparent 70%);
+  animation:profileCouponOrb 4.6s ease-in-out infinite;
 }
-.profileCouponsHero::after{
+.profileCouponCard::after{
   content:"";
   position:absolute;
   inset:0;
-  background:linear-gradient(120deg, transparent 20%, rgba(255,255,255,.18) 40%, transparent 60%);
+  background:linear-gradient(115deg, transparent 22%, rgba(255,255,255,.18) 50%, transparent 78%);
   transform:translateX(-130%);
-  animation:profileCouponHeroShine 3.8s linear infinite;
-  pointer-events:none;
+  animation:profileCouponSweep 5s linear infinite;
 }
-.profileCouponsHero__eyebrow{
-  position:relative;
-  z-index:1;
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:7px 12px;
-  border-radius:999px;
-  background:rgba(255,255,255,.10);
-  border:1px solid rgba(255,255,255,.14);
-  font-size:11px;
-  text-transform:uppercase;
-  letter-spacing:.12em;
+@keyframes profileCouponSweep{ to{ transform:translateX(130%); } }
+@keyframes profileCouponOrb{ 0%,100%{ transform:scale(.95); opacity:.75; } 50%{ transform:scale(1.08); opacity:1; } }
+.profileCouponTop,.profileCouponCode,.profileCouponMeta{ position:relative; z-index:1; }
+.profileCouponBadge{
+  background:rgba(255,255,255,.14);
+  border:1px solid rgba(255,255,255,.18);
+  color:#fff;
+}
+.profileCouponCode{
+  margin-top:16px;
+  padding:12px;
+  border-radius:18px;
+  background:rgba(255,255,255,.08);
+  border:1px dashed rgba(255,255,255,.2);
+}
+.profileCouponCopyBtn{
+  border:none;
+  background:linear-gradient(135deg, #22c55e, #16a34a);
+  color:#fff;
   font-weight:900;
+  box-shadow:0 12px 28px rgba(34,197,94,.28);
 }
-.profileCouponsHero__title{
-  position:relative;
-  z-index:1;
+.profileCouponCopyBtn:active{ transform:scale(.97); }
+.profileCouponMeta{
   margin-top:12px;
-  font-size:24px;
-  font-weight:1000;
-  letter-spacing:-.03em;
+  color:#cbd5e1;
+  line-height:1.45;
 }
-.profileCouponsHero__text{
-  position:relative;
-  z-index:1;
-  margin-top:8px;
-  color:rgba(255,255,255,.84);
-  line-height:1.5;
-  font-size:13px;
-  max-width:520px;
+.profileCouponsEmpty{
+  border-radius:18px;
+  padding:18px;
+  background:linear-gradient(180deg, #f8fafc, #f1f5f9);
+  border:1px solid rgba(15,23,42,.06);
+  color:#475569;
+  text-align:center;
 }
-@keyframes profileCouponHeroFloat{
-  0%,100%{ transform:translate3d(0,0,0) scale(1); }
-  50%{ transform:translate3d(18px,10px,0) scale(1.08); }
-}
-@keyframes profileCouponHeroShine{
-  to{ transform:translateX(130%); }
-}
-.profilePhotoCard{ text-align:center; }
-.profilePhotoPreviewWrap{
-  display:flex;
-  justify-content:center;
-  margin-bottom:14px;
-}
-.profilePhotoPreview{
-  width:110px;
-  height:110px;
-  border-radius:30px;
-  background:linear-gradient(135deg,#111827,#ff6a00);
-  color:#fff;
-  font-size:42px;
-  font-weight:900;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  box-shadow:0 18px 34px rgba(17,24,39,.18);
-}
-.profileSecondaryBtn{
-  background:#111827;
-  color:#fff;
-}
-.profileSettingsIcon{
-  background:rgba(255,255,255,.12);
-  border:1px solid rgba(255,255,255,.16);
-  color:#fff;
-}
-.profileSettingsIcon svg{ color:#fff; stroke:#fff; }
-#profileSettingsModal .modal__panel,
-#emailAuthModal .modal__panel{
-  border-radius:28px 28px 0 0;
-}
-#profileSettingsModal .modal__header,
-#emailAuthModal .modal__header{
-  background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(249,250,251,.94));
-}
-@media (max-width:520px){
-  .profileInfoGrid{ grid-template-columns:1fr; }
-  .profileHeroTopline{ flex-direction:column; align-items:flex-start; }
-  .profileCouponCard__top{ flex-direction:column; }
+@media (max-width:640px){
+  .profileHeroQuickStats{ grid-template-columns:1fr; }
+  .profileIdentityRow{ flex-direction:column; }
+  .profileIdentityRow strong{ max-width:100%; text-align:left; }
 }
 
-.profileCouponsList{
-  display:grid;
-  gap:14px;
-  margin-top:16px;
+
+/* Checkout wallet de cupons */
+.coCouponBoxPremium{ position:relative; overflow:hidden; }
+.coCouponHead{ display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:12px; }
+.coCouponHintTop{ max-width:380px; }
+.coCouponWalletBtn{
+  border-radius:14px;
+  padding:10px 14px;
+  border:1px solid rgba(148,163,184,.28);
+  background:linear-gradient(135deg, rgba(255,255,255,.96), rgba(241,245,249,.94));
+  box-shadow:0 14px 30px rgba(15,23,42,.08);
+  font-weight:800;
 }
-.profileCouponsList:empty::before{
-  content:"Nenhuma promoção ativa no momento.";
-  display:block;
-  padding:18px;
-  border-radius:20px;
-  background:linear-gradient(180deg,#fff,#f8fafc);
-  border:1px dashed rgba(15,23,42,.14);
-  color:#64748b;
-  text-align:center;
-  font-weight:700;
-}
-.profileCouponListItem{
+.coCouponWallet{ display:grid; gap:12px; margin-top:14px; }
+.coCouponWallet.hidden{ display:none; }
+.coCouponWalletCard{
   position:relative;
   overflow:hidden;
+  display:grid;
+  grid-template-columns:1.45fr auto;
+  align-items:center;
+  gap:14px;
   width:100%;
   text-align:left;
-  border:1px solid rgba(15,23,42,.08);
-  background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(248,250,252,.96));
-  border-radius:24px;
-  padding:16px 16px 15px;
-  box-shadow:0 18px 34px rgba(15,23,42,.08);
-  transform:translateY(0) scale(1);
-  transition:transform .22s ease, box-shadow .22s ease, border-color .22s ease;
-}
-.profileCouponListItem::before{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:linear-gradient(135deg, rgba(255,106,0,.10), transparent 40%, rgba(34,197,94,.08) 100%);
-  opacity:.9;
-}
-.profileCouponListItem::after{
-  content:"";
-  position:absolute;
-  inset:0;
-  background:linear-gradient(120deg, transparent 10%, rgba(255,255,255,.55) 45%, transparent 70%);
-  transform:translateX(-135%);
-  transition:transform .75s ease;
-}
-.profileCouponListItem:hover,
-.profileCouponListItem:active{
-  transform:translateY(-2px) scale(1.01);
-  box-shadow:0 24px 42px rgba(15,23,42,.12);
-  border-color:rgba(255,106,0,.22);
-}
-.profileCouponListItem:hover::after,
-.profileCouponListItem:active::after{
-  transform:translateX(135%);
-}
-.profileCouponListItem.is-available{
-  border-color:rgba(22,163,74,.24);
-  box-shadow:0 22px 40px rgba(22,163,74,.14);
-}
-.profileCouponListItem.is-available .profileCouponListItem__badge{
-  background:linear-gradient(135deg,#16a34a,#22c55e);
+  border:1px solid rgba(255,255,255,.22);
+  border-radius:20px;
+  padding:16px 18px;
+  background:linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #38bdf8 100%);
+  box-shadow:0 24px 48px rgba(15,23,42,.22);
   color:#fff;
-  box-shadow:0 10px 20px rgba(22,163,74,.22);
+  transition:transform .18s ease, box-shadow .22s ease;
 }
-.profileCouponListItem.is-available .profileCouponListItem__status{
-  color:#15803d;
+.coCouponWalletCard:hover{ transform:translateY(-2px); box-shadow:0 30px 54px rgba(15,23,42,.26); }
+.coCouponWalletCard:active{ transform:scale(.985); }
+.coCouponWalletGlow{
+  position:absolute; inset:auto -30% -80% auto; width:180px; height:180px; border-radius:999px;
+  background:radial-gradient(circle, rgba(255,255,255,.3), transparent 70%);
+  pointer-events:none; animation:coCouponGlow 4.8s ease-in-out infinite;
 }
-.profileCouponListItem > *{ position:relative; z-index:1; }
-.profileCouponListItem__top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-bottom:10px;
+@keyframes coCouponGlow{ 0%,100%{ transform:scale(.9); opacity:.7; } 50%{ transform:scale(1.08); opacity:1; } }
+.coCouponWalletMain,.coCouponWalletSide{ position:relative; z-index:1; display:flex; flex-direction:column; }
+.coCouponWalletMain strong{ font-size:15px; font-weight:900; }
+.coCouponWalletMain small{ margin-top:4px; color:rgba(255,255,255,.85); line-height:1.4; }
+.coCouponWalletSide{ align-items:flex-end; gap:8px; }
+.coCouponWalletSide em{
+  font-style:normal; font-size:11px; font-weight:900; letter-spacing:.08em; text-transform:uppercase;
+  background:rgba(255,255,255,.16); border:1px solid rgba(255,255,255,.2); border-radius:999px; padding:6px 10px;
 }
-.profileCouponListItem__badge{
-  display:inline-flex;
-  align-items:center;
-  justify-content:center;
-  min-width:92px;
-  padding:8px 12px;
-  border-radius:999px;
-  background:rgba(15,23,42,.08);
-  color:#0f172a;
-  font-weight:1000;
-  font-size:12px;
-  letter-spacing:.08em;
+.coCouponWalletSide b{ font-size:14px; letter-spacing:.08em; }
+.coCouponWalletEmpty{
+  border:1px dashed rgba(148,163,184,.35); border-radius:16px; padding:16px; color:#64748b; background:#f8fafc;
 }
-.profileCouponListItem__status{
-  font-size:12px;
-  color:#64748b;
-  font-weight:800;
+@media (max-width:640px){
+  .coCouponHead{ flex-direction:column; }
+  .coCouponWalletCard{ grid-template-columns:1fr; }
+  .coCouponWalletSide{ align-items:flex-start; }
 }
-.profileCouponListItem__title{
-  font-weight:1000;
-  font-size:18px;
-  color:#0f172a;
-  margin-bottom:8px;
-  letter-spacing:-.02em;
-}
-.profileCouponListItem__text{
-  color:#475569;
-  font-size:13px;
-  line-height:1.5;
-}
-.profileCouponListItem__meta{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap:12px;
-  margin-top:14px;
-}
-.profileCouponListItem__hint{
-  font-size:12px;
-  color:#64748b;
-  font-weight:800;
-}
-.profileCouponListItem__action{
-  display:inline-flex;
-  align-items:center;
-  gap:8px;
-  padding:9px 12px;
-  border-radius:999px;
-  background:#0f172a;
-  color:#fff;
-  font-size:12px;
-  font-weight:900;
-  box-shadow:0 12px 20px rgba(15,23,42,.16);
-}
-@media (max-width:520px){
-  .profileCouponsHero{ padding:16px; }
-  .profileCouponsHero__title{ font-size:21px; }
-  .profileCouponListItem__top,
-  .profileCouponListItem__meta{ flex-direction:column; align-items:flex-start; }
+
+.ordersHeaderBar{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.ordersHistoryBtn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap;font-weight:800;}
+.miniCountBadge{display:inline-flex;align-items:center;justify-content:center;min-width:22px;height:22px;padding:0 7px;border-radius:999px;background:#111827;color:#fff;font-size:12px;font-weight:800;}
+.deliveredTimerBox{margin:16px 0 10px;padding:16px;border-radius:18px;background:linear-gradient(135deg,#111827,#1f2937);color:#fff;box-shadow:0 18px 40px rgba(15,23,42,.22);}
+.deliveredTimerBox__kicker{font-size:11px;letter-spacing:.16em;text-transform:uppercase;opacity:.72;font-weight:800;}
+.deliveredTimerValue{margin-top:6px;font-size:34px;line-height:1;font-weight:900;}
+.deliveredTimerSub{margin-top:8px;color:rgba(255,255,255,.8);font-size:13px;}
+.historyPanel{max-height:88vh;}
+.historyOrdersList{display:flex;flex-direction:column;gap:14px;padding:14px 14px 22px;}
+.historyCard{background:#fff;border:1px solid rgba(15,23,42,.08);border-radius:18px;padding:14px;box-shadow:0 14px 30px rgba(15,23,42,.08);}
+.historyCard__top{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;}
+.historyCard__kicker{font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;color:#64748b;}
+.historyCard__title{display:block;margin-top:4px;font-size:16px;}
+.historyCard__meta{margin-top:8px;color:#64748b;font-size:12px;}
+.historyStatus{padding:8px 10px;border-radius:999px;background:rgba(22,163,74,.1);color:#15803d;font-weight:800;font-size:12px;white-space:nowrap;}
+.historyItems{margin-top:12px;padding-top:12px;border-top:1px solid rgba(15,23,42,.08);display:flex;flex-direction:column;gap:10px;}
+.historyItemLine{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;}
+.historyItemMeta{margin-top:4px;color:#64748b;font-size:12px;}
+.historyItemQty{font-weight:800;color:#111827;}
+.historyActions{margin-top:14px;}
+.historyActionBtn{width:100%;font-weight:800;}
+
+
+@keyframes chatBadgePulse{
+  0%,100%{ transform: scale(1); }
+  18%{ transform: scale(1.08); }
+  36%{ transform: scale(1); }
+  54%{ transform: scale(1.12); }
 }

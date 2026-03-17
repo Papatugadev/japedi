@@ -16,7 +16,7 @@
   <meta name="apple-mobile-web-app-title" content="Cardápio">
 
   <link rel="stylesheet" href="./styles.css">
-  <script src="https://unpkg.com/lucide@latest"></script>
+  <script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=_yUWVrQ2kvJLAs4dlcBXXBx28t3cY4RFHyNOby5ULDb8227SmWrfRQyAvz0VHmpKoSBb-8I77KELycnfhtGbHWc2gfCmbN2recwrTdDMhuvr7IZFztmjzhY4YkowNgnF-LXtqkvWLnJQloyKWsx6mjYfxI_Rg1CU_GyVQgsvSFGCcK_U_hH-WIguqct4jCo4T6qvJbv2RUKfEI1aaTmEbF0WppjUAlvUZW0jmb0BzjpIvUEqV4C8rCFoPznnPq0m5YTux3jplk2u0qFQuMvrWQ" charset="UTF-8"></script><script src="https://unpkg.com/lucide@latest"></script>
 
   <style>
    
@@ -70,15 +70,27 @@
   </main>
 
   <main id="ordersView" class="view hidden">
-    <div class="sectionTitle">
-      <h2 style="margin:0">Pedidos</h2>
-      <p class="muted" style="margin:6px 0 0">Acompanhe seu último pedido e fale com o restaurante.</p>
+    <div class="sectionTitle ordersHeaderBar">
+      <div>
+        <h2 style="margin:0">Pedidos</h2>
+        <p class="muted" style="margin:6px 0 0">Acompanhe seu último pedido e fale com o restaurante.</p>
+      </div>
+      <button id="openHistoryBtn" class="ghost ordersHistoryBtn hidden" type="button">
+        Histórico
+        <span id="historyCountBadge" class="miniCountBadge hidden">0</span>
+      </button>
     </div>
 
     <div id="ordersEmpty" class="box">
       <strong>Nenhum pedido ainda</strong>
       <div class="muted" style="margin-top:6px">Faça um pedido no cardápio e ele aparece aqui.</div>
       <button id="goMenuBtn" class="btn" type="button" style="margin-top:12px">Ir para o cardápio</button>
+    </div>
+
+    <div id="ordersHistoryState" class="box hidden">
+      <strong>Seu pedido atual já saiu da tela</strong>
+      <div class="muted" style="margin-top:6px">Agora ele fica salvo no histórico para você consultar os itens e pedir novamente.</div>
+      <button class="btn" type="button" onclick="document.getElementById('openHistoryBtn')?.click()" style="margin-top:12px">Abrir histórico</button>
     </div>
 
     <div id="orderCard" class="box orderCardPro hidden">
@@ -177,6 +189,8 @@
         </div>
       </div>
 
+      <div id="deliveredTimerBox" class="deliveredTimerBox hidden"><div class="deliveredTimerBox__kicker">Sai em</div><div id="deliveredTimerValue" class="deliveredTimerValue">20:00</div><div id="deliveredTimerSub" class="deliveredTimerSub">Depois desse tempo, o pedido vai para o histórico.</div></div>
+
       <div class="orderMeta orderMeta--pro">
         <div class="trackTotalCard">
           <div class="muted" style="font-weight:800;">Total</div>
@@ -273,23 +287,34 @@
       <button id="checkoutBtn" class="btn" type="button" style="margin-top:12px">Finalizar pedido</button>
     </div>
   </main>
-<main id="profileView" class="view hidden">
-  <section class="profileHeroCard clean profileHeroCard--premium">
+<main id="profileView" class="view hidden profileViewPro">
+  <section class="profileHeroCard clean profileHeroCardPro">
+    <div class="profileHeroGlow"></div>
     <button id="openProfileSettingsBtn" class="profileSettingsIcon" type="button" aria-label="Abrir configurações">
       <i data-lucide="settings-2"></i>
     </button>
 
-    <div class="profileHeroTopline">
-      <div class="profileHeroBadge">Cliente premium</div>
-      <div class="profileHeroMini" id="profileHeroMini">Personalize sua conta</div>
-    </div>
+    <div class="profileHeroName" id="profileHeroName">Seu perfil</div>
+    <div class="profileHeroSub" id="profileHeroSub">Seu espaço premium com dados, benefícios e cupons ativos.</div>
 
     <div class="profileHeroAvatarWrap">
-      <div class="profileHeroAvatar" id="profileAvatarPreview">J</div>
+      <div class="profileHeroAvatar" id="profileAvatarPreview">🙂</div>
     </div>
 
-    <div class="profileHeroName" id="profileHeroName">Seu perfil</div>
-    <div class="profileHeroSub" id="profileHeroSub">Faça login, envie sua foto e deixe seu perfil bonito.</div>
+    <div class="profileHeroQuickStats">
+      <div class="profileHeroStatChip">
+        <span class="profileHeroStatLabel">Pedidos</span>
+        <strong id="profileStatOrders">0</strong>
+      </div>
+      <div class="profileHeroStatChip">
+        <span class="profileHeroStatLabel">Cupons</span>
+        <strong id="profileStatCoupons">0</strong>
+      </div>
+      <div class="profileHeroStatChip">
+        <span class="profileHeroStatLabel">Economia</span>
+        <strong id="profileStatSavings">R$ 0,00</strong>
+      </div>
+    </div>
 
     <button id="openLevelsGuideBtn" class="profileXpCard" type="button" aria-label="Ver benefícios dos níveis">
       <div class="profileXpTop">
@@ -305,102 +330,73 @@
     </button>
   </section>
 
-  <section class="profileTabsCard box">
-    <div class="profileTabs" id="profileTabs">
-      <button class="profileTab is-active" type="button" data-profile-tab="account">Conta</button>
-      <button class="profileTab" type="button" data-profile-tab="coupons">Cupons</button>
-      <button class="profileTab" type="button" data-profile-tab="photo">Foto</button>
+  <div class="profileTabs" role="tablist" aria-label="Abas do perfil">
+    <button id="profileTabConta" class="profileTabBtn is-active" type="button" data-profile-tab="conta" aria-selected="true">Conta</button>
+    <button id="profileTabCupons" class="profileTabBtn" type="button" data-profile-tab="cupons" aria-selected="false">Cupons</button>
+  </div>
+
+  <section id="profileContaPane" class="profilePane is-active" data-profile-pane="conta">
+    <div class="box profileBox profileHighlightsBox">
+      <div class="profileSectionTitle">Resumo da sua conta</div>
+      <div class="profileHighlightsGrid">
+        <article class="profileMiniCard">
+          <span class="profileMiniCard__label">Restaurante</span>
+          <strong id="profileRestaurantName">-</strong>
+          <small id="profileRestaurantDesc">Seus benefícios acompanham esta loja.</small>
+        </article>
+        <article class="profileMiniCard">
+          <span class="profileMiniCard__label">Último pedido</span>
+          <strong id="profileLastOrderText">Nenhum pedido recente</strong>
+          <small id="profileLastOrderSub">Faça um pedido e acompanhe tudo por aqui.</small>
+        </article>
+        <article class="profileMiniCard">
+          <span class="profileMiniCard__label">Próximo benefício</span>
+          <strong id="profileNextBenefit">Continue pedindo para subir de nível</strong>
+          <small id="profileNextBenefitSub">Quanto mais pedidos, melhores as vantagens.</small>
+        </article>
+      </div>
     </div>
 
-    <div class="profileTabPanel is-active" data-profile-panel="account">
-      <div class="profileInfoGrid">
-        <button class="profileInfoCard profileInfoCard--action" id="openProfileSettingsCard" type="button">
-          <div class="profileInfoCard__icon"><i data-lucide="user-round"></i></div>
-          <div>
-            <div class="profileInfoCard__title">Seus dados</div>
-            <div class="profileInfoCard__text">Nome, endereço, email e telefone em um só lugar.</div>
-          </div>
-        </button>
+    <div class="box profileBox profileIdentityBox">
+      <div class="profileSectionTitle">Informações salvas</div>
+      <div class="profileIdentityRows">
+        <div class="profileIdentityRow"><span>Nome</span><strong id="profileIdentityName">Não informado</strong></div>
+        <div class="profileIdentityRow"><span>WhatsApp</span><strong id="profileIdentityPhone">Não informado</strong></div>
+        <div class="profileIdentityRow"><span>E-mail</span><strong id="profileIdentityEmail">Não informado</strong></div>
+        <div class="profileIdentityRow"><span>Endereço</span><strong id="profileIdentityAddress">Não informado</strong></div>
+      </div>
+    </div>
 
-        <button class="profileInfoCard profileInfoCard--action" id="useProfileOnCheckoutCard" type="button">
-          <div class="profileInfoCard__icon"><i data-lucide="shopping-bag"></i></div>
-          <div>
-            <div class="profileInfoCard__title">Usar no checkout</div>
-            <div class="profileInfoCard__text">Preenche seus dados automaticamente no pedido.</div>
-          </div>
-        </button>
+    <div class="box profileBox">
+      <div class="profileSectionTitle">Escolha seu avatar</div>
+
+      <div class="avatarGrid" id="avatarGrid">
+        <button class="avatarOption is-active" type="button" data-avatar="🙂">🙂</button>
+        <button class="avatarOption" type="button" data-avatar="😎">😎</button>
+        <button class="avatarOption" type="button" data-avatar="🤠">🤠</button>
+        <button class="avatarOption" type="button" data-avatar="🧑‍🍳">🧑‍🍳</button>
+        <button class="avatarOption" type="button" data-avatar="👨‍💼">👨‍💼</button>
+        <button class="avatarOption" type="button" data-avatar="👩‍🦱">👩‍🦱</button>
+        <button class="avatarOption" type="button" data-avatar="🧔">🧔</button>
+        <button class="avatarOption" type="button" data-avatar="👩‍🎨">👩‍🎨</button>
       </div>
 
-      <div class="profileLoginCard" id="profileGuestBox">
-        <div class="profileLoginCard__kicker">Acesso</div>
-        <div class="profileLoginCard__title">Entre para salvar seu perfil</div>
-        <div class="profileLoginCard__text">Continue com Google ou email e mantenha seus dados sincronizados.</div>
+      <button id="saveAvatarBtn" class="btn" type="button" style="margin-top:14px;">
+        Salvar avatar
+      </button>
+    </div>
+  </section>
 
-        <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
-          Entrar com Google
-        </button>
-
-        <button id="openEmailAuthBtn" class="ghost profileGhostFull" type="button" style="margin-top:10px;width:100%;">
-          Entrar com email
-        </button>
-      </div>
-
-      <div id="profileUserBox" class="profileLoginCard profileLoginCard--connected hidden">
-        <div class="profileConnectedTop">
-          <div class="profileConnectedAvatar" id="profileConnectedAvatar">J</div>
-          <div>
-            <div class="profileLoginCard__kicker">Conta conectada</div>
-            <div class="profileLoginCard__title" id="profileUserName">Conta conectada</div>
-            <div class="profileLoginCard__text" id="profileUserEmail"></div>
-          </div>
+  <section id="profileCuponsPane" class="profilePane hidden" data-profile-pane="cupons">
+    <div class="box profileBox profileCouponsBox">
+      <div class="profileSectionTitle">Cupons e campanhas</div>
+      <div class="profileCouponsHeader">
+        <div>
+          <strong>Ofertas liberadas para você</strong>
+          <span id="profileCouponsSubtitle">Os cupons criados no painel admin aparecem aqui.</span>
         </div>
-
-        <button id="logoutBtn" class="ghost profileGhostFull" type="button" style="margin-top:14px;width:100%;">
-          Sair
-        </button>
-      </div>
-    </div>
-
-    <div class="profileTabPanel" data-profile-panel="coupons">
-      <div class="profileCouponsHero">
-        <div class="profileCouponsHero__eyebrow">Promoções ativas</div>
-        <div class="profileCouponsHero__title">Seus cupons e benefícios</div>
-        <div class="profileCouponsHero__text" id="profileCouponsHeroText">Quando houver promoção ativa, ela vai aparecer aqui para você usar no checkout.</div>
       </div>
       <div id="profileCouponsList" class="profileCouponsList"></div>
-    </div>
-
-    <div class="profileTabPanel" data-profile-panel="photo">
-      <div class="profilePhotoCard">
-        <div class="profilePhotoPreviewWrap">
-          <div class="profilePhotoPreview" id="profilePhotoPreview">J</div>
-        </div>
-
-        <div class="profilePhotoText">
-          <div class="profilePhotoTitle">Sua foto de perfil</div>
-          <div class="profilePhotoSub">Sem foto, mostramos a primeira letra do seu nome. Se enviar uma foto, ela aparece no perfil.</div>
-        </div>
-
-        <input id="profilePhotoInput" class="hidden" type="file" accept="image/*" />
-        <button id="uploadProfilePhotoBtn" class="btn" type="button">Enviar foto</button>
-        <button id="removeProfilePhotoBtn" class="ghost profileGhostFull" type="button" style="margin-top:10px;width:100%;">Remover foto</button>
-
-        <div class="profileSectionTitle" style="margin-top:16px;">Avatar rápido</div>
-        <div class="avatarGrid" id="avatarGrid">
-          <button class="avatarOption is-active" type="button" data-avatar="🙂">🙂</button>
-          <button class="avatarOption" type="button" data-avatar="😎">😎</button>
-          <button class="avatarOption" type="button" data-avatar="🤠">🤠</button>
-          <button class="avatarOption" type="button" data-avatar="🧑‍🍳">🧑‍🍳</button>
-          <button class="avatarOption" type="button" data-avatar="👨‍💼">👨‍💼</button>
-          <button class="avatarOption" type="button" data-avatar="👩‍🦱">👩‍🦱</button>
-          <button class="avatarOption" type="button" data-avatar="🧔">🧔</button>
-          <button class="avatarOption" type="button" data-avatar="👩‍🎨">👩‍🎨</button>
-        </div>
-
-        <button id="saveAvatarBtn" class="btn profileSecondaryBtn" type="button" style="margin-top:14px;">
-          Salvar avatar rápido
-        </button>
-      </div>
     </div>
   </section>
 </main>
@@ -648,9 +644,6 @@
       <label class="label">Nome</label>
       <input id="profileNameInput" class="input" type="text" placeholder="Digite seu nome" />
 
-      <label class="label">WhatsApp</label>
-      <input id="profilePhoneInput" class="input" type="tel" placeholder="(19) 99999-9999" />
-
       <label class="label">E-mail</label>
       <input id="profileEmailInput" class="input" type="email" placeholder="voce@email.com" />
 
@@ -663,7 +656,7 @@
       <label class="label">Complemento</label>
       <input id="profileComplementInput" class="input" type="text" placeholder="Bloco, referência" />
 
-      <button id="useProfileOnCheckoutBtnModal" class="ghost" type="button" style="margin-top:10px;width:100%;">
+      <button id="useProfileOnCheckoutBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
         Usar dados no checkout
       </button>
 
@@ -673,26 +666,26 @@
 
       <div style="height:16px"></div>
 
-      <div id="profileGuestBoxModal">
+      <div id="profileGuestBox">
         <div style="font-weight:800; font-size:18px;">Você está como visitante</div>
         <div class="muted" style="margin-top:6px;">
           Entre com sua conta para salvar seus dados.
         </div>
 
-        <button id="loginGoogleBtnModal" class="btn" type="button" style="margin-top:14px;">
+        <button id="loginGoogleBtn" class="btn" type="button" style="margin-top:14px;">
           Entrar com Google
         </button>
 
-        <button id="openEmailAuthBtnModal" class="ghost" type="button" style="margin-top:10px;width:100%;">
+        <button id="openEmailAuthBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
           Entrar com email
         </button>
       </div>
 
-      <div id="profileUserBoxModal" class="hidden">
-        <div style="font-weight:800; font-size:18px;" id="profileUserNameModal">Conta conectada</div>
-        <div class="muted" id="profileUserEmailModal" style="margin-top:6px;"></div>
+      <div id="profileUserBox" class="hidden">
+        <div style="font-weight:800; font-size:18px;" id="profileUserName">Conta conectada</div>
+        <div class="muted" id="profileUserEmail" style="margin-top:6px;"></div>
 
-        <button id="logoutBtnModal" class="ghost" type="button" style="margin-top:14px;width:100%;">
+        <button id="logoutBtn" class="ghost" type="button" style="margin-top:14px;width:100%;">
           Sair
         </button>
       </div>
@@ -776,6 +769,16 @@
       <span class="levelsDot"></span>
       <span class="levelsDot"></span>
     </div>
+  </div>
+</div>
+<div id="orderHistoryModal" class="drawer hidden">
+  <div id="orderHistoryBackdrop" class="drawer__backdrop"></div>
+  <div class="drawer__panel historyPanel">
+    <div class="drawer__head">
+      <strong>Histórico de pedidos</strong>
+      <button id="closeHistoryBtn" class="ghost" type="button">Fechar</button>
+    </div>
+    <div id="historyOrdersList" class="drawer__body historyOrdersList"></div>
   </div>
 </div>
 </body>

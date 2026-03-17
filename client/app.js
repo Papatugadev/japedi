@@ -77,12 +77,18 @@ const state = {
     pixPollBusy: false,
     successOverlayTimer: null
   },
+  historyExpireTimer: null,
+  deliveredAtMs: 0,
+  currentTrackedOrderData: null,
 
   // (adicionado) Chat unread / notificações
   chatUnread: 0,
   chatInitialized: false,
   chatLastSeenRestaurantMs: 0,
   chatToastTimer: null,
+  chatAudioCtx: null,
+  chatAudioUnlocked: false,
+  chatTitleBase: document.title || "Japed",
   reviewLocked: false,
 reviewStars: 0,
   // entrega dinâmica
@@ -157,6 +163,213 @@ function loadLastOrder() {
 function forgetLastOrder() {
   try { localStorage.removeItem(lastOrderKey()); } catch (_) {}
 }
+function historyOrdersKey(){
+  return `japed:orderHistory:${state.restaurant?.id || state.slug || "unknown"}`;
+}
+
+function loadOrderHistory(){
+  try {
+    const raw = localStorage.getItem(historyOrdersKey());
+    const arr = JSON.parse(raw || "[]");
+    return Array.isArray(arr) ? arr : [];
+  } catch (_) {
+    return [];
+  }
+}
+
+function saveOrderHistory(list){
+  try {
+    localStorage.setItem(historyOrdersKey(), JSON.stringify(Array.isArray(list) ? list.slice(0, 25) : []));
+  } catch (_) {}
+}
+
+function upsertOrderHistory(entry){
+  if (!entry?.orderId) return;
+  const list = loadOrderHistory().filter(x => x?.orderId !== entry.orderId);
+  list.unshift(entry);
+  saveOrderHistory(list);
+  renderOrderHistoryButton();
+  renderOrderHistoryList();
+}
+
+function getHistoryOrderById(orderId){
+  return loadOrderHistory().find(x => x?.orderId === orderId) || null;
+}
+
+function getOrderHideDeadlineMs(data){
+  const deliveredAt = data?.deliveredAtMs || 0;
+  if (!deliveredAt) return 0;
+  return deliveredAt + (20 * 60 * 1000);
+}
+
+function getRemainingHideMs(data){
+  const deadline = getOrderHideDeadlineMs(data);
+  return Math.max(0, deadline - Date.now());
+}
+
+function formatDurationMMSS(ms){
+  const totalSec = Math.max(0, Math.ceil(Number(ms || 0) / 1000));
+  const mm = String(Math.floor(totalSec / 60)).padStart(2, '0');
+  const ss = String(totalSec % 60).padStart(2, '0');
+  return `${mm}:${ss}`;
+}
+
+function hideCurrentTrackedOrderToHistory(){
+  const data = state.currentTrackedOrderData || (state.currentOrderId ? getHistoryOrderById(state.currentOrderId) : null);
+  try { if (state.historyExpireTimer) clearInterval(state.historyExpireTimer); } catch(_) {}
+  state.historyExpireTimer = null;
+  state.deliveredAtMs = 0;
+
+  if (data?.orderId) {
+    upsertOrderHistory({ ...data, hiddenFromTrackingAt: Date.now() });
+  }
+
+  try { hideDeliveryReviewGate(); } catch(_) {}
+  try { closeChatDrawer(); } catch(_) {}
+  stopChat();
+  if (state.unsubTrack) { state.unsubTrack(); state.unsubTrack = null; }
+  forgetLastOrder();
+  state.currentOrderId = null;
+  state.currentOrderNumber = null;
+  state.currentTrackedOrderData = null;
+  setOrdersUI(false);
+  renderOrderHistoryButton();
+
+  if (document.getElementById('ordersView') && !document.getElementById('ordersView').classList.contains('hidden')) {
+    showTab('orders');
+  }
+}
+
+function updateDeliveredTimerUI(data){
+  const wrap = document.getElementById('deliveredTimerBox');
+  const value = document.getElementById('deliveredTimerValue');
+  const sub = document.getElementById('deliveredTimerSub');
+  if (!wrap || !value || !sub) return;
+
+  const isDelivered = normalizeOrderStatus(data?.status) === 'entregue';
+  if (!isDelivered || !data?.deliveredAtMs) {
+    wrap.classList.add('hidden');
+    value.textContent = '--:--';
+    return;
+  }
+
+  const remaining = getRemainingHideMs(data);
+  wrap.classList.remove('hidden');
+  value.textContent = formatDurationMMSS(remaining);
+  sub.textContent = remaining > 0
+    ? 'Depois desse tempo, o pedido sai do acompanhamento e vai para o histórico.'
+    : 'Movendo pedido para o histórico...';
+}
+
+function scheduleDeliveredOrderExpiry(data){
+  try { if (state.historyExpireTimer) clearInterval(state.historyExpireTimer); } catch(_) {}
+  state.historyExpireTimer = null;
+  state.deliveredAtMs = Number(data?.deliveredAtMs || 0) || 0;
+  updateDeliveredTimerUI(data);
+
+  if (!state.deliveredAtMs) return;
+
+  if (getRemainingHideMs(data) <= 0) {
+    hideCurrentTrackedOrderToHistory();
+    return;
+  }
+
+  state.historyExpireTimer = setInterval(() => {
+    const live = state.currentTrackedOrderData || data;
+    updateDeliveredTimerUI(live);
+    if (getRemainingHideMs(live) <= 0) {
+      hideCurrentTrackedOrderToHistory();
+    }
+  }, 1000);
+}
+
+function renderOrderHistoryButton(){
+  const btn = document.getElementById('openHistoryBtn');
+  const badge = document.getElementById('historyCountBadge');
+  if (!btn || !badge) return;
+  const list = loadOrderHistory();
+  const count = list.length;
+  badge.textContent = String(count);
+  badge.classList.toggle('hidden', count <= 0);
+  btn.classList.toggle('hidden', count <= 0);
+}
+
+function renderOrderHistoryList(){
+  const listEl = document.getElementById('historyOrdersList');
+  if (!listEl) return;
+  const list = loadOrderHistory();
+  if (!list.length) {
+    listEl.innerHTML = `<div class="muted">Nenhum pedido no histórico ainda.</div>`;
+    return;
+  }
+
+  listEl.innerHTML = list.map((order) => {
+    const total = Number(order?.totals?.total || 0);
+    const items = Array.isArray(order?.items) ? order.items : [];
+    const count = items.reduce((acc, it) => acc + Number(it?.qty || 0), 0);
+    const when = order?.deliveredAtMs ? new Date(order.deliveredAtMs).toLocaleString('pt-BR') : '-';
+    const itemsHtml = items.map((it) => {
+      const meta = [it?.optionsText, Array.isArray(it?.meta?.addons) && it.meta.addons.length ? it.meta.addons.map(a => a?.name).filter(Boolean).join(', ') : ''].filter(Boolean).join(' • ');
+      return `<div class="historyItemLine"><div><strong>${String(it?.name || 'Item')}</strong>${meta ? `<div class="historyItemMeta">${meta}</div>` : ''}</div><div class="historyItemQty">x${Number(it?.qty || 0)}</div></div>`;
+    }).join('');
+    return `
+      <div class="historyCard">
+        <div class="historyCard__top">
+          <div>
+            <div class="historyCard__kicker">Pedido ${order?.orderNumber ? '#' + order.orderNumber : '#' + order.orderId}</div>
+            <strong class="historyCard__title">${count} ${count === 1 ? 'item' : 'itens'} • ${moneyBRL(total)}</strong>
+          </div>
+          <span class="historyStatus">Entregue</span>
+        </div>
+        <div class="historyCard__meta">Entregue em ${when}</div>
+        <div class="historyItems">${itemsHtml || '<div class="muted">Itens indisponíveis.</div>'}</div>
+        <div class="historyActions">
+          <button class="ghost historyActionBtn" type="button" data-repeat-order="${order.orderId}">Pedir novamente</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  listEl.querySelectorAll('[data-repeat-order]').forEach((btn) => {
+    btn.addEventListener('click', () => repeatHistoryOrder(btn.getAttribute('data-repeat-order')));
+  });
+}
+
+function openOrderHistoryModal(){
+  renderOrderHistoryList();
+  const root = document.getElementById('orderHistoryModal');
+  if (!root) return;
+  root.classList.remove('hidden');
+}
+
+function closeOrderHistoryModal(){
+  const root = document.getElementById('orderHistoryModal');
+  if (!root) return;
+  root.classList.add('hidden');
+}
+
+function repeatHistoryOrder(orderId){
+  const order = getHistoryOrderById(orderId);
+  if (!order) return alert('Não foi possível carregar este pedido do histórico.');
+
+  const items = Array.isArray(order.items) ? order.items : [];
+  if (!items.length) return alert('Este pedido não tem itens disponíveis para repetir.');
+
+  state.cart = items.map((it, idx) => ({
+    id: `${it.productId || it.id || 'item'}_${Date.now()}_${idx}`,
+    productId: it.productId || it.id || null,
+    name: it.name || 'Produto',
+    optionsText: it.optionsText || '',
+    price: Number(it.price || 0),
+    qty: Math.max(1, Number(it.qty || 1)),
+    meta: it.meta || null
+  }));
+
+  renderCartUI();
+  closeOrderHistoryModal();
+  showTab('cart');
+}
+
 function getReviewStorageKey(orderId){
   return `japed:review:${state.restaurant?.id || state.slug || "unknown"}:${orderId}`;
 }
@@ -288,14 +501,29 @@ function isChatDrawerOpen() {
 function setChatUnread(n) {
   state.chatUnread = Math.max(0, Number(n || 0));
   const badge = document.getElementById("chatUnreadBadge");
-  if (!badge) return;
-  if (state.chatUnread > 0) {
-    badge.textContent = String(state.chatUnread);
-    badge.classList.remove("hidden");
-  } else {
-    badge.textContent = "0";
-    badge.classList.add("hidden");
+  const btn = document.getElementById("openChatBtn");
+  const visibleText = state.chatUnread > 99 ? "99+" : String(state.chatUnread || 0);
+
+  if (badge) {
+    if (state.chatUnread > 0) {
+      badge.textContent = visibleText;
+      badge.classList.remove("hidden");
+      badge.setAttribute("aria-label", `${visibleText} mensagens não lidas`);
+    } else {
+      badge.textContent = "0";
+      badge.classList.add("hidden");
+      badge.removeAttribute("aria-label");
+    }
   }
+
+  if (btn) {
+    const unreadLabel = state.chatUnread > 0 ? ` (${visibleText} nova${state.chatUnread > 1 ? 's' : ''})` : "";
+    btn.setAttribute("aria-label", `Abrir chat${unreadLabel}`);
+  }
+
+  try {
+    document.title = state.chatUnread > 0 ? `(${visibleText}) ${state.chatTitleBase || document.title || 'Japed'}` : (state.chatTitleBase || document.title || 'Japed');
+  } catch(_) {}
 }
 
 function showChatToast(text) {
@@ -321,29 +549,75 @@ function resetChatUnread() {
   }
 }
 
-function playChatPing() {
-  // Beep simples via WebAudio (sem arquivo externo).
-  // Pode ser bloqueado até o usuário interagir (normal do navegador).
+function ensureChatAudioReady() {
   try {
     const AudioCtx = window.AudioContext || window.webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    const o = ctx.createOscillator();
-    const g = ctx.createGain();
-    o.type = "sine";
-    o.frequency.value = 880;
-    g.gain.value = 0.0001;
-    o.connect(g);
-    g.connect(ctx.destination);
-    const now = ctx.currentTime;
-    g.gain.setValueAtTime(0.0001, now);
-    g.gain.exponentialRampToValueAtTime(0.18, now + 0.02);
-    g.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
-    o.start(now);
-    o.stop(now + 0.25);
-    o.onended = () => { try { ctx.close(); } catch(_) {} };
+    if (!AudioCtx) return null;
+    if (!state.chatAudioCtx || state.chatAudioCtx.state === 'closed') {
+      state.chatAudioCtx = new AudioCtx();
+    }
+    return state.chatAudioCtx;
+  } catch(_) {
+    return null;
+  }
+}
+
+function unlockChatAudio() {
+  const ctx = ensureChatAudioReady();
+  if (!ctx) return;
+  const finish = () => {
+    state.chatAudioUnlocked = true;
+    try { window.removeEventListener('pointerdown', unlockChatAudio, true); } catch(_) {}
+    try { window.removeEventListener('touchstart', unlockChatAudio, true); } catch(_) {}
+    try { window.removeEventListener('keydown', unlockChatAudio, true); } catch(_) {}
+  };
+  try {
+    const resumePromise = (ctx.state === 'suspended' && ctx.resume) ? ctx.resume() : Promise.resolve();
+    Promise.resolve(resumePromise).then(finish).catch(() => {});
   } catch(_) {}
 }
+
+function installChatAudioUnlock() {
+  try {
+    window.addEventListener('pointerdown', unlockChatAudio, true);
+    window.addEventListener('touchstart', unlockChatAudio, true);
+    window.addEventListener('keydown', unlockChatAudio, true);
+  } catch(_) {}
+}
+
+function playChatPing() {
+  try {
+    const ctx = ensureChatAudioReady();
+    if (!ctx) return;
+    if (ctx.state === 'suspended' && ctx.resume) {
+      ctx.resume().catch(() => {});
+    }
+    const now = ctx.currentTime + 0.01;
+
+    const makeTone = (freq, start, duration, gainValue, type = 'sine') => {
+      const o = ctx.createOscillator();
+      const g = ctx.createGain();
+      const f = ctx.createBiquadFilter();
+      o.type = type;
+      o.frequency.setValueAtTime(freq, start);
+      f.type = 'lowpass';
+      f.frequency.setValueAtTime(2200, start);
+      g.gain.setValueAtTime(0.0001, start);
+      g.gain.exponentialRampToValueAtTime(gainValue, start + 0.012);
+      g.gain.exponentialRampToValueAtTime(0.0001, start + duration);
+      o.connect(f);
+      f.connect(g);
+      g.connect(ctx.destination);
+      o.start(start);
+      o.stop(start + duration + 0.03);
+    };
+
+    makeTone(840, now, 0.09, 0.045, 'triangle');
+    makeTone(1180, now + 0.11, 0.11, 0.038, 'triangle');
+    makeTone(980, now + 0.25, 0.08, 0.02, 'sine');
+  } catch(_) {}
+}
+
 
 /** Util: gera número de pedido (4 dígitos) para exibir como #1234 */
 function genOrderNumber4() {
@@ -1294,13 +1568,20 @@ function ensureCheckoutUI(){
   if (!document.getElementById("coCouponBox")){
     const box = document.createElement("div");
     box.id = "coCouponBox";
-    box.className = "coBox";
+    box.className = "coBox coCouponBoxPremium";
     box.innerHTML = `
-      <div class="coTitle">Cupom</div>
+      <div class="coCouponHead">
+        <div>
+          <div class="coTitle">Cupom</div>
+          <div class="muted coCouponHintTop">Use um código manualmente ou escolha um cupom da sua conta.</div>
+        </div>
+        <button id="coOpenCouponsBtn" class="ghost coCouponWalletBtn" type="button">Cupons da conta</button>
+      </div>
       <div class="coRow">
         <input id="coCouponInput" class="input" placeholder="Digite o cupom (opcional)" />
         <button id="coApplyCoupon" class="ghost" type="button">Aplicar</button>
       </div>
+      <div id="coCouponWallet" class="coCouponWallet hidden"></div>
       <div class="muted" id="coCouponMsg" style="margin-top:6px"></div>
     `;
     content.appendChild(box);
@@ -1338,6 +1619,18 @@ function ensureCheckoutUI(){
         state.couponCode = (couponInput.value || "").trim();
         validateCouponAndUpdateUI(true);
       }
+    });
+  }
+
+  const openCouponsBtn = document.getElementById("coOpenCouponsBtn");
+  if (openCouponsBtn && openCouponsBtn.dataset.bound !== "1"){
+    openCouponsBtn.dataset.bound = "1";
+    openCouponsBtn.addEventListener("click", () => {
+      const wallet = document.getElementById("coCouponWallet");
+      if (!wallet) return;
+      const willShow = wallet.classList.contains("hidden");
+      wallet.classList.toggle("hidden", !willShow);
+      if (willShow) renderCheckoutCouponsWallet();
     });
   }
 }
@@ -1477,8 +1770,8 @@ function updateCheckoutUIFromConfig(){
   // Cupom
   const couponBox = document.getElementById("coCouponBox");
   if (couponBox){
-    const campaigns = _promoCampaignList();
-    const show = campaigns.some((item) => item?.enabled !== false && (_promoCampaignCode(item) || item?.autoApply === true));
+    const availableCoupons = getProfileCampaignCoupons();
+    const show = !!((promo.enabled && promo.couponCode && promo.couponPct) || availableCoupons.length);
     couponBox.classList.toggle("hidden", !show);
     if (!show){
       state.couponCode = "";
@@ -1487,177 +1780,186 @@ function updateCheckoutUIFromConfig(){
       const msg = document.getElementById("coCouponMsg");
       if (msg) msg.textContent = "";
     } else {
-      applyAutoPromoSelection();
+      renderCheckoutCouponsWallet();
     }
   }
 }
 
-function _promoCampaignList(){
+function resolveCheckoutCoupon(code, subtotal, deliveryFee){
   const promo = state.config?.promo || {};
-  const campaigns = Array.isArray(promo.campaigns) ? promo.campaigns.slice() : [];
+  const rawCode = String(code || "").trim();
+  if (!rawCode) return { ok:false, code:"", discount:0, pct:0, value:0, freeDelivery:false, deliveryDiscount:0, title:"", source:null };
 
-  if (promo.enabled && String(promo.couponCode || '').trim()) {
-    campaigns.unshift({
-      id: 'legacy_coupon',
-      enabled: true,
-      featured: true,
-      title: promo.title || 'Cupom disponível',
-      subtitle: promo.subtitle || promo.notice || '',
-      couponCode: String(promo.couponCode || '').trim(),
-      discountType: 'percent',
-      discountPct: Number(promo.couponPct || 0),
-      startsAt: promo.startsAt || '',
-      endsAt: promo.endsAt || ''
-    });
-  }
-
-  return campaigns;
-}
-
-function _promoCampaignCode(campaign){
-  return String(campaign?.couponCode || campaign?.code || campaign?.coupon || '').trim();
-}
-
-function _normalizeCampaignDiscountType(campaign){
-  const raw = String(campaign?.discountType || campaign?.type || '').trim().toLowerCase();
-  if (raw === 'free_delivery' || raw === 'frete_gratis' || raw === 'free-delivery') return 'free_delivery';
-  if (raw === 'fixed' || raw === 'valor_fixo' || raw === 'fixed_amount') return 'fixed';
-  return 'percent';
-}
-
-function _campaignDiscountValue(campaign){
-  return Number(campaign?.discountValue ?? campaign?.discountPct ?? campaign?.couponPct ?? campaign?.value ?? 0);
-}
-
-function _campaignDateMs(raw){
-  const s = String(raw || '').trim();
-  if (!s) return null;
-  const t = Date.parse(s);
-  return Number.isFinite(t) ? t : null;
-}
-
-function _profilePromoStats(){
-  const profile = loadProfile?.() || {};
-  return {
-    lastOrderAt: Number(profile.lastOrderAt || 0) || 0,
-    orderCount: Number(profile.orderCount || 0) || 0,
-    totalSpent: Number(profile.totalSpent || 0) || 0,
-    level: String(profile.level || 'Bronze').trim() || 'Bronze'
-  };
-}
-
-function _campaignCriteriaOk(campaign, subtotal){
   const now = Date.now();
-  const startsAt = _campaignDateMs(campaign?.startsAt);
-  const endsAt = _campaignDateMs(campaign?.endsAt);
-  if (startsAt && now < startsAt) return { ok:false, reason:'Cupom ainda não começou.' };
-  if (endsAt && now >= endsAt) return { ok:false, reason:'Cupom expirado.' };
-  if (campaign?.enabled === false) return { ok:false, reason:'Cupom desativado.' };
+  const normalizedCode = rawCode.toLowerCase();
+  const campaigns = Array.isArray(promo.campaigns) ? promo.campaigns : [];
 
-  const minOrder = Number(campaign?.minOrder ?? campaign?.minSubtotal ?? campaign?.minimumOrder ?? 0);
-  if (minOrder > 0 && Number(subtotal || 0) < minOrder){
-    return { ok:false, reason:`Pedido mínimo de ${moneyBRL(minOrder)}.` };
-  }
+  for (const raw of campaigns){
+    const codeValue = String(raw?.code || raw?.couponCode || raw?.coupon || raw?.cupom || "").trim();
+    if (!codeValue || codeValue.toLowerCase() !== normalizedCode) continue;
 
-  const stats = _profilePromoStats();
-  const daysInactive = Number(campaign?.daysInactive ?? campaign?.inactiveDays ?? campaign?.daysWithoutOrder ?? 0);
-  if (daysInactive > 0){
-    if (!stats.lastOrderAt) return { ok:false, reason:`Válido para clientes com ${daysInactive} dias sem pedir.` };
-    const diffDays = (Date.now() - stats.lastOrderAt) / 86400000;
-    if (diffDays < daysInactive) return { ok:false, reason:`Válido após ${daysInactive} dias sem pedir.` };
-  }
+    const startsAt = _parsePromoEndsAt(raw?.startsAt || raw?.startAt || raw?.startDate || raw?.beginAt);
+    const endsAt = _parsePromoEndsAt(raw?.endsAt || raw?.endAt || raw?.endDate || raw?.expiresAt);
+    const enabled = raw?.enabled !== false && raw?.active !== false && String(raw?.status || "active").toLowerCase() !== "inactive";
+    if (!enabled) continue;
+    if (startsAt && now < startsAt) return { ok:false, reason:'not_started', code:codeValue };
+    if (endsAt && now >= endsAt) return { ok:false, reason:'expired', code:codeValue };
 
-  const minOrders = Number(campaign?.minOrders ?? campaign?.minOrderCount ?? 0);
-  if (minOrders > 0 && stats.orderCount < minOrders){
-    return { ok:false, reason:`Necessário ter pelo menos ${minOrders} pedidos.` };
-  }
-
-  const minSpent = Number(campaign?.minSpent ?? campaign?.minTotalSpent ?? 0);
-  if (minSpent > 0 && stats.totalSpent < minSpent){
-    return { ok:false, reason:`Válido para clientes com gasto mínimo de ${moneyBRL(minSpent)}.` };
-  }
-
-  const levelOrder = { bronze:1, prata:2, silver:2, ouro:3, gold:3, diamante:4, diamond:4 };
-  const minLevelRaw = String(campaign?.minLevel || campaign?.customerLevel || '').trim().toLowerCase();
-  if (minLevelRaw){
-    const currentLevel = String(stats.level || 'Bronze').trim().toLowerCase();
-    if ((levelOrder[currentLevel] || 0) < (levelOrder[minLevelRaw] || 0)){
-      return { ok:false, reason:`Disponível a partir do nível ${campaign?.minLevel || campaign?.customerLevel}.` };
+    const minOrder = Number(raw?.minOrder ?? raw?.minimumOrder ?? raw?.minSubtotal ?? raw?.minimumSubtotal ?? 0);
+    if (minOrder > 0 && Number(subtotal || 0) < minOrder){
+      return { ok:false, reason:'min_order', code:codeValue, minOrder };
     }
+
+    const benefitType = String(raw?.type || raw?.benefitType || raw?.discountType || '').trim().toLowerCase();
+    let pct = Number(raw?.discountPct ?? raw?.percentOff ?? raw?.pct ?? raw?.couponPct ?? raw?.discountPercent ?? 0);
+    let value = Number(raw?.discountValue ?? raw?.amountOff ?? raw?.fixedDiscount ?? raw?.fixedOff ?? raw?.valueOff ?? 0);
+    let freeDelivery = !!(raw?.freeDelivery || benefitType === 'free_delivery' || benefitType === 'freedelivery' || benefitType === 'delivery_free');
+
+    if (benefitType === 'percent' || benefitType === 'percentage') {
+      pct = pct > 0 ? pct : Number(raw?.value ?? 0);
+      value = 0;
+    } else if (benefitType === 'fixed' || benefitType === 'amount' || benefitType === 'value') {
+      value = value > 0 ? value : Number(raw?.value ?? 0);
+      pct = 0;
+    } else if (benefitType === 'free_delivery' || benefitType === 'freedelivery' || benefitType === 'delivery_free') {
+      freeDelivery = true;
+      pct = 0;
+      value = 0;
+    } else if (!pct && !value && Number(raw?.value || 0) > 0) {
+      // fallback: se o admin gravou só "value", assume percentual quando <= 100; senão valor fixo.
+      const genericValue = Number(raw?.value || 0);
+      if (genericValue <= 100) pct = genericValue;
+      else value = genericValue;
+    }
+
+    let discount = 0;
+    if (pct > 0) discount += Math.round((Number(subtotal || 0) * (pct / 100)) * 100) / 100;
+    if (value > 0) discount += Math.min(Number(value || 0), Math.max(0, Number(subtotal || 0) - discount));
+    const deliveryDiscount = freeDelivery ? Number(deliveryFee || 0) : 0;
+    return {
+      ok: discount > 0 || deliveryDiscount > 0,
+      reason: discount > 0 || deliveryDiscount > 0 ? '' : 'no_benefit',
+      code: codeValue,
+      discount,
+      pct,
+      value,
+      freeDelivery,
+      deliveryDiscount,
+      title: String(raw?.title || raw?.name || raw?.headline || 'Cupom aplicado').trim(),
+      source: raw
+    };
   }
 
-  return { ok:true, reason:'' };
+  const expected = String(promo.couponCode || "").trim();
+  const pct = Number(promo.couponPct || 0);
+  const endsAtMs = _parsePromoEndsAt(promo.endsAt);
+  const expired = !!(endsAtMs && now >= endsAtMs);
+  if (promo.enabled && expected && pct > 0 && normalizedCode === expected.toLowerCase()){
+    if (expired) return { ok:false, reason:'expired', code:expected };
+    return {
+      ok:true,
+      code:expected,
+      discount: Math.round((Number(subtotal || 0) * (pct / 100)) * 100) / 100,
+      pct,
+      value:0,
+      freeDelivery:false,
+      deliveryDiscount:0,
+      title: String(promo.title || `Desconto de ${pct}%`).trim(),
+      source: 'legacy'
+    };
+  }
+
+  return { ok:false, reason:'invalid', code:rawCode };
 }
 
-function evaluatePromoEngine(){
-  const campaigns = _promoCampaignList().map((campaign, index) => {
-    const normalized = { ...campaign };
-    normalized._idx = index;
-    normalized._code = _promoCampaignCode(normalized);
-    normalized._type = _normalizeCampaignDiscountType(normalized);
-    normalized._value = _campaignDiscountValue(normalized);
-    normalized._criteria = _campaignCriteriaOk(normalized, cartTotals().subtotal);
-    normalized._criteriaReason = normalized._criteria.reason || '';
-    normalized._displayText = normalized._type === 'free_delivery'
-      ? 'frete grátis'
-      : normalized._type === 'fixed'
-        ? `${moneyBRL(normalized._value)} OFF`
-        : `${Number(normalized._value || 0)}% OFF`;
-    return normalized;
+function renderCheckoutCouponsWallet(){
+  const mount = document.getElementById('coCouponWallet');
+  const trigger = document.getElementById('coOpenCouponsBtn');
+  if (!mount) return;
+  const coupons = getProfileCampaignCoupons();
+  if (trigger){
+    trigger.textContent = coupons.length ? `Cupons da conta (${coupons.length})` : 'Cupons da conta';
+  }
+  if (!coupons.length){
+    mount.innerHTML = `<div class="coCouponWalletEmpty">Nenhum cupom ativo no momento.</div>`;
+    return;
+  }
+  mount.innerHTML = coupons.map((item) => `
+    <button class="coCouponWalletCard" type="button" data-wallet-coupon="${item.code}">
+      <span class="coCouponWalletGlow"></span>
+      <span class="coCouponWalletMain">
+        <strong>${item.title}</strong>
+        <small>${item.subtitle}</small>
+      </span>
+      <span class="coCouponWalletSide">
+        <em>${item.badge}</em>
+        <b>${item.code}</b>
+      </span>
+    </button>
+  `).join('');
+  mount.querySelectorAll('[data-wallet-coupon]').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const code = String(btn.dataset.walletCoupon || '').trim();
+      const inp = document.getElementById('coCouponInput');
+      state.couponCode = code;
+      if (inp) inp.value = code;
+      validateCouponAndUpdateUI(true);
+    });
   });
-
-  const code = String(state.couponCode || '').trim().toLowerCase();
-  const manualMatch = code
-    ? campaigns.find((item) => item._code && item._code.toLowerCase() === code && item._criteria.ok)
-    : null;
-
-  const autoMatch = campaigns.find((item) => item._criteria.ok && item.autoApply === true && (!item._code || item._code.toLowerCase() === code || !code)) || null;
-  const featured = campaigns.find((item) => item._criteria.ok && (item.featured === true || item.highlight === true)) || campaigns.find((item) => item._criteria.ok && !!item._code) || null;
-
-  return { campaigns, manualMatch, autoMatch, featured };
-}
-
-function applyAutoPromoSelection(){
-  const evaluation = evaluatePromoEngine();
-  const input = document.getElementById('coCouponInput');
-  if (state.couponCode) return evaluation;
-  if (evaluation.autoMatch?._code){
-    state.couponCode = evaluation.autoMatch._code;
-    if (input) input.value = evaluation.autoMatch._code;
-  }
-  return evaluation;
 }
 
 function validateCouponAndUpdateUI(showAlerts){
   const msg = document.getElementById("coCouponMsg");
-  const code = (state.couponCode || "").trim();
-  const evaluation = evaluatePromoEngine();
-  const manual = evaluation.manualMatch;
-  const auto = evaluation.autoMatch;
-  const featured = evaluation.featured;
+  const code = String(state.couponCode || "").trim();
+  const { subtotal } = cartTotals();
+  const cfg = state.config || {};
+  const delivery = cfg.delivery || {};
 
-  if (msg){
-    if (!code){
-      if (auto?._code){
-        msg.textContent = `Promoção automática ativa: ${auto.title || auto._code} • ${auto._displayText || 'benefício aplicado'} ✅`;
-      } else if (featured?._displayText) {
-        msg.textContent = featured._code
-          ? `${featured.title || featured._code} • ${featured._displayText}`
-          : `Promoção ativa • ${featured._displayText}`;
-      } else {
-        msg.textContent = "";
-      }
-    } else if (manual){
-      msg.textContent = `Cupom aplicado: ${manual.title || manual._code} • ${manual._displayText || 'benefício liberado'} ✅`;
+  let deliveryFee = 0;
+  if (state.checkoutMode === "delivery"){
+    if (_hasDynamicDeliveryConfig(cfg)){
+      deliveryFee = Number(state.deliveryQuote?.fee || 0);
     } else {
-      const candidate = evaluation.campaigns.find((item) => item._code && item._code.toLowerCase() === code.toLowerCase());
-      msg.textContent = candidate?._criteriaReason ? `${candidate._criteriaReason} ❌` : "Cupom inválido ❌";
+      deliveryFee = Number(delivery.fee || 0);
     }
   }
 
-  if (showAlerts && code && !manual) {
-    const candidate = evaluation.campaigns.find((item) => item._code && item._code.toLowerCase() === code.toLowerCase());
-    alert(candidate?._criteriaReason || "Cupom inválido.");
+  const result = resolveCheckoutCoupon(code, subtotal, deliveryFee);
+
+  if (msg){
+    if (!code){
+      msg.textContent = "";
+    } else if (result.ok){
+      if (result.freeDelivery && (Number(result.deliveryDiscount || 0) > 0 || Number(deliveryFee || 0) > 0)){
+        msg.textContent = "Cupom aplicado: frete grátis ✅";
+      } else if (Number(result.pct || 0) > 0){
+        msg.textContent = `Cupom aplicado: ${Number(result.pct || 0)}% OFF ✅`;
+      } else if (Number(result.value || 0) > 0){
+        msg.textContent = `Cupom aplicado: ${moneyBRL(result.value || 0)} OFF ✅`;
+      } else {
+        msg.textContent = "Cupom aplicado ✅";
+      }
+    } else if (result.reason === 'expired'){
+      msg.textContent = "Cupom expirado ⏰";
+    } else if (result.reason === 'not_started'){
+      msg.textContent = "Cupom ainda não começou ⏳";
+    } else if (result.reason === 'min_order'){
+      msg.textContent = `Pedido mínimo para este cupom: ${moneyBRL(result.minOrder || 0)}.`;
+    } else {
+      msg.textContent = "Cupom inválido ❌";
+    }
+  }
+
+  if (showAlerts && code && !result.ok) {
+    if (result.reason === 'expired') {
+      alert("Esse cupom expirou.");
+    } else if (result.reason === 'not_started') {
+      alert("Esse cupom ainda não começou.");
+    } else if (result.reason === 'min_order') {
+      alert(`Esse cupom exige pedido mínimo de ${moneyBRL(result.minOrder || 0)}.`);
+    } else {
+      alert("Cupom inválido.");
+    }
   }
 
   updateCheckoutTotals();
@@ -1828,9 +2130,11 @@ function _bindDeliveryAddressEvents(){
 function computeOrderTotals(){
   const cfg = state.config || {};
   const delivery = cfg.delivery || {};
+  const promo = cfg.promo || {};
 
   const { subtotal, qty } = cartTotals();
 
+  // taxa de entrega (só no modo delivery)
   let deliveryFee = 0;
   if (state.checkoutMode === "delivery"){
     if (_hasDynamicDeliveryConfig(cfg)){
@@ -1840,49 +2144,30 @@ function computeOrderTotals(){
     }
   }
 
-  let discount = 0;
-  let couponOk = false;
-  let couponPct = 0;
-  let appliedCampaign = null;
-  const evaluation = evaluatePromoEngine();
-  const code = String(state.couponCode || '').trim();
+  // cupom / campanhas
+  const couponResult = resolveCheckoutCoupon(state.couponCode, subtotal, deliveryFee);
+  const discount = Number(couponResult.discount || 0);
+  const deliveryDiscount = Number(couponResult.deliveryDiscount || 0);
+  const effectiveDeliveryFee = Math.max(0, deliveryFee - deliveryDiscount);
+  const couponOk = !!couponResult.ok;
 
-  if (evaluation.manualMatch){
-    appliedCampaign = evaluation.manualMatch;
-    couponOk = true;
-  } else if ((!code || (evaluation.autoMatch?._code && code.toLowerCase() === evaluation.autoMatch._code.toLowerCase())) && evaluation.autoMatch){
-    appliedCampaign = evaluation.autoMatch;
-    couponOk = true;
-  }
+  const total = Math.max(0, (subtotal + effectiveDeliveryFee) - discount);
 
-  if (appliedCampaign){
-    const type = _normalizeCampaignDiscountType(appliedCampaign);
-    const rawValue = _campaignDiscountValue(appliedCampaign);
-    if (type === 'free_delivery'){
-      discount = Math.max(0, deliveryFee);
-      couponPct = 0;
-    } else if (type === 'fixed'){
-      discount = Math.max(0, Math.min(subtotal + deliveryFee, rawValue));
-      couponPct = 0;
-    } else {
-      couponPct = Math.max(0, rawValue);
-      discount = Math.round((subtotal * (couponPct / 100)) * 100) / 100;
-    }
-  }
-
-  const total = Math.max(0, (subtotal + deliveryFee) - discount);
+  // pedido mínimo (somente delivery)
   const minOrder = Number(delivery.minOrder || 0);
   const minOk = !(state.checkoutMode === "delivery" && minOrder > 0 && subtotal < minOrder);
 
   return {
     qty,
     subtotal,
-    deliveryFee,
+    deliveryFee: effectiveDeliveryFee,
+    deliveryDiscount,
     discount,
     total,
     couponOk,
-    couponPct,
-    appliedCampaign,
+    couponPct: couponOk ? Number(couponResult.pct || 0) : 0,
+    couponValue: couponOk ? Number(couponResult.value || 0) : 0,
+    couponFreeDelivery: couponOk ? !!couponResult.freeDelivery : false,
     minOk,
     minOrder
   };
@@ -2001,7 +2286,7 @@ async function createOrder(options = {}) {
   }
 
   const totalsCalc = computeOrderTotals();
-  const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, appliedCampaign, minOk, minOrder } = totalsCalc;
+  const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, minOk, minOrder } = totalsCalc;
 
   if (!minOk) {
     alert(`Pedido mínimo para entrega: ${moneyBRL(minOrder)}.`);
@@ -2015,8 +2300,6 @@ async function createOrder(options = {}) {
     couponCode: ((state.couponCode || "").trim() || null),
     couponOk: !!couponOk,
     couponPct: Number(couponPct || 0),
-    couponCampaignId: (appliedCampaign?.id || appliedCampaign?._code || null),
-    couponCampaignTitle: (appliedCampaign?.title || null),
     deliveryFee: Number(deliveryFee || 0),
     deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0),
     discount: Number(discount || 0),
@@ -2027,9 +2310,11 @@ async function createOrder(options = {}) {
   };
 
   const initialStatus = (options?.status || "recebido");
+  const initialPaymentStatus = String(options?.paymentStatus || (initialStatus === "aguardando_pagamento" ? "pending" : "approved") || "").trim();
 
   const orderData = {
     status: initialStatus,
+    paymentStatus: initialPaymentStatus || null,
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
@@ -2045,7 +2330,7 @@ async function createOrder(options = {}) {
       optionsText: i.optionsText || "",
       meta: i.meta || null
     })),
-    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), couponCampaignId: (appliedCampaign?.id || appliedCampaign?._code || null), couponCampaignTitle: (appliedCampaign?.title || null), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
+    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
@@ -2053,16 +2338,6 @@ async function createOrder(options = {}) {
 
   state.currentOrderNumber = orderData.orderNumber;
 
-  try { saveLastOrder(newDoc.id, orderData.orderNumber); } catch (_) {}
-  try {
-    const currentProfile = loadProfile();
-    saveProfile({
-      ...currentProfile,
-      lastOrderAt: Date.now(),
-      orderCount: Number(currentProfile.orderCount || 0) + 1,
-      totalSpent: Number(currentProfile.totalSpent || 0) + Number(total || 0)
-    });
-  } catch(_) {}
 
   // ✅ tracking público PRECISA vir antes do chat (rules do chat usa exists(orders_public/{orderId}))
   let publicOk = false;
@@ -2072,6 +2347,7 @@ async function createOrder(options = {}) {
   publicRef,
   {
     status: orderData.status,
+    paymentStatus: orderData.paymentStatus || null,
     createdAt: orderData.createdAt,
     updatedAt: orderData.updatedAt,
     orderNumber: orderData.orderNumber,
@@ -2252,6 +2528,7 @@ function finishOrderFlow(orderId){
   clearCheckoutInputs();
 
   state.currentOrderId = orderId;
+  try { saveLastOrder(orderId, state.currentOrderNumber || null); } catch (_) {}
   setOrdersUI(true);
   openTrackScreen(orderId);
   startTrackingOrder(orderId);
@@ -2527,7 +2804,8 @@ function showTab(name){
   const tabCart = document.getElementById("openCartBtn");
   const tabProfile = document.getElementById("tabProfile");
 
-  const safeName = (name === "orders" && !state.currentOrderId) ? "menu" : name;
+  const hasOrderHistory = loadOrderHistory().length > 0;
+  const safeName = (name === "orders" && !state.currentOrderId && !hasOrderHistory) ? "menu" : name;
 
   const isMenu = safeName === "menu";
   const isOrders = safeName === "orders";
@@ -2566,11 +2844,14 @@ function showTab(name){
   }
 }
 function setOrdersUI(hasOrder){
-  document.getElementById("ordersEmpty")?.classList?.toggle("hidden", !!hasOrder);
+  const hasHistory = loadOrderHistory().length > 0;
+  document.getElementById("ordersEmpty")?.classList?.toggle("hidden", !!hasOrder || hasHistory);
   document.getElementById("orderCard")?.classList?.toggle("hidden", !hasOrder);
+  document.getElementById("ordersHistoryState")?.classList?.toggle("hidden", !(!hasOrder && hasHistory));
 
   const dot = document.getElementById("ordersDot");
   if (dot) dot.classList.toggle("hidden", !hasOrder);
+  renderOrderHistoryButton();
 }
 
 function openChatDrawer(){
@@ -2656,6 +2937,7 @@ function openTrackScreen(orderId) {
 
   const codeEl = document.getElementById("orderCode");
   if (codeEl) codeEl.textContent = orderId || "-";
+  renderOrderHistoryButton();
 }
 
 function normalizeOrderStatus(raw){
@@ -2754,10 +3036,12 @@ function renderOrderItems(items){
     const price = Number(it?.price || 0) || 0;
     const row = document.createElement("div");
     row.className = "orderItemRow";
+    const metaText = [it?.optionsText, Array.isArray(it?.meta?.addons) && it.meta.addons.length ? it.meta.addons.map(a => a?.name).filter(Boolean).join(', ') : ''].filter(Boolean).join(' • ');
     row.innerHTML = `
       <div>
         <strong>${name}</strong>
         <div class="orderItemMeta">${moneyBRL(price)} cada</div>
+        ${metaText ? `<div class="orderItemMeta">${metaText}</div>` : ''}
       </div>
       <div class="orderItemQty">x${qty}</div>
     `;
@@ -2790,6 +3074,24 @@ function renderOrderTotal(totals){
   if (wrap) wrap.classList.toggle("hidden", !(subtotal > 0 || deliveryFee > 0 || discount > 0));
 }
 
+
+async function canExposeOrderToCustomer(orderId){
+  if (!orderId || !state.restaurant?.id) return false;
+  try {
+    const ref = Firestore.doc(db, "restaurants", state.restaurant.id, "orders_public", orderId);
+    const snap = await Firestore.getDoc(ref);
+    if (!snap.exists()) return false;
+    const data = snap.data() || {};
+    const rawStatus = normalizeOrderStatus(data.status);
+    const rawPayment = String(data.paymentStatus || "").toLowerCase();
+    if (rawStatus === "aguardando_pagamento") return false;
+    if (rawPayment && rawPayment !== "approved") return false;
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
 function startTrackingOrder(orderId) {
   if (state.unsubTrack) {
     state.unsubTrack();
@@ -2803,6 +3105,38 @@ function startTrackingOrder(orderId) {
     (snap) => {
       if (!snap.exists()) return;
       const data = snap.data();
+      const rawStatus = normalizeOrderStatus(data.status);
+      const rawPayment = String(data.paymentStatus || "").toLowerCase();
+
+      if (rawStatus === "aguardando_pagamento" || (rawPayment && rawPayment !== "approved")) {
+        if (state.currentOrderId === orderId) state.currentOrderId = null;
+        try { forgetLastOrder(); } catch(_) {}
+        setOrdersUI(false);
+        if ((document.getElementById("ordersView") && !document.getElementById("ordersView").classList.contains("hidden"))) {
+          showTab("menu");
+        }
+        return;
+      }
+
+      const deliveredAtMs = rawStatus === 'entregue'
+        ? (state.deliveredAtMs || (data.updatedAt?.toDate ? data.updatedAt.toDate().getTime() : Date.now()))
+        : 0;
+
+      state.currentTrackedOrderData = {
+        orderId,
+        orderNumber: data.orderNumber || state.currentOrderNumber || null,
+        status: rawStatus,
+        deliveredAtMs,
+        updatedAtMs: data.updatedAt?.toDate ? data.updatedAt.toDate().getTime() : Date.now(),
+        items: Array.isArray(data.items) ? data.items : [],
+        totals: data.totals || {},
+        paymentStatus: rawPayment || data.paymentStatus || ''
+      };
+
+      if (rawStatus === 'entregue') {
+        state.currentTrackedOrderData.deliveredAtMs = deliveredAtMs;
+        upsertOrderHistory(state.currentTrackedOrderData);
+      }
 
       if (data.orderNumber) {
         state.currentOrderNumber = data.orderNumber;
@@ -2822,6 +3156,14 @@ function startTrackingOrder(orderId) {
 
       renderOrderTotal(data.totals);
       renderOrderItems(data.items);
+
+      if (rawStatus === 'entregue') {
+        scheduleDeliveredOrderExpiry(state.currentTrackedOrderData);
+      } else {
+        try { if (state.historyExpireTimer) clearInterval(state.historyExpireTimer); } catch(_) {}
+        state.historyExpireTimer = null;
+        updateDeliveredTimerUI(null);
+      }
 
       if (normalizeOrderStatus(data.status) === "entregue") {
         if (hasReviewedOrder(orderId)) hideDeliveryReviewGate();
@@ -2872,6 +3214,7 @@ function startChat(orderId) {
   stopChat();
   ensureChatUIVisible();
   clearChatUI();
+  state.chatInitialized = false;
 
   const msgsRef = Firestore.collection(
     db,
@@ -3092,6 +3435,7 @@ if (tabProfile) {
     chatBackdrop.addEventListener("touchend", (e) => { e.preventDefault(); closeChatDrawer(); }, { passive:false });
   }
   try { setupChatSwipe(); } catch(_) {}
+  try { installChatAudioUnlock(); } catch(_) {}
 
  const openChatBtn = document.getElementById("openChatBtn");
 if (openChatBtn) openChatBtn.addEventListener("click", () => {
@@ -3110,6 +3454,15 @@ if (openChatBtn) openChatBtn.addEventListener("click", () => {
   openChatDrawer();
   setTimeout(() => { try { document.getElementById("chatText")?.focus(); } catch(_){} }, 60);
 });
+
+  const openHistoryBtn = document.getElementById("openHistoryBtn");
+  if (openHistoryBtn) openHistoryBtn.addEventListener("click", openOrderHistoryModal);
+
+  const closeHistoryBtn = document.getElementById("closeHistoryBtn");
+  if (closeHistoryBtn) closeHistoryBtn.addEventListener("click", closeOrderHistoryModal);
+
+  const closeHistoryBackdrop = document.getElementById("orderHistoryBackdrop");
+  if (closeHistoryBackdrop) closeHistoryBackdrop.addEventListener("click", closeOrderHistoryModal);
 
   // Chat (enviar)
   const sendBtn = document.getElementById("sendChatBtn");
@@ -3228,15 +3581,19 @@ document.getElementById("confirmOrderBtn")?.addEventListener("click", async () =
 
   // Retomar último pedido
   const last = loadLastOrder();
-  if (last?.orderId) {
+  if (last?.orderId && await canExposeOrderToCustomer(last.orderId)) {
     state.currentOrderId = last.orderId;
     if (last.orderNumber) state.currentOrderNumber = last.orderNumber;
     setOrdersUI(true);
     openTrackScreen(last.orderId);
     startTrackingOrder(last.orderId);
   } else {
+    try { forgetLastOrder(); } catch(_) {}
     setOrdersUI(false);
   }
+
+  renderOrderHistoryButton();
+  renderOrderHistoryList();
 
   renderProducts();
   renderCartUI();
@@ -3405,7 +3762,11 @@ function getDefaultProfile(){
     number: "",
     complement: "",
     level: "Bronze",
-    xp: 22
+    xp: 22,
+    ordersCount: 0,
+    totalSpent: 0,
+    totalSavings: 0,
+    lastOrderAt: null
   };
 }
 
@@ -3430,18 +3791,153 @@ function saveProfile(data){
     number: (data?.number ?? current.number ?? "").trim(),
     complement: (data?.complement ?? current.complement ?? "").trim(),
     level: (data?.level ?? current.level ?? "Bronze").trim() || "Bronze",
-    xp: Math.max(0, Math.min(100, Number(data?.xp ?? current.xp ?? 22)))
+    xp: Math.max(0, Math.min(100, Number(data?.xp ?? current.xp ?? 22))),
+    ordersCount: Math.max(0, Number(data?.ordersCount ?? current.ordersCount ?? 0)),
+    totalSpent: Math.max(0, Number(data?.totalSpent ?? current.totalSpent ?? 0)),
+    totalSavings: Math.max(0, Number(data?.totalSavings ?? current.totalSavings ?? 0)),
+    lastOrderAt: data?.lastOrderAt ?? current.lastOrderAt ?? null
   };
 
   localStorage.setItem(PROFILE_STORAGE_KEY, JSON.stringify(safe));
   return safe;
 }
 
+function setProfileTab(tab = "conta"){
+  const target = tab === "cupons" ? "cupons" : "conta";
+  document.querySelectorAll(".profileTabBtn").forEach((btn) => {
+    const active = btn.dataset.profileTab === target;
+    btn.classList.toggle("is-active", active);
+    btn.setAttribute("aria-selected", active ? "true" : "false");
+  });
+  document.querySelectorAll(".profilePane").forEach((pane) => {
+    pane.classList.toggle("hidden", pane.dataset.profilePane !== target);
+    pane.classList.toggle("is-active", pane.dataset.profilePane === target);
+  });
+  if (target === "cupons") renderProfileCoupons();
+}
+
+async function copyProfileCoupon(code){
+  const text = String(code || "").trim();
+  if (!text) return;
+  try { await navigator.clipboard.writeText(text); } catch(_) {}
+  state.couponCode = text;
+  const couponInput = document.getElementById("coCouponInput");
+  if (couponInput) couponInput.value = text;
+  try { validateCouponAndUpdateUI(); } catch(_) {}
+  alert("Cupom copiado.");
+}
+
+function getProfileCampaignCoupons(){
+  const promo = state.config?.promo || {};
+  const now = Date.now();
+  const normalized = [];
+  const campaigns = Array.isArray(promo.campaigns) ? promo.campaigns : [];
+
+  campaigns.forEach((campaign, index) => {
+    const raw = campaign || {};
+    const code = String(raw.code || raw.couponCode || raw.coupon || raw.cupom || "").trim();
+    const startsAt = _parsePromoEndsAt(raw.startsAt || raw.startAt || raw.startDate || raw.beginAt);
+    const endsAt = _parsePromoEndsAt(raw.endsAt || raw.endAt || raw.endDate || raw.expiresAt);
+    const enabled = raw.enabled !== false && raw.active !== false && String(raw.status || "active").toLowerCase() !== "inactive";
+    const started = !startsAt || now >= startsAt;
+    const notExpired = !endsAt || now < endsAt;
+    if (!enabled || !started || !notExpired || !code) return;
+
+    const pct = Number(raw.discountPct ?? raw.percentOff ?? raw.pct ?? raw.couponPct ?? raw.discountPercent ?? 0);
+    const value = Number(raw.discountValue ?? raw.amountOff ?? raw.fixedDiscount ?? raw.fixedOff ?? raw.valueOff ?? 0);
+    const freeDelivery = !!(raw.freeDelivery || raw.benefitType === "free_delivery" || raw.type === "free_delivery");
+    const minOrder = Number(raw.minOrder ?? raw.minimumOrder ?? raw.minSubtotal ?? raw.minimumSubtotal ?? 0);
+    const uses = Number(raw.limitUses ?? raw.usageLimit ?? raw.maxUses ?? 0);
+    const badge = freeDelivery ? 'Frete grátis' : pct > 0 ? `${pct}% OFF` : value > 0 ? `${moneyBRL(value)} OFF` : 'Cupom ativo';
+    const title = String(raw.title || raw.name || raw.headline || 'Oferta especial').trim();
+    const subtitle = String(raw.subtitle || raw.description || raw.notice || '').trim() ||
+      (freeDelivery ? 'Use no checkout para liberar a entrega grátis.' : pct > 0 ? `Use este cupom e ganhe ${pct}% de desconto no pedido.` : value > 0 ? `Use este cupom e economize ${moneyBRL(value)}.` : 'Cupom disponível para você.');
+
+    const metaParts = [];
+    if (minOrder > 0) metaParts.push(`Pedido mínimo ${moneyBRL(minOrder)}`);
+    if (uses > 0) metaParts.push(`Limite ${uses} uso${uses > 1 ? 's' : ''}`);
+    if (endsAt) metaParts.push(`Válido até ${new Date(endsAt).toLocaleString('pt-BR')}`);
+    else metaParts.push('Disponível agora');
+
+    normalized.push({
+      key: `${code}-${index}`,
+      code,
+      title,
+      subtitle,
+      badge,
+      meta: metaParts.join(' • '),
+      featured: !!(raw.featured || raw.highlight || raw.isPrimary || raw.isFeatured),
+      sortOrder: Number(raw.sortOrder ?? raw.priority ?? index)
+    });
+  });
+
+  const legacyCode = String(promo.couponCode || '').trim();
+  const legacyPct = Number(promo.couponPct || 0);
+  const legacyEnds = _parsePromoEndsAt(promo.endsAt);
+  const legacyOk = !!(promo.enabled && legacyCode && legacyPct > 0 && (!legacyEnds || legacyEnds > now));
+  if (legacyOk && !normalized.some(item => item.code.toLowerCase() === legacyCode.toLowerCase())) {
+    normalized.push({
+      key: `${legacyCode}-legacy`,
+      code: legacyCode,
+      title: String(promo.title || `Desconto de ${legacyPct}%`).trim(),
+      subtitle: String(promo.subtitle || `Use este cupom no checkout e economize ${legacyPct}% no seu pedido.`).trim(),
+      badge: `${legacyPct}% OFF`,
+      meta: legacyEnds ? `Válido até ${new Date(legacyEnds).toLocaleString('pt-BR')}` : 'Disponível agora',
+      featured: true,
+      sortOrder: -1
+    });
+  }
+
+  return normalized.sort((a, b) => Number(b.featured) - Number(a.featured) || a.sortOrder - b.sortOrder || a.title.localeCompare(b.title, 'pt-BR'));
+}
+
+function renderProfileCoupons(){
+  const mount = document.getElementById("profileCouponsList");
+  const subtitleEl = document.getElementById("profileCouponsSubtitle");
+  if (!mount) return;
+
+  const coupons = getProfileCampaignCoupons();
+
+  if (subtitleEl) {
+    subtitleEl.textContent = coupons.length
+      ? `${coupons.length} cupom${coupons.length > 1 ? 's ativos' : ' ativo'} disponível${coupons.length > 1 ? 's' : ''} para usar no checkout.`
+      : 'Assim que o restaurante liberar campanhas, elas aparecem aqui.';
+  }
+
+  if (!coupons.length) {
+    mount.innerHTML = `<div class="profileCouponsEmpty">Nenhum cupom ativo no momento.</div>`;
+    return;
+  }
+
+  mount.innerHTML = coupons.map((item) => `
+    <article class="profileCouponCard">
+      <div class="profileCouponTop">
+        <div>
+          <div class="profileCouponTitle">${item.title}</div>
+          <div class="profileCouponSub">${item.subtitle}</div>
+        </div>
+        <div class="profileCouponBadge">${item.badge}</div>
+      </div>
+      <div class="profileCouponCode">
+        <strong>${item.code}</strong>
+        <button class="profileCouponCopyBtn" type="button" data-copy-coupon="${item.code}">Usar agora</button>
+      </div>
+      <div class="profileCouponMeta">${item.meta}</div>
+    </article>
+  `).join('');
+
+  mount.querySelectorAll('[data-copy-coupon]').forEach((btn) => {
+    btn.addEventListener('click', () => copyProfileCoupon(btn.dataset.copyCoupon || ''));
+  });
+}
+
 function renderProfileForm(){
   const data = loadProfile();
+  const coupons = getProfileCampaignCoupons();
 
   const avatarPreview = document.getElementById("profileAvatarPreview");
   const heroName = document.getElementById("profileHeroName");
+  const heroSub = document.getElementById("profileHeroSub");
   const levelText = document.getElementById("profileLevelText");
   const xpFill = document.getElementById("profileXpBarFill");
 
@@ -3454,11 +3950,45 @@ function renderProfileForm(){
 
   if (avatarPreview) avatarPreview.textContent = data.avatar || "🙂";
   if (heroName) heroName.textContent = data.name || "Seu perfil";
+  if (heroSub) heroSub.textContent = data.name ? `Olá, ${data.name.split(/\s+/)[0]}! Seu espaço premium reúne seus dados, vantagens e ofertas ativas.` : "Seu espaço premium reúne seus dados, vantagens e ofertas ativas.";
   if (levelText) levelText.textContent = data.level || "Bronze";
   if (xpFill) xpFill.style.width = `${Number(data.xp || 0)}%`;
 
   const xpHint = document.getElementById("profileXpHint");
   if (xpHint) xpHint.textContent = `${Number(data.xp || 0)} XP • Toque para ver benefícios e como funciona`;
+
+  const statOrders = document.getElementById("profileStatOrders");
+  const statCoupons = document.getElementById("profileStatCoupons");
+  const statSavings = document.getElementById("profileStatSavings");
+  if (statOrders) statOrders.textContent = String(Math.max(0, Number(data.ordersCount || 0)));
+  if (statCoupons) statCoupons.textContent = String(coupons.length);
+  if (statSavings) statSavings.textContent = moneyBRL(Number(data.totalSavings || 0));
+
+  const restaurantName = document.getElementById("profileRestaurantName");
+  const restaurantDesc = document.getElementById("profileRestaurantDesc");
+  if (restaurantName) restaurantName.textContent = state.restaurant?.name || 'Sua loja favorita';
+  if (restaurantDesc) restaurantDesc.textContent = state.restaurant?.desc || 'Cupons, benefícios e dados rápidos centralizados no seu perfil.';
+
+  const lastOrderText = document.getElementById("profileLastOrderText");
+  const lastOrderSub = document.getElementById("profileLastOrderSub");
+  const lastOrder = loadLastOrder();
+  if (lastOrderText) lastOrderText.textContent = lastOrder?.orderNumber ? `Pedido #${lastOrder.orderNumber}` : 'Nenhum pedido recente';
+  if (lastOrderSub) lastOrderSub.textContent = lastOrder?.ts ? `Última atividade em ${new Date(lastOrder.ts).toLocaleString('pt-BR')}` : 'Faça um pedido e acompanhe tudo por aqui.';
+
+  const nextBenefit = document.getElementById("profileNextBenefit");
+  const nextBenefitSub = document.getElementById("profileNextBenefitSub");
+  const missingXp = Math.max(0, 100 - Number(data.xp || 0));
+  if (nextBenefit) nextBenefit.textContent = coupons.length ? `Você tem ${coupons.length} campanha${coupons.length > 1 ? 's' : ''} ativa${coupons.length > 1 ? 's' : ''}` : 'Suba de nível para receber novas vantagens';
+  if (nextBenefitSub) nextBenefitSub.textContent = coupons.length ? 'Use os cupons no checkout e aproveite as ofertas do painel admin.' : `Faltam ${missingXp} XP para encher sua barra atual.`;
+
+  const identityName = document.getElementById("profileIdentityName");
+  const identityPhone = document.getElementById("profileIdentityPhone");
+  const identityEmail = document.getElementById("profileIdentityEmail");
+  const identityAddress = document.getElementById("profileIdentityAddress");
+  if (identityName) identityName.textContent = data.name || 'Não informado';
+  if (identityPhone) identityPhone.textContent = data.phone || 'Não informado';
+  if (identityEmail) identityEmail.textContent = data.email || 'Não informado';
+  if (identityAddress) identityAddress.textContent = buildProfileCheckoutAddress(data) || 'Não informado';
 
   if (nameInput) nameInput.value = data.name || "";
   if (phoneInput) phoneInput.value = data.phone || "";
@@ -3470,6 +4000,8 @@ function renderProfileForm(){
   document.querySelectorAll(".avatarOption").forEach(btn => {
     btn.classList.toggle("is-active", btn.dataset.avatar === data.avatar);
   });
+
+  renderProfileCoupons();
 }
 
 function bindProfileAvatarPicker(){
@@ -3623,11 +4155,14 @@ document.getElementById("closeLevelsGuideBtn")?.addEventListener("click", closeL
 document.getElementById("closeLevelsGuideBackdrop")?.addEventListener("click", closeLevelsGuide);
 document.getElementById("levelsGuideTrack")?.addEventListener("scroll", syncLevelsDots, { passive: true });
 
+document.getElementById("profileTabConta")?.addEventListener("click", () => setProfileTab("conta"));
+document.getElementById("profileTabCupons")?.addEventListener("click", () => setProfileTab("cupons"));
 document.getElementById("saveAvatarBtn")?.addEventListener("click", handleSaveAvatar);
 document.getElementById("saveProfileDataBtn")?.addEventListener("click", handleSaveProfileData);
 document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fillCheckoutWithProfile);
 
 renderProfileForm();
+setProfileTab("conta");
 bindProfileAvatarPicker();
 fillCheckoutWithProfile(false);
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
@@ -3717,6 +4252,20 @@ let __JPED_PROMO_TICK = null;
 function _parsePromoEndsAt(raw){
   const s = String(raw || "").trim();
   if (!s) return null;
+
+  // Data sem hora (YYYY-MM-DD) deve valer até o fim do dia local,
+  // não expirar logo à meia-noite.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) {
+    const t = new Date(`${s}T23:59:59.999`).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
+
+  // Data/hora sem timezone: mantém como horário local.
+  if (/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(:\d{2}(\.\d{1,3})?)?$/.test(s) && !(/[zZ]|[+\-]\d{2}:?\d{2}$/.test(s))) {
+    const normalized = s.replace(' ', 'T');
+    const t = new Date(normalized).getTime();
+    return Number.isFinite(t) ? t : null;
+  }
 
   const t = Date.parse(s);
   if (Number.isFinite(t)) return t;

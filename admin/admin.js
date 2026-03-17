@@ -599,7 +599,10 @@ function renderOrders(list) {
   }
 
   // helper para escolher coluna
-  function bucketStatus(s) {
+  function bucketStatus(s, paymentStatus) {
+    const pay = String(paymentStatus || "").toLowerCase();
+    if (s === "aguardando_pagamento") return "aguardando_pagamento";
+    if (pay && pay !== "approved") return "aguardando_pagamento";
     // pedido novo pode vir "recebido" (ou vazio) => em_preparo
     if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
     if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
@@ -626,7 +629,10 @@ function renderOrders(list) {
     div.className = "order";
     div.style.borderLeftColor = border;
 
-    const col = bucketStatus(o.status);
+    const col = bucketStatus(o.status, o.paymentStatus);
+    if (col === "aguardando_pagamento") {
+      continue;
+    }
 
     // botões por coluna (pedido novo vai pra em_preparo)
     let actions = "";
