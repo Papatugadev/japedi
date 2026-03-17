@@ -447,6 +447,17 @@ async function setOrderStatus(orderId, newStatus) {
   const publicRef  = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
   const historyRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_history", orderId);
 
+  let currentData = null;
+  try {
+    const snap = await Firestore.getDoc(publicRef);
+    if (snap.exists()) currentData = snap.data() || null;
+  } catch (_) {}
+
+  const currentStatus = String(currentData?.status || "").toLowerCase();
+  if (currentStatus === "entregue" || currentStatus === "cancelado") {
+    return;
+  }
+
   const payload = {
     status: newStatus,
     updatedAt: Firestore.serverTimestamp()
@@ -489,10 +500,10 @@ async function setOrderStatus(orderId, newStatus) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
   }
 
-  // 3) Se for ENTREGUE: arquiva no histórico, MAS NÃO DELETA (não some hoje)
-  if (newStatus === "entregue") {
+  // 3) Se for status final: arquiva no histórico
+  if (newStatus === "entregue" || newStatus === "cancelado") {
     try {
-      // tenta pegar dados do privado, se não der pega do público
+      // tenta pegar dados do privado, se não der pega do público / snapshot anterior
       let baseData = null;
 
       try {
@@ -507,13 +518,18 @@ async function setOrderStatus(orderId, newStatus) {
         } catch (_) {}
       }
 
+      if (!baseData && currentData) {
+        baseData = currentData;
+      }
+
       await Firestore.setDoc(
         historyRef,
         {
           ...(baseData || {}),
           id: orderId,
-          status: "entregue",
-          deliveredAt: Firestore.serverTimestamp(),
+          status: newStatus,
+          deliveredAt: newStatus === "entregue" ? Firestore.serverTimestamp() : (baseData?.deliveredAt || null),
+          canceledAt: newStatus === "cancelado" ? Firestore.serverTimestamp() : (baseData?.canceledAt || null),
           archivedAt: Firestore.serverTimestamp(),
           updatedAt: Firestore.serverTimestamp(),
         },
@@ -521,7 +537,7 @@ async function setOrderStatus(orderId, newStatus) {
       );
     } catch (e) {
       console.warn("Falha ao arquivar em orders_history:", e?.code || e, e?.message || "");
-      // não bloqueia a entrega (status já foi salvo), só avisa no console
+      // não bloqueia a troca de status, só avisa no console
     }
   }
 
@@ -558,18 +574,19 @@ async function setOrderStatus(orderId, newStatus) {
 
 /** Renderiza pedidos */
 function renderOrders(list) {
-  // containers das 3 colunas
+  // containers das colunas
   const prepEl = document.getElementById("orders-prep");
   const outEl = document.getElementById("orders-out");
   const doneEl = document.getElementById("orders-done");
+  const cancelledEl = document.getElementById("orders-cancelled");
 
   // fallback antigo (caso o HTML ainda esteja no formato antigo)
   const legacyWrap = document.getElementById("orders");
 
   const clear = (el) => { if (el) el.innerHTML = ""; };
 
-  clear(prepEl); clear(outEl); clear(doneEl);
-  if (legacyWrap && !prepEl && !outEl && !doneEl) legacyWrap.innerHTML = "";
+  clear(prepEl); clear(outEl); clear(doneEl); clear(cancelledEl);
+  if (legacyWrap && !prepEl && !outEl && !doneEl && !cancelledEl) legacyWrap.innerHTML = "";
 
   // Diag de permissão no topo (sem atrapalhar)
   const attachDiag = (host) => {
@@ -598,32 +615,34 @@ function renderOrders(list) {
     return;
   }
 
+  function normalizeBucketStatus(s) {
+    return String(s || "").toLowerCase().trim();
+  }
+
   // helper para escolher coluna
   function bucketStatus(s, paymentStatus) {
+    const st = normalizeBucketStatus(s);
     const pay = String(paymentStatus || "").toLowerCase();
-    if (s === "aguardando_pagamento") return "aguardando_pagamento";
+    if (st === "aguardando_pagamento") return "aguardando_pagamento";
     if (pay && pay !== "approved") return "aguardando_pagamento";
+    if (st === "cancelado") return "cancelado";
     // pedido novo pode vir "recebido" (ou vazio) => em_preparo
-    if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
-    if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
-    if (s === "entregue") return "entregue";
+    if (!st || st === "recebido" || st === "em_preparo") return "em_preparo";
+    if (st === "saiu_pra_entrega") return "saiu_pra_entrega";
+    if (st === "entregue") return "entregue";
     return "em_preparo";
   }
 
   function hostFor(status) {
-    if (!prepEl && !outEl && !doneEl) return legacyWrap;
+    if (!prepEl && !outEl && !doneEl && !cancelledEl) return legacyWrap;
     if (status === "saiu_pra_entrega") return outEl;
     if (status === "entregue") return doneEl;
+    if (status === "cancelado") return cancelledEl;
     return prepEl;
   }
 
   for (const o of list) {
-    const mins = minsSince(o.createdAt);
     const border = statusColor(o.status);
-
-    const itemsHtml = (o.items || [])
-      .map(i => `• ${i.qty}x ${i.name} (${brl(i.price)})`)
-      .join("<br/>");
 
     const div = document.createElement("div");
     div.className = "order";
@@ -634,7 +653,7 @@ function renderOrders(list) {
       continue;
     }
 
-    // botões por coluna (pedido novo vai pra em_preparo)
+    // botões por coluna (status final fica bloqueado)
     let actions = "";
     if (col === "em_preparo") {
       actions = `
@@ -646,37 +665,36 @@ function renderOrders(list) {
         <button class="btn small" data-act="entregue" data-id="${o.id}">Entregue</button>
         <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
       `;
-    } else {
-      // entregue
-      actions = `
-        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
-      `;
+    } else if (col === "entregue") {
+      actions = `<div class="orderLockedTag">Pedido finalizado</div>`;
+    } else if (col === "cancelado") {
+      actions = `<div class="orderLockedTag orderLockedTag--danger">Pedido cancelado</div>`;
     }
 
-    
-const createdMs = _tsToMs(o.createdAt) || Date.now();
-const ageMs = Date.now() - createdMs;
-const late = ageMs >= 20 * 60 * 1000;
+    const createdMs = _tsToMs(o.createdAt) || Date.now();
+    const ageMs = Date.now() - createdMs;
+    const late = ageMs >= 20 * 60 * 1000;
 
-div.dataset.id = o.id;
+    div.dataset.id = o.id;
 
-div.innerHTML = `
-  <div class="cardTop">
-    <div class="timePill ${late ? "late" : ""} pulse" data-created-ms="${createdMs}" data-last-min="-1">
-      <span class="timePillDot"></span>
-      <span data-age>${_formatAge(ageMs)}</span>
-    </div>
-  </div>
+    div.innerHTML = `
+      <div class="cardTop">
+        <div class="timePill ${late ? "late" : ""} pulse" data-created-ms="${createdMs}" data-last-min="-1">
+          <span class="timePillDot"></span>
+          <span data-age>${_formatAge(ageMs)}</span>
+        </div>
+      </div>
 
-  <div class="cardBody">
-    <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
-    <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
-  </div>
+      <div class="cardBody">
+        <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
+        <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
+      </div>
 
-  <div class="cardActions">
-    ${actions}
-  </div>
-`;const host = hostFor(col);
+      <div class="cardActions">
+        ${actions}
+      </div>
+    `;
+    const host = hostFor(col);
     if (host) host.appendChild(div);
   }
 }
