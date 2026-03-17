@@ -1,0 +1,14 @@
+{
+  "framework": null,
+  "cleanUrls": true,
+  "rewrites": [
+    {
+      "source": "/r/(.*)",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
+  ]
+}
