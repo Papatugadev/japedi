@@ -1,14 +1,25 @@
-[debug] [2026-03-17T03:24:05.088Z] ----------------------------------------------------------------------
-[debug] [2026-03-17T03:24:05.095Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\jorge\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
-[debug] [2026-03-17T03:24:05.096Z] CLI Version:   15.8.0
-[debug] [2026-03-17T03:24:05.096Z] Platform:      win32
-[debug] [2026-03-17T03:24:05.096Z] Node Version:  v24.13.0
-[debug] [2026-03-17T03:24:05.097Z] Time:          Tue Mar 17 2026 00:24:05 GMT-0300 (Horário Padrão de Brasília)
-[debug] [2026-03-17T03:24:05.097Z] ----------------------------------------------------------------------
+[debug] [2026-03-17T15:52:18.805Z] ----------------------------------------------------------------------
+[debug] [2026-03-17T15:52:18.812Z] Command:       C:\Program Files\nodejs\node.exe C:\Users\jorge\AppData\Roaming\npm\node_modules\firebase-tools\lib\bin\firebase.js emulators:start
+[debug] [2026-03-17T15:52:18.813Z] CLI Version:   15.8.0
+[debug] [2026-03-17T15:52:18.814Z] Platform:      win32
+[debug] [2026-03-17T15:52:18.814Z] Node Version:  v24.13.0
+[debug] [2026-03-17T15:52:18.815Z] Time:          Tue Mar 17 2026 12:52:18 GMT-0300 (Horário Padrão de Brasília)
+[debug] [2026-03-17T15:52:18.815Z] ----------------------------------------------------------------------
 [debug] 
-[debug] [2026-03-17T03:24:09.530Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
-[debug] [2026-03-17T03:24:09.532Z] > authorizing via signed-in user (jorgewalker2012@gmail.com)
+[debug] [2026-03-17T15:52:23.829Z] > command requires scopes: ["email","openid","https://www.googleapis.com/auth/cloudplatformprojects.readonly","https://www.googleapis.com/auth/firebase","https://www.googleapis.com/auth/cloud-platform"]
+[debug] [2026-03-17T15:52:23.830Z] > authorizing via signed-in user (jorgewalker2012@gmail.com)
 [info] i  emulators: Starting emulators: functions, extensions {"metadata":{"emulator":{"name":"hub"},"message":"Starting emulators: functions, extensions"}}
-[debug] [2026-03-17T03:24:09.542Z] Checked if tokens are valid: true, expires at: 1773721371165
-[debug] [2026-03-17T03:24:09.542Z] Checked if tokens are valid: true, expires at: 1773721371165
-[debug] [2026-03-17T03:24:09.544Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/japed-e09f2 [none]
+[debug] [2026-03-17T15:52:23.839Z] Checked if tokens are valid: true, expires at: 1773766303114
+[debug] [2026-03-17T15:52:23.840Z] Checked if tokens are valid: true, expires at: 1773766303114
+[debug] [2026-03-17T15:52:23.842Z] >>> [apiv2][query] GET https://cloudresourcemanager.googleapis.com/v1/projects/japed-e09f2 [none]
+[debug] [2026-03-17T15:52:25.275Z] <<< [apiv2][status] GET https://cloudresourcemanager.googleapis.com/v1/projects/japed-e09f2 200
+[debug] [2026-03-17T15:52:25.276Z] <<< [apiv2][body] GET https://cloudresourcemanager.googleapis.com/v1/projects/japed-e09f2 {"projectNumber":"715293947768","projectId":"japed-e09f2","lifecycleState":"ACTIVE","name":"japed","labels":{"firebase":"enabled","firebase-core":"disabled"},"createTime":"2026-02-28T05:16:42.629873Z"}
+[debug] [2026-03-17T15:52:25.303Z] [logging] Logging Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-17T15:52:25.303Z] assigned listening specs for emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}]},"metadata":{"message":"assigned listening specs for emulators"}}
+[debug] [2026-03-17T15:52:25.317Z] Write emulator hub locator at C:\Users\jorge\AppData\Local\Temp\hub-japed-e09f2.json
+[debug] [2026-03-17T15:52:25.332Z] [Extensions] Started Extensions emulator, this is a noop.
+[debug] [2026-03-17T15:52:25.348Z] [functions] Functions Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-17T15:52:25.348Z] [eventarc] Eventarc Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-17T15:52:25.348Z] [tasks] Cloud Tasks Emulator only supports listening on one address (127.0.0.1). Not listening on ::1
+[debug] [2026-03-17T15:52:25.348Z] late-assigned ports for functions and eventarc emulators {"user":{"hub":[{"address":"127.0.0.1","family":"IPv4","port":4400},{"address":"::1","family":"IPv6","port":4400}],"ui":[{"address":"127.0.0.1","family":"IPv4","port":4000},{"address":"::1","family":"IPv6","port":4000}],"logging":[{"address":"127.0.0.1","family":"IPv4","port":4500}],"functions":[{"address":"127.0.0.1","family":"IPv4","port":5001}],"eventarc":[{"address":"127.0.0.1","family":"IPv4","port":9299}],"tasks":[{"address":"127.0.0.1","family":"IPv4","port":9499}]},"metadata":{"message":"late-assigned ports for functions and eventarc emulators"}}
+[warn] !  functions: The following emulators are not running, calls to these services from the Functions emulator will affect production: apphosting, auth, firestore, database, hosting, pubsub, storage, dataconnect {"metadata":{"emulator":{"name":"functions"},"message":"The following emulators are not running, calls to these services from the Functions emulator will affect production: \u001b[1mapphosting, auth, firestore, database, hosting, pubsub, storage, dataconnect\u001b[22m"}}

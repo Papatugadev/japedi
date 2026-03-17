@@ -88,9 +88,10 @@
     </div>
 
     <div id="ordersHistoryState" class="box hidden">
-      <strong>Seu pedido atual já saiu da tela</strong>
-      <div class="muted" style="margin-top:6px">Agora ele fica salvo no histórico para você consultar os itens e pedir novamente.</div>
-      <button class="btn" type="button" onclick="document.getElementById('openHistoryBtn')?.click()" style="margin-top:12px">Abrir histórico</button>
+      <strong>Histórico de pedidos</strong>
+      <div class="muted" style="margin-top:6px">Você não tem pedido em andamento no momento. Aqui estão seus pedidos anteriores.</div>
+      <div id="ordersHistoryInlineList" class="historyOrdersList" style="margin-top:14px"></div>
+      <button id="goMenuFromHistoryBtn" class="ghost" type="button" style="margin-top:12px; width:100%;">Ir para o cardápio</button>
     </div>
 
     <div id="orderCard" class="box orderCardPro hidden">

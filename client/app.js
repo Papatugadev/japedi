@@ -294,16 +294,13 @@ function renderOrderHistoryButton(){
   btn.classList.toggle('hidden', count <= 0);
 }
 
-function renderOrderHistoryList(){
-  const listEl = document.getElementById('historyOrdersList');
-  if (!listEl) return;
+function buildOrderHistoryMarkup(buttonAttrName){
   const list = loadOrderHistory();
   if (!list.length) {
-    listEl.innerHTML = `<div class="muted">Nenhum pedido no histórico ainda.</div>`;
-    return;
+    return `<div class="muted">Nenhum pedido no histórico ainda.</div>`;
   }
 
-  listEl.innerHTML = list.map((order) => {
+  return list.map((order) => {
     const total = Number(order?.totals?.total || 0);
     const items = Array.isArray(order?.items) ? order.items : [];
     const count = items.reduce((acc, it) => acc + Number(it?.qty || 0), 0);
@@ -324,15 +321,32 @@ function renderOrderHistoryList(){
         <div class="historyCard__meta">Entregue em ${when}</div>
         <div class="historyItems">${itemsHtml || '<div class="muted">Itens indisponíveis.</div>'}</div>
         <div class="historyActions">
-          <button class="ghost historyActionBtn" type="button" data-repeat-order="${order.orderId}">Pedir novamente</button>
+          <button class="ghost historyActionBtn" type="button" ${buttonAttrName}="${order.orderId}">Pedir novamente</button>
         </div>
       </div>
     `;
   }).join('');
+}
 
-  listEl.querySelectorAll('[data-repeat-order]').forEach((btn) => {
-    btn.addEventListener('click', () => repeatHistoryOrder(btn.getAttribute('data-repeat-order')));
+function bindRepeatOrderButtons(root, buttonAttrName){
+  if (!root) return;
+  root.querySelectorAll(`[${buttonAttrName}]`).forEach((btn) => {
+    btn.addEventListener('click', () => repeatHistoryOrder(btn.getAttribute(buttonAttrName)));
   });
+}
+
+function renderOrderHistoryList(){
+  const listEl = document.getElementById('historyOrdersList');
+  if (!listEl) return;
+  listEl.innerHTML = buildOrderHistoryMarkup('data-repeat-order');
+  bindRepeatOrderButtons(listEl, 'data-repeat-order');
+}
+
+function renderOrderHistoryInline(){
+  const listEl = document.getElementById('ordersHistoryInlineList');
+  if (!listEl) return;
+  listEl.innerHTML = buildOrderHistoryMarkup('data-repeat-order-inline');
+  bindRepeatOrderButtons(listEl, 'data-repeat-order-inline');
 }
 
 function openOrderHistoryModal(){
@@ -2845,12 +2859,25 @@ function showTab(name){
 }
 function setOrdersUI(hasOrder){
   const hasHistory = loadOrderHistory().length > 0;
-  document.getElementById("ordersEmpty")?.classList?.toggle("hidden", !!hasOrder || hasHistory);
-  document.getElementById("orderCard")?.classList?.toggle("hidden", !hasOrder);
-  document.getElementById("ordersHistoryState")?.classList?.toggle("hidden", !(!hasOrder && hasHistory));
+
+  const ordersEmpty = document.getElementById("ordersEmpty");
+  const orderCard = document.getElementById("orderCard");
+  const ordersHistoryState = document.getElementById("ordersHistoryState");
+
+  const showActiveOrder = !!hasOrder;
+  const showHistory = !showActiveOrder && hasHistory;
+  const showEmpty = !showActiveOrder && !hasHistory;
+
+  ordersEmpty?.classList?.toggle("hidden", !showEmpty);
+  orderCard?.classList?.toggle("hidden", !showActiveOrder);
+  ordersHistoryState?.classList?.toggle("hidden", !showHistory);
+
+  if (showHistory) {
+    renderOrderHistoryInline();
+  }
 
   const dot = document.getElementById("ordersDot");
-  if (dot) dot.classList.toggle("hidden", !hasOrder);
+  if (dot) dot.classList.toggle("hidden", !showActiveOrder);
   renderOrderHistoryButton();
 }
 
@@ -3421,6 +3448,9 @@ if (tabProfile) {
 
   const goMenuBtn = document.getElementById("goMenuBtn");
   if (goMenuBtn) goMenuBtn.addEventListener("click", () => showTab("menu"));
+
+  const goMenuFromHistoryBtn = document.getElementById("goMenuFromHistoryBtn");
+  if (goMenuFromHistoryBtn) goMenuFromHistoryBtn.addEventListener("click", () => showTab("menu"));
 
   // ✅ Chat: fechar / backdrop / swipe / abrir
   const closeChatBtn = document.getElementById("closeChatBtn");
