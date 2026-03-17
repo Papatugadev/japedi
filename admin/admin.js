@@ -447,17 +447,6 @@ async function setOrderStatus(orderId, newStatus) {
   const publicRef  = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
   const historyRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_history", orderId);
 
-  let currentData = null;
-  try {
-    const snap = await Firestore.getDoc(publicRef);
-    if (snap.exists()) currentData = snap.data() || null;
-  } catch (_) {}
-
-  const currentStatus = String(currentData?.status || "").toLowerCase();
-  if (currentStatus === "entregue" || currentStatus === "cancelado") {
-    return;
-  }
-
   const payload = {
     status: newStatus,
     updatedAt: Firestore.serverTimestamp()
@@ -500,10 +489,10 @@ async function setOrderStatus(orderId, newStatus) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
   }
 
-  // 3) Se for status final: arquiva no histórico
-  if (newStatus === "entregue" || newStatus === "cancelado") {
+  // 3) Se for ENTREGUE: arquiva no histórico, MAS NÃO DELETA (não some hoje)
+  if (newStatus === "entregue") {
     try {
-      // tenta pegar dados do privado, se não der pega do público / snapshot anterior
+      // tenta pegar dados do privado, se não der pega do público
       let baseData = null;
 
       try {
@@ -518,18 +507,13 @@ async function setOrderStatus(orderId, newStatus) {
         } catch (_) {}
       }
 
-      if (!baseData && currentData) {
-        baseData = currentData;
-      }
-
       await Firestore.setDoc(
         historyRef,
         {
           ...(baseData || {}),
           id: orderId,
-          status: newStatus,
-          deliveredAt: newStatus === "entregue" ? Firestore.serverTimestamp() : (baseData?.deliveredAt || null),
-          canceledAt: newStatus === "cancelado" ? Firestore.serverTimestamp() : (baseData?.canceledAt || null),
+          status: "entregue",
+          deliveredAt: Firestore.serverTimestamp(),
           archivedAt: Firestore.serverTimestamp(),
           updatedAt: Firestore.serverTimestamp(),
         },
@@ -537,7 +521,7 @@ async function setOrderStatus(orderId, newStatus) {
       );
     } catch (e) {
       console.warn("Falha ao arquivar em orders_history:", e?.code || e, e?.message || "");
-      // não bloqueia a troca de status, só avisa no console
+      // não bloqueia a entrega (status já foi salvo), só avisa no console
     }
   }
 
@@ -574,19 +558,18 @@ async function setOrderStatus(orderId, newStatus) {
 
 /** Renderiza pedidos */
 function renderOrders(list) {
-  // containers das colunas
+  // containers das 3 colunas
   const prepEl = document.getElementById("orders-prep");
   const outEl = document.getElementById("orders-out");
   const doneEl = document.getElementById("orders-done");
-  const cancelledEl = document.getElementById("orders-cancelled");
 
   // fallback antigo (caso o HTML ainda esteja no formato antigo)
   const legacyWrap = document.getElementById("orders");
 
   const clear = (el) => { if (el) el.innerHTML = ""; };
 
-  clear(prepEl); clear(outEl); clear(doneEl); clear(cancelledEl);
-  if (legacyWrap && !prepEl && !outEl && !doneEl && !cancelledEl) legacyWrap.innerHTML = "";
+  clear(prepEl); clear(outEl); clear(doneEl);
+  if (legacyWrap && !prepEl && !outEl && !doneEl) legacyWrap.innerHTML = "";
 
   // Diag de permissão no topo (sem atrapalhar)
   const attachDiag = (host) => {
@@ -615,34 +598,32 @@ function renderOrders(list) {
     return;
   }
 
-  function normalizeBucketStatus(s) {
-    return String(s || "").toLowerCase().trim();
-  }
-
   // helper para escolher coluna
   function bucketStatus(s, paymentStatus) {
-    const st = normalizeBucketStatus(s);
     const pay = String(paymentStatus || "").toLowerCase();
-    if (st === "aguardando_pagamento") return "aguardando_pagamento";
+    if (s === "aguardando_pagamento") return "aguardando_pagamento";
     if (pay && pay !== "approved") return "aguardando_pagamento";
-    if (st === "cancelado") return "cancelado";
     // pedido novo pode vir "recebido" (ou vazio) => em_preparo
-    if (!st || st === "recebido" || st === "em_preparo") return "em_preparo";
-    if (st === "saiu_pra_entrega") return "saiu_pra_entrega";
-    if (st === "entregue") return "entregue";
+    if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
+    if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
+    if (s === "entregue") return "entregue";
     return "em_preparo";
   }
 
   function hostFor(status) {
-    if (!prepEl && !outEl && !doneEl && !cancelledEl) return legacyWrap;
+    if (!prepEl && !outEl && !doneEl) return legacyWrap;
     if (status === "saiu_pra_entrega") return outEl;
     if (status === "entregue") return doneEl;
-    if (status === "cancelado") return cancelledEl;
     return prepEl;
   }
 
   for (const o of list) {
+    const mins = minsSince(o.createdAt);
     const border = statusColor(o.status);
+
+    const itemsHtml = (o.items || [])
+      .map(i => `• ${i.qty}x ${i.name} (${brl(i.price)})`)
+      .join("<br/>");
 
     const div = document.createElement("div");
     div.className = "order";
@@ -653,7 +634,7 @@ function renderOrders(list) {
       continue;
     }
 
-    // botões por coluna (status final fica bloqueado)
+    // botões por coluna (pedido novo vai pra em_preparo)
     let actions = "";
     if (col === "em_preparo") {
       actions = `
@@ -665,36 +646,37 @@ function renderOrders(list) {
         <button class="btn small" data-act="entregue" data-id="${o.id}">Entregue</button>
         <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
       `;
-    } else if (col === "entregue") {
-      actions = `<div class="orderLockedTag">Pedido finalizado</div>`;
-    } else if (col === "cancelado") {
-      actions = `<div class="orderLockedTag orderLockedTag--danger">Pedido cancelado</div>`;
+    } else {
+      // entregue
+      actions = `
+        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
+      `;
     }
 
-    const createdMs = _tsToMs(o.createdAt) || Date.now();
-    const ageMs = Date.now() - createdMs;
-    const late = ageMs >= 20 * 60 * 1000;
+    
+const createdMs = _tsToMs(o.createdAt) || Date.now();
+const ageMs = Date.now() - createdMs;
+const late = ageMs >= 20 * 60 * 1000;
 
-    div.dataset.id = o.id;
+div.dataset.id = o.id;
 
-    div.innerHTML = `
-      <div class="cardTop">
-        <div class="timePill ${late ? "late" : ""} pulse" data-created-ms="${createdMs}" data-last-min="-1">
-          <span class="timePillDot"></span>
-          <span data-age>${_formatAge(ageMs)}</span>
-        </div>
-      </div>
+div.innerHTML = `
+  <div class="cardTop">
+    <div class="timePill ${late ? "late" : ""} pulse" data-created-ms="${createdMs}" data-last-min="-1">
+      <span class="timePillDot"></span>
+      <span data-age>${_formatAge(ageMs)}</span>
+    </div>
+  </div>
 
-      <div class="cardBody">
-        <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
-        <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
-      </div>
+  <div class="cardBody">
+    <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
+    <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
+  </div>
 
-      <div class="cardActions">
-        ${actions}
-      </div>
-    `;
-    const host = hostFor(col);
+  <div class="cardActions">
+    ${actions}
+  </div>
+`;const host = hostFor(col);
     if (host) host.appendChild(div);
   }
 }
@@ -1191,19 +1173,58 @@ async function _ensureAdminForProducts(){
 function _renderProducts(list){
   const host = document.getElementById("productsList");
   const empty = document.getElementById("productsEmpty");
+  const emptyTitle = document.getElementById("productsEmptyTitle");
+  const emptyText = document.getElementById("productsEmptyText");
+  const searchEl = document.getElementById("prodSearch");
+  const statusEl = document.getElementById("prodStatusFilter");
+  const categoryEl = document.getElementById("prodCategoryFilter");
   if (!host) return;
 
   host.innerHTML = "";
 
-  const q = (document.getElementById("prodSearch")?.value || "").trim().toLowerCase();
-  const filtered = (list || []).filter(p => {
-    if (!q) return true;
-    const hay = `${p.name||""} ${p.category||""} ${p.desc||""}`.toLowerCase();
-    return hay.includes(q);
+  const products = Array.isArray(list) ? list : [];
+  const q = (searchEl?.value || "").trim().toLowerCase();
+  const status = statusEl?.value || "all";
+  const currentCategory = categoryEl?.value || "all";
+
+  const categories = [...new Set(products.map(p => String(p?.category || "").trim()).filter(Boolean))].sort((a,b) => a.localeCompare(b, 'pt-BR'));
+
+  if (categoryEl) {
+    const nextValue = categories.includes(currentCategory) ? currentCategory : "all";
+    categoryEl.innerHTML = `<option value="all">Todas</option>` + categories.map(cat => `<option value="${_escapeHtml(cat)}">${_escapeHtml(cat)}</option>`).join("");
+    categoryEl.value = nextValue;
+  }
+
+  const activeCount = products.filter(p => p?.active !== false).length;
+  const inactiveCount = Math.max(0, products.length - activeCount);
+  const statTotal = document.getElementById("prodStatTotal");
+  const statActive = document.getElementById("prodStatActive");
+  const statInactive = document.getElementById("prodStatInactive");
+  const statCategories = document.getElementById("prodStatCategories");
+  if (statTotal) statTotal.textContent = String(products.length);
+  if (statActive) statActive.textContent = String(activeCount);
+  if (statInactive) statInactive.textContent = String(inactiveCount);
+  if (statCategories) statCategories.textContent = String(categories.length);
+
+  const filtered = products.filter((p) => {
+    const hay = `${p?.name || ""} ${p?.category || ""} ${p?.desc || ""}`.toLowerCase();
+    const active = p?.active !== false;
+    const okQuery = !q || hay.includes(q);
+    const okStatus = status === "all" || (status === "active" && active) || (status === "inactive" && !active);
+    const selectedCategory = categoryEl?.value || "all";
+    const okCategory = selectedCategory === "all" || String(p?.category || "").trim() === selectedCategory;
+    return okQuery && okStatus && okCategory;
   });
 
   if (!filtered.length) {
+    host.innerHTML = "";
     if (empty) empty.classList.remove("hidden");
+    if (emptyTitle) emptyTitle.textContent = products.length ? "Nenhum produto encontrado" : "Nenhum produto cadastrado ainda.";
+    if (emptyText) {
+      emptyText.textContent = products.length
+        ? "Tente mudar a busca ou limpar os filtros para ver mais resultados."
+        : "Cadastre seu primeiro item para começar a montar o cardápio.";
+    }
     return;
   }
   if (empty) empty.classList.add("hidden");
@@ -1211,30 +1232,71 @@ function _renderProducts(list){
   for (const p of filtered) {
     const div = document.createElement("div");
     div.className = "prodCard";
-    const active = p.active !== false; // default true
+    const active = p.active !== false;
+    const name = _escapeHtml(p?.name || "Sem nome");
+    const category = _escapeHtml(p?.category || "Sem categoria");
+    const descRaw = String(p?.desc || "").trim();
+    const desc = descRaw ? `${_escapeHtml(descRaw.slice(0, 150))}${descRaw.length > 150 ? "…" : ""}` : "Sem descrição cadastrada para este produto.";
+    const imageUrl = String(p?.imageUrl || "").trim();
+    const sizesCount = Array.isArray(p?.sizes) ? p.sizes.filter(x => String(x?.name || "").trim()).length : 0;
+    const addonsCount = Array.isArray(p?.addons) ? p.addons.filter(x => String(x?.name || "").trim()).length : 0;
+    const hasImage = !!imageUrl;
+    const mediaHtml = hasImage
+      ? `<img src="${_escapeHtml(imageUrl)}" alt="${name}">`
+      : `<div class="prodCard__mediaFallback">${name.slice(0,1).toUpperCase()}</div>`;
+
     div.innerHTML = `
-      <div class="prodCardTop">
-        <div>
-          <div class="prodName">${(p.name || "Sem nome")}</div>
-          <div class="prodMeta">
-            <span class="badge small ${active ? "good" : "off"}">
-              <span class="badgeDot" style="background:${active ? "#22c55e" : "#94a3b8"}"></span>
-              ${active ? "Ativo" : "Inativo"}
-            </span>
-            ${p.category ? `<span class="badge small">${p.category}</span>` : ""}
+      <div class="prodCard__media">${mediaHtml}</div>
+      <div class="prodCard__body">
+        <div class="prodCard__head">
+          <div class="prodCard__titleWrap">
+            <div class="prodName">${name}</div>
+            <div class="prodMeta">
+              <span class="badge small ${active ? "good" : "off"}">
+                <span class="badgeDot" style="background:${active ? "#22c55e" : "#94a3b8"}"></span>
+                ${active ? "Ativo" : "Inativo"}
+              </span>
+              <span class="badge small">${category}</span>
+            </div>
+          </div>
+          <div class="prodPriceWrap">
+            <span class="prodPriceLabel">Preço base</span>
+            <div class="prodPrice">${brl(p.price ?? 0)}</div>
           </div>
         </div>
-        <div class="prodPrice">${brl(p.price ?? 0)}</div>
-      </div>
 
-      ${p.desc ? `<div class="muted">${String(p.desc).slice(0, 120)}${String(p.desc).length > 120 ? "…" : ""}</div>` : ""}
+        <div class="prodDesc">${desc}</div>
 
-      <div class="prodActions">
-        <button class="ghost small" type="button" data-prod-act="toggle" data-id="${p.id}">
-          ${active ? "Desativar" : "Ativar"}
-        </button>
-        <button class="btn small" type="button" data-prod-act="edit" data-id="${p.id}">Editar</button>
-        <button class="ghost small danger" type="button" data-prod-act="del" data-id="${p.id}">Excluir</button>
+        <div class="prodInsights">
+          <div class="prodInsight">
+            <strong>${sizesCount}</strong>
+            <span>${sizesCount === 1 ? "tamanho" : "tamanhos"}</span>
+          </div>
+          <div class="prodInsight">
+            <strong>${addonsCount}</strong>
+            <span>${addonsCount === 1 ? "adicional" : "adicionais"}</span>
+          </div>
+          <div class="prodInsight">
+            <strong>${hasImage ? "Sim" : "Não"}</strong>
+            <span>imagem cadastrada</span>
+          </div>
+        </div>
+
+        <div class="prodChips">
+          <span class="prodChip"><b>ID</b> ${_escapeHtml(p.id || "-")}</span>
+          ${sizesCount ? `<span class="prodChip"><b>Opções</b> ${sizesCount} tamanho(s)</span>` : ""}
+          ${addonsCount ? `<span class="prodChip"><b>Extras</b> ${addonsCount} adicional(is)</span>` : ""}
+        </div>
+
+        <div class="prodActions">
+          <div class="prodActionsGroup">
+            <button class="ghost small" type="button" data-prod-act="toggle" data-id="${_escapeHtml(p.id)}">
+              ${active ? "Desativar" : "Ativar"}
+            </button>
+            <button class="btn small" type="button" data-prod-act="edit" data-id="${_escapeHtml(p.id)}">Editar</button>
+          </div>
+          <button class="ghost small danger" type="button" data-prod-act="del" data-id="${_escapeHtml(p.id)}">Excluir</button>
+        </div>
       </div>
     `;
     host.appendChild(div);
@@ -1246,10 +1308,27 @@ function _startProductsListener(){
   __JPED_PRODUCTS_READY = true;
 
   const search = document.getElementById("prodSearch");
+  const statusFilter = document.getElementById("prodStatusFilter");
+  const categoryFilter = document.getElementById("prodCategoryFilter");
+  const clearFilters = document.getElementById("prodClearFilters");
   const btnNew = document.getElementById("btnNewProduct");
 
   if (search) {
     search.addEventListener("input", () => _renderProducts(__JPED_PRODUCTS_CACHE));
+  }
+  if (statusFilter) {
+    statusFilter.addEventListener("change", () => _renderProducts(__JPED_PRODUCTS_CACHE));
+  }
+  if (categoryFilter) {
+    categoryFilter.addEventListener("change", () => _renderProducts(__JPED_PRODUCTS_CACHE));
+  }
+  if (clearFilters) {
+    clearFilters.addEventListener("click", () => {
+      if (search) search.value = "";
+      if (statusFilter) statusFilter.value = "all";
+      if (categoryFilter) categoryFilter.value = "all";
+      _renderProducts(__JPED_PRODUCTS_CACHE);
+    });
   }
   if (btnNew) {
     btnNew.addEventListener("click", async () => {

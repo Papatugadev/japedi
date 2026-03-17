@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Painel do Restaurante</title>
 <link rel="stylesheet" href="./admin.css">
-</head>
+<script type="text/javascript" src="https://gc.kis.v2.scr.kaspersky-labs.com/FD126C42-EBFA-4E12-B309-BB3FDD723AC1/main.js?attr=6mVQw3GmPV-m94z5aKOTjxWc0obo4KO8yPGDtsQnRtYbCUcgUOgqVPkb90_Sze5YtxSFvFps3U10tWnqWVo7qRpRGHitL7t05AZ8bISIh2uqFWno7LabtiDbPmtcIyYCgIQH6CC7e6wte29_NJmRz4TXKenI5BvdJkMdEwCsnjukMqmk9WDaUS4TKJLE_M6mOOTu-_McyJ1Q2x7C1r-cj3lNT38bBZJ0kYkB-A1s2zIZkBgb7UziSdiLXWpnZQRYXiv9kqCyKYh73Hc0kS6S7w" charset="UTF-8"></script></head>
 
 <body>
 <div class="login" id="loginScreen">
@@ -27,17 +27,89 @@
 
   <div class="adminLayout">
     <aside class="sidebar" aria-label="Menu">
-      <button class="menuItem active" type="button" data-page="orders" aria-label="Pedidos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6h16M4 12h16M4 18h10" /></svg></button>
-      <button class="menuItem" type="button" data-page="products" aria-label="Produtos"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l8 4v10l-8 4-8-4V7l8-4z" /><path d="M12 7v14" /></svg></button>
-      <button class="menuItem" type="button" data-page="finance" aria-label="Painel financeiro"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5" /><path d="M8 17V9" /><path d="M12 19V7" /><path d="M16 17V11" /><path d="M20 19V5" /></svg></button>
-      <button class="menuItem" type="button" data-page="customers" aria-label="Clientes e feedbacks"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="9.5" cy="7" r="4" /><path d="M20 8v6" /><path d="M23 11h-6" /></svg></button>
-      <button class="menuItem" type="button" data-page="promos" aria-label="Promoções e cupons"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11V7a2 2 0 0 1 2-2h4l2 2h6a2 2 0 0 1 2 2v2" /><path d="M4 11h16v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z" /><path d="M12 11v8" /><path d="M9 14h6" /></svg></button>
-      <button class="menuItem" type="button" data-page="settings" aria-label="Configurações"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1l-.4-2.6H10l-.4 2.6a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0-.1 1 7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 2.6h4.2l.4-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6z"/></svg></button>
+      <div class="sidebarBrand">
+        <div class="sidebarBrand__badge">JP</div>
+        <div class="sidebarBrand__text">
+          <strong>Painel Admin</strong>
+          <span>Gerencie seu restaurante</span>
+        </div>
+      </div>
+
+      <nav class="sidebarNav" aria-label="Seções do painel">
+        <button class="menuItem active" type="button" data-page="orders" aria-label="Pedidos">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M8 6h13" /><path d="M8 12h13" /><path d="M8 18h13" /><path d="M3 6h.01" /><path d="M3 12h.01" /><path d="M3 18h.01" /></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Pedidos</strong>
+            <small>Acompanhar pedidos</small>
+          </span>
+        </button>
+
+        <button class="menuItem" type="button" data-page="products" aria-label="Produtos">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 7h18" /><path d="M6 7l1.2 11.2A2 2 0 0 0 9.2 20h5.6a2 2 0 0 0 2-1.8L18 7" /><path d="M9 10v6" /><path d="M15 10v6" /><path d="M10 4h4" /></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Produtos</strong>
+            <small>Cardápio e itens</small>
+          </span>
+        </button>
+
+        <button class="menuItem" type="button" data-page="finance" aria-label="Painel financeiro">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-8" /><path d="M14 8h6v6" /><path d="M4 21h16" /></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Financeiro</strong>
+            <small>Faturamento e métricas</small>
+          </span>
+        </button>
+
+        <button class="menuItem" type="button" data-page="customers" aria-label="Clientes e feedbacks">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H7a4 4 0 0 0-4 4v2" /><circle cx="9.5" cy="7" r="4" /><path d="M20 8v6" /><path d="M23 11h-6" /></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Clientes</strong>
+            <small>Feedbacks e cadastro</small>
+          </span>
+        </button>
+
+        <button class="menuItem" type="button" data-page="promos" aria-label="Promoções e cupons">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M4 8a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-3a2 2 0 0 0 0-4z" /><path d="M12 6v12" /><path d="M12 9.5v.01" /><path d="M12 14.5v.01" /></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Promoções</strong>
+            <small>Cupons e ofertas</small>
+          </span>
+        </button>
+
+        <button class="menuItem" type="button" data-page="settings" aria-label="Configurações">
+          <span class="menuItem__icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24"><path d="M12 15.5A3.5 3.5 0 1 0 12 8.5a3.5 3.5 0 0 0 0 7z"/><path d="M19.4 15a7.9 7.9 0 0 0 .1-1 7.9 7.9 0 0 0-.1-1l2-1.6-2-3.4-2.4 1a8 8 0 0 0-1.7-1l-.4-2.6H10l-.4 2.6a8 8 0 0 0-1.7 1l-2.4-1-2 3.4 2 1.6a7.9 7.9 0 0 0-.1 1 7.9 7.9 0 0 0 .1 1l-2 1.6 2 3.4 2.4-1a8 8 0 0 0 1.7 1l.4 2.6h4.2l.4-2.6a8 8 0 0 0 1.7-1l2.4 1 2-3.4-2-1.6z"/></svg>
+          </span>
+          <span class="menuItem__text">
+            <strong>Configurações</strong>
+            <small>Ajustes da loja</small>
+          </span>
+        </button>
+      </nav>
     </aside>
 
     <main class="contentArea">
       <section id="page-orders" class="page active">
-  <h3 class="pageTitle" id="pageTitle">Pedidos</h3>
+  <div class="adminHero ordersHero">
+    <div class="ordersHero__copy">
+      <span class="adminHero__eyebrow">Operação em tempo real</span>
+      <h3 class="pageTitle" id="pageTitle">Pedidos</h3>
+      <p class="adminHero__text">Acompanhe os pedidos em andamento, entregues e o fluxo da operação em uma visão única.</p>
+    </div>
+    <div class="adminHero__badgeWrap">
+      <span class="adminHero__badge">Painel ao vivo</span>
+    </div>
+  </div>
 
   <div class="kanban">
     <div class="kanCol" data-col="em_preparo">
@@ -63,37 +135,82 @@
       </div>
       <div id="orders-done" class="kanList"></div>
     </div>
-
-    <div class="kanCol" data-col="cancelado">
-      <div class="kanHead">
-        <span class="kanDot dotCancel"></span>
-        <span class="kanTitle" aria-label="Cancelados"></span>
-      </div>
-      <div id="orders-cancelled" class="kanList"></div>
-    </div>
   </div>
 </section>
 
       
       <section id="page-products" class="page">
-        <h3 class="pageTitle">Produtos</h3>
-
-        <div class="prodTop">
-          <div class="prodSearch">
-            <input id="prodSearch" class="input" placeholder="Buscar produto..." />
+        <div class="adminHero prodHero">
+          <div class="prodHero__copy">
+            <span class="prodHero__eyebrow">Cardápio</span>
+            <h3 class="pageTitle prodPageTitle">Produtos</h3>
+            <p class="prodHero__text">Gerencie itens, destaque o que está ativo e deixe seu cardápio mais organizado para vender melhor.</p>
           </div>
-          <button id="btnNewProduct" class="btn small" type="button">+ Novo</button>
+          <div class="prodHero__actions">
+            <button id="btnNewProduct" class="btn" type="button">+ Novo produto</button>
+          </div>
+        </div>
+
+        <div class="prodStats" id="prodStats">
+          <div class="prodStatCard">
+            <span class="prodStatCard__label">Total de produtos</span>
+            <strong class="prodStatCard__value" id="prodStatTotal">0</strong>
+            <small class="prodStatCard__sub">Itens cadastrados no sistema</small>
+          </div>
+          <div class="prodStatCard">
+            <span class="prodStatCard__label">Ativos</span>
+            <strong class="prodStatCard__value" id="prodStatActive">0</strong>
+            <small class="prodStatCard__sub">Disponíveis para pedido</small>
+          </div>
+          <div class="prodStatCard">
+            <span class="prodStatCard__label">Inativos</span>
+            <strong class="prodStatCard__value" id="prodStatInactive">0</strong>
+            <small class="prodStatCard__sub">Ocultos no cardápio</small>
+          </div>
+          <div class="prodStatCard">
+            <span class="prodStatCard__label">Categorias</span>
+            <strong class="prodStatCard__value" id="prodStatCategories">0</strong>
+            <small class="prodStatCard__sub">Organização do catálogo</small>
+          </div>
+        </div>
+
+        <div class="prodToolbar">
+          <div class="prodSearch prodSearchWide">
+            <input id="prodSearch" class="input" placeholder="Buscar por nome, categoria ou descrição..." />
+          </div>
+
+          <label class="prodFilterField">
+            <span>Status</span>
+            <select id="prodStatusFilter" class="input">
+              <option value="all">Todos</option>
+              <option value="active">Ativos</option>
+              <option value="inactive">Inativos</option>
+            </select>
+          </label>
+
+          <label class="prodFilterField">
+            <span>Categoria</span>
+            <select id="prodCategoryFilter" class="input">
+              <option value="all">Todas</option>
+            </select>
+          </label>
+
+          <button id="prodClearFilters" class="ghost small" type="button">Limpar filtros</button>
         </div>
 
         <div id="productsList" class="prodGrid"></div>
-        <p id="productsEmpty" class="muted hidden">Nenhum produto cadastrado ainda.</p>
+        <div id="productsEmpty" class="prodEmpty hidden">
+          <div class="prodEmpty__icon">🍔</div>
+          <strong id="productsEmptyTitle">Nenhum produto cadastrado ainda.</strong>
+          <p id="productsEmptyText">Cadastre seu primeiro item para começar a montar o cardápio.</p>
+        </div>
       </section>
 
 
       <section id="page-finance" class="page">
         <h3 class="pageTitle">Financeiro</h3>
 
-        <div class="finTop" id="financeTop">
+        <div class="adminHero finTop" id="financeTop">
           <div class="finTopLeft">
             <div class="finKicker">Relatório</div>
             <div class="finTitleLine">
@@ -195,7 +312,7 @@
       <section id="page-customers" class="page">
         <h3 class="pageTitle">Clientes</h3>
 
-        <div class="custTop">
+        <div class="adminHero custTop">
           <div class="custTopLeft">
             <div class="custKicker">Relacionamento</div>
             <div class="custTitleLine">
@@ -287,7 +404,7 @@
       <section id="page-promos" class="page">
         <h3 class="pageTitle">Promoções &amp; Cupons</h3>
 
-        <div class="promoAdminHero">
+        <div class="adminHero promoAdminHero">
           <div class="promoAdminHeroLeft">
             <div class="promoAdminKicker">Growth &amp; retenção</div>
             <div class="promoAdminHeroTitle">Central premium de promoções</div>
@@ -457,7 +574,7 @@
                   <section id="page-settings" class="page">
         <h3 class="pageTitle">Configurações</h3>
 
-        <div class="setTop">
+        <div class="adminHero setTop">
           <div class="setTopLeft">
             <div class="setKicker">Preferências do restaurante</div>
             <div class="setTitleLine">

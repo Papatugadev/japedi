@@ -22,7 +22,7 @@ const db = Firestore.getFirestore(app);
 const auth = Auth.getAuth(app);
 
 
-const MP_FUNCTIONS_BASE_URL = "http://127.0.0.1:5001/japed-e09f2/us-central1";
+const MP_FUNCTIONS_BASE_URL ="https://japedi.onrender.com";
 const MP_PUBLIC_KEY_STORAGE_KEY = "japed:mpPublicKey";
 
 function getMercadoPagoPublicKey(){
@@ -4385,13 +4385,14 @@ function syncMenuChrome(){
 }
 async function pagarComMercadoPago(total, orderId) {
   const response = await fetch(
-    "http://127.0.0.1:5001/japed-e09f2/us-central1/createMercadoPagoPreference",
+    `${MP_FUNCTIONS_BASE_URL}/createMercadoPagoPreference`,
     {
       method: "POST",
       headers: {
         "Content-Type": "application/json"
       },
       body: JSON.stringify({
+        restaurantId: state.restaurant?.id || "",
         amount: Number(total),
         title: "Pedido do restaurante",
         orderId: String(orderId)
