@@ -806,21 +806,32 @@ function _ensurePromoBanner(){
 
 // ===== util: copiar =====
 async function _copyText(text){
-  if (navigator.clipboard && window.isSecureContext){
-    await navigator.clipboard.writeText(text);
+  const value = String(text || "").replace(/\s+/g, "").trim();
+  if (!value) throw new Error("empty_text");
+
+  if (navigator.clipboard && window.isSecureContext) {
+    await navigator.clipboard.writeText(value);
     return true;
   }
-  // fallback antigo
-  const ta = document.createElement("textarea");
-  ta.value = text;
-  ta.style.position = "fixed";
-  ta.style.left = "-9999px";
-  ta.style.top = "0";
-  document.body.appendChild(ta);
-  ta.focus();
-  ta.select();
+
+  const input = document.createElement("input");
+  input.type = "text";
+  input.value = value;
+  input.setAttribute("readonly", "");
+  input.style.position = "fixed";
+  input.style.top = "0";
+  input.style.left = "0";
+  input.style.opacity = "0.01";
+  input.style.zIndex = "-1";
+
+  document.body.appendChild(input);
+  input.focus();
+  input.select();
+  input.setSelectionRange(0, input.value.length);
+
   const ok = document.execCommand("copy");
-  document.body.removeChild(ta);
+  document.body.removeChild(input);
+
   if (!ok) throw new Error("copy_failed");
   return true;
 }
@@ -2606,24 +2617,25 @@ async function createInlinePixPayment(orderId, total){
     throw new Error(data?.error || "Não foi possível gerar o PIX.");
   }
 
-  state.mp.currentPaymentId = data.paymentId;
-  state.mp.currentPaymentStatus = data.status || "pending";
-const cleanPixCode = String(data.qrCode || "").replace(/\s+/g, "").trim();
-
-state.mp.pixCode = cleanPixCode;
-
-if (code) code.value = cleanPixCode;
-  state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
-
   const img = document.getElementById("mpPixQrImage");
   const code = document.getElementById("mpPixCode");
   const status = document.getElementById("mpPixStatus");
+
+  const cleanPixCode = String(data.qrCode || "")
+    .replace(/\s+/g, "")
+    .trim();
+
+  state.mp.currentPaymentId = data.paymentId;
+  state.mp.currentPaymentStatus = data.status || "pending";
+  state.mp.pixCode = cleanPixCode;
+  state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
 
   if (img && data.qrCodeBase64){
     img.src = `data:image/png;base64,${data.qrCodeBase64}`;
     img.classList.remove("hidden");
   }
-  if (code) code.value = data.qrCode || "";
+
+  if (code) code.value = cleanPixCode;
   if (status) status.textContent = "PIX gerado. Aguardando pagamento...";
 
   await updateOrderPaymentState(orderId, {
@@ -4231,17 +4243,16 @@ document.getElementById("saveProfileDataBtn")?.addEventListener("click", handleS
 document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fillCheckoutWithProfile);
 
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
-  const code = String(document.getElementById("mpPixCode")?.value || "")
-  .replace(/\s+/g, "")
-  .trim();
-
+  const code = String(state.mp.pixCode || "").replace(/\s+/g, "").trim();
   if (!code) return;
+
   try {
     await _copyText(code);
     const status = document.getElementById("mpPixStatus");
     if (status) status.textContent = "Código Pix copiado ✅";
-  } catch(err) {
+  } catch (err) {
     console.error("Erro ao copiar PIX:", err);
+    alert("Não foi possível copiar o código PIX.");
   }
 });
 const checkPixStatusBtn = document.getElementById("checkPixStatusBtn");
