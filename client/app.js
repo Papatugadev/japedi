@@ -15,6 +15,7 @@ const firebaseConfig = {
 
 console.log("APP.JS CARREGOU ✅");
 console.log("IMPORT FIREBASE OK ✅", typeof FirebaseApp.initializeApp);
+console.log("APP_VERSION", "2026-03-17-mobile-fast-01");
 
 // Init Firebase
 const app = FirebaseApp.initializeApp(firebaseConfig);
@@ -805,26 +806,21 @@ function _ensurePromoBanner(){
 
 // ===== util: copiar =====
 async function _copyText(text){
-  const safeText = String(text || "").replace(/\r/g, "").replace(/\n/g, "").trim();
-
   if (navigator.clipboard && window.isSecureContext){
-    await navigator.clipboard.writeText(safeText);
+    await navigator.clipboard.writeText(text);
     return true;
   }
-
+  // fallback antigo
   const ta = document.createElement("textarea");
-  ta.value = safeText;
+  ta.value = text;
   ta.style.position = "fixed";
   ta.style.left = "-9999px";
   ta.style.top = "0";
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
-  ta.setSelectionRange(0, ta.value.length);
-
   const ok = document.execCommand("copy");
   document.body.removeChild(ta);
-
   if (!ok) throw new Error("copy_failed");
   return true;
 }
@@ -2591,7 +2587,6 @@ function renderInlinePaymentUI(){
 
 async function createInlinePixPayment(orderId, total){
   const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/createMercadoPagoPixPayment`, {
-    
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2603,7 +2598,6 @@ async function createInlinePixPayment(orderId, total){
         email: getCheckoutCustomerEmail(),
         first_name: (document.getElementById("custName")?.value || "Cliente").trim(),
       }
-      
     })
   });
 
@@ -2611,16 +2605,10 @@ async function createInlinePixPayment(orderId, total){
   if (!response.ok || !data?.paymentId) {
     throw new Error(data?.error || "Não foi possível gerar o PIX.");
   }
-  console.log("MP RESPONSE:", data);
-console.log("qrCode bruto:", JSON.stringify(data.qrCode));
-console.log("qrCode length:", String(data.qrCode || "").length);
-console.log("qrCodeBase64 exists:", !!data.qrCodeBase64);
+
   state.mp.currentPaymentId = data.paymentId;
   state.mp.currentPaymentStatus = data.status || "pending";
-state.mp.pixCode = String(data.qrCode || "")
-  .replace(/\r/g, "")
-  .replace(/\n/g, "")
-  .trim();
+  state.mp.pixCode = data.qrCode || "";
   state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
 
   const img = document.getElementById("mpPixQrImage");
@@ -2631,7 +2619,7 @@ state.mp.pixCode = String(data.qrCode || "")
     img.src = `data:image/png;base64,${data.qrCodeBase64}`;
     img.classList.remove("hidden");
   }
- if (code) code.value = state.mp.pixCode;
+  if (code) code.value = data.qrCode || "";
   if (status) status.textContent = "PIX gerado. Aguardando pagamento...";
 
   await updateOrderPaymentState(orderId, {
@@ -3613,34 +3601,50 @@ document.getElementById("confirmOrderBtn")?.addEventListener("click", async () =
     return;
   }
 
-  // Carregar config/app (salva no painel admin) e aplicar no client
-  state.config = await fetchAppConfig(state.restaurant.id);
-  applyConfigToClient(state.config);
-  // Realtime config: se mudar no admin, atualiza no cliente
-  startConfigListener(state.restaurant.id);
+  const restaurantId = state.restaurant.id;
 
-  state.products = await fetchProducts(state.restaurant.id);
+  // Carregar config e produtos em paralelo para reduzir o tempo inicial
+  const [configResult, productsResult] = await Promise.allSettled([
+    fetchAppConfig(restaurantId),
+    fetchProducts(restaurantId)
+  ]);
+
+  state.config = configResult.status === "fulfilled" ? configResult.value : null;
+  applyConfigToClient(state.config || {});
+  setTimeout(() => {
+    try { startConfigListener(restaurantId); } catch (err) { console.warn("Falha no listener de config:", err); }
+  }, 0);
+
+  state.products = productsResult.status === "fulfilled" && Array.isArray(productsResult.value)
+    ? productsResult.value
+    : [];
   buildCategories();
-
-  // Retomar último pedido
-  const last = loadLastOrder();
-  if (last?.orderId && await canExposeOrderToCustomer(last.orderId)) {
-    state.currentOrderId = last.orderId;
-    if (last.orderNumber) state.currentOrderNumber = last.orderNumber;
-    setOrdersUI(true);
-    openTrackScreen(last.orderId);
-    startTrackingOrder(last.orderId);
-  } else {
-    try { forgetLastOrder(); } catch(_) {}
-    setOrdersUI(false);
-  }
-
-  renderOrderHistoryButton();
-  renderOrderHistoryList();
 
   renderProducts();
   renderCartUI();
+  renderOrderHistoryButton();
+  renderOrderHistoryList();
   showTab("menu");
+
+  // Coisas secundárias ficam para depois da primeira renderização
+  setTimeout(async () => {
+    try { startPromoListener(); } catch (err) { console.warn("Falha no listener de promo:", err); }
+
+    const last = loadLastOrder();
+    if (last?.orderId && await canExposeOrderToCustomer(last.orderId)) {
+      state.currentOrderId = last.orderId;
+      if (last.orderNumber) state.currentOrderNumber = last.orderNumber;
+      setOrdersUI(true);
+      openTrackScreen(last.orderId);
+      startTrackingOrder(last.orderId);
+    } else {
+      try { forgetLastOrder(); } catch(_) {}
+      setOrdersUI(false);
+    }
+
+    renderOrderHistoryButton();
+    renderOrderHistoryList();
+  }, 0);
     document.getElementById("tabProfile")?.addEventListener("click", () => {
     showTab("profile");
   });
@@ -4188,7 +4192,25 @@ function fillCheckoutWithProfile(force = false){
   bindCheckoutProfileAutosave();
 }
 
-boot();
+function startAppOptimized(){
+  renderProfileForm();
+  setProfileTab("conta");
+  bindProfileAvatarPicker();
+  fillCheckoutWithProfile(false);
+
+  requestAnimationFrame(() => {
+    setTimeout(() => {
+      boot().catch((err) => console.error("boot falhou:", err));
+    }, 0);
+  });
+}
+
+if (document.readyState === "loading") {
+  document.addEventListener("DOMContentLoaded", startAppOptimized, { once: true });
+} else {
+  startAppOptimized();
+}
+
 document.getElementById("openProfileSettingsBtn")?.addEventListener("click", openProfileSettings);
 document.getElementById("closeProfileSettingsBtn")?.addEventListener("click", closeProfileSettings);
 document.getElementById("closeProfileSettingsBackdrop")?.addEventListener("click", closeProfileSettings);
@@ -4204,10 +4226,6 @@ document.getElementById("saveAvatarBtn")?.addEventListener("click", handleSaveAv
 document.getElementById("saveProfileDataBtn")?.addEventListener("click", handleSaveProfileData);
 document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fillCheckoutWithProfile);
 
-renderProfileForm();
-setProfileTab("conta");
-bindProfileAvatarPicker();
-fillCheckoutWithProfile(false);
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
   const code = String(document.getElementById("mpPixCode")?.value || "")
     .replace(/\r/g, "")
@@ -4215,16 +4233,12 @@ document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () =>
     .trim();
 
   if (!code) return;
-
   try {
     await _copyText(code);
     const status = document.getElementById("mpPixStatus");
     if (status) status.textContent = "Código Pix copiado ✅";
-  } catch (err) {
+  } catch(err) {
     console.error("Erro ao copiar PIX:", err);
-    const status = document.getElementById("mpPixStatus");
-    if (status) status.textContent = "Falha ao copiar o código Pix";
-    alert("Não foi possível copiar o PIX neste celular.");
   }
 });
 const checkPixStatusBtn = document.getElementById("checkPixStatusBtn");
@@ -4241,6 +4255,8 @@ if (checkPixStatusBtn) {
    ✅ FIX: NÃO registrar 2 service workers, e NÃO usar await solto no final
    - /sw.js com scope "/" já cobre o app (inclusive /client/)
 */
+// Service Worker desativado temporariamente para priorizar abertura rápida no mobile.
+// Reative só depois de validar que a versão está estável em iPhone/Android.
 // if ("serviceWorker" in navigator) {
 //   window.addEventListener("load", async () => {
 //     try {
@@ -4252,7 +4268,10 @@ if (checkPixStatusBtn) {
 //   });
 // }
 function startPromoListener() {
-  const ref = Firestore.doc(db, "restaurants", state.restaurant.id, "settings", "promo");
+  const restaurantId = String(state?.restaurant?.id || "").trim();
+  if (!restaurantId) return;
+
+  const ref = Firestore.doc(db, "restaurants", restaurantId, "settings", "promo");
 
   Firestore.onSnapshot(ref, (snap) => {
     if (!snap.exists()) return;
@@ -4265,7 +4284,7 @@ function startPromoListener() {
   });
 }
 
-function applyProfileToCheckoutFields(force = false) {
+function applyProfileToCheckoutFields(force = false){
   const data = loadProfile();
 
   const nameEl = document.getElementById("custName");
