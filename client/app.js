@@ -2608,7 +2608,11 @@ async function createInlinePixPayment(orderId, total){
 
   state.mp.currentPaymentId = data.paymentId;
   state.mp.currentPaymentStatus = data.status || "pending";
-  state.mp.pixCode = data.qrCode || "";
+const cleanPixCode = String(data.qrCode || "").replace(/\s+/g, "").trim();
+
+state.mp.pixCode = cleanPixCode;
+
+if (code) code.value = cleanPixCode;
   state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
 
   const img = document.getElementById("mpPixQrImage");
@@ -4228,9 +4232,8 @@ document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fi
 
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
   const code = String(document.getElementById("mpPixCode")?.value || "")
-    .replace(/\r/g, "")
-    .replace(/\n/g, "")
-    .trim();
+  .replace(/\s+/g, "")
+  .trim();
 
   if (!code) return;
   try {
