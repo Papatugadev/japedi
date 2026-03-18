@@ -4252,23 +4252,20 @@ if (checkPixStatusBtn) {
 //   });
 // }
 function startPromoListener() {
-
-  const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID, "settings", "promo");
+  const ref = Firestore.doc(db, "restaurants", state.restaurant.id, "settings", "promo");
 
   Firestore.onSnapshot(ref, (snap) => {
-
     if (!snap.exists()) return;
 
     const data = snap.data();
     const cupom = data.cupom || "";
 
     const el = document.getElementById("promoCupom");
-
     if (el) el.textContent = cupom;
-
   });
+}
 
-function applyProfileToCheckoutFields(force = false){
+function applyProfileToCheckoutFields(force = false) {
   const data = loadProfile();
 
   const nameEl = document.getElementById("custName");
@@ -4283,7 +4280,6 @@ function applyProfileToCheckoutFields(force = false){
       .filter(Boolean)
       .join(" - ");
   }
-}
 }
 // ✅ Mostra no banner o cupom digitado no input "promo"
 (function bindPromoToBanner() {
