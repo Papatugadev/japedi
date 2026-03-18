@@ -4267,6 +4267,11 @@ if (checkPixStatusBtn) {
 //     }
 //   });
 // }
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then((registrations) => {
+    registrations.forEach((r) => r.unregister());
+  });
+}
 function startPromoListener() {
   const restaurantId = String(state?.restaurant?.id || "").trim();
   if (!restaurantId) return;
