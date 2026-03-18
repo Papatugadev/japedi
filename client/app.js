@@ -820,8 +820,11 @@ async function _copyText(text){
   document.body.appendChild(ta);
   ta.focus();
   ta.select();
+  ta.setSelectionRange(0, ta.value.length);
+
   const ok = document.execCommand("copy");
   document.body.removeChild(ta);
+
   if (!ok) throw new Error("copy_failed");
   return true;
 }
@@ -4206,13 +4209,23 @@ setProfileTab("conta");
 bindProfileAvatarPicker();
 fillCheckoutWithProfile(false);
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
-  const code = document.getElementById("mpPixCode")?.value || "";
+  const code = String(document.getElementById("mpPixCode")?.value || "")
+    .replace(/\r/g, "")
+    .replace(/\n/g, "")
+    .trim();
+
   if (!code) return;
+
   try {
-    await navigator.clipboard.writeText(code);
+    await _copyText(code);
     const status = document.getElementById("mpPixStatus");
     if (status) status.textContent = "Código Pix copiado ✅";
-  } catch(_) {}
+  } catch (err) {
+    console.error("Erro ao copiar PIX:", err);
+    const status = document.getElementById("mpPixStatus");
+    if (status) status.textContent = "Falha ao copiar o código Pix";
+    alert("Não foi possível copiar o PIX neste celular.");
+  }
 });
 const checkPixStatusBtn = document.getElementById("checkPixStatusBtn");
 if (checkPixStatusBtn) {
@@ -4228,16 +4241,16 @@ if (checkPixStatusBtn) {
    ✅ FIX: NÃO registrar 2 service workers, e NÃO usar await solto no final
    - /sw.js com scope "/" já cobre o app (inclusive /client/)
 */
-if ("serviceWorker" in navigator) {
-  window.addEventListener("load", async () => {
-    try {
-      await navigator.serviceWorker.register("/sw.js", { scope: "/" });
-      console.log("SW registrado ✅");
-    } catch (e) {
-      console.warn("SW falhou:", e);
-    }
-  });
-}
+// if ("serviceWorker" in navigator) {
+//   window.addEventListener("load", async () => {
+//     try {
+//       await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+//       console.log("SW registrado ✅");
+//     } catch (e) {
+//       console.warn("SW falhou:", e);
+//     }
+//   });
+// }
 function startPromoListener() {
 
   const ref = Firestore.doc(db, "restaurants", RESTAURANT_ID, "settings", "promo");
