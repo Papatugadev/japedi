@@ -805,13 +805,15 @@ function _ensurePromoBanner(){
 
 // ===== util: copiar =====
 async function _copyText(text){
+  const safeText = String(text || "").replace(/\r/g, "").replace(/\n/g, "").trim();
+
   if (navigator.clipboard && window.isSecureContext){
-    await navigator.clipboard.writeText(text);
+    await navigator.clipboard.writeText(safeText);
     return true;
   }
-  // fallback antigo
+
   const ta = document.createElement("textarea");
-  ta.value = text;
+  ta.value = safeText;
   ta.style.position = "fixed";
   ta.style.left = "-9999px";
   ta.style.top = "0";
@@ -2586,6 +2588,7 @@ function renderInlinePaymentUI(){
 
 async function createInlinePixPayment(orderId, total){
   const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/createMercadoPagoPixPayment`, {
+    
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -2597,6 +2600,7 @@ async function createInlinePixPayment(orderId, total){
         email: getCheckoutCustomerEmail(),
         first_name: (document.getElementById("custName")?.value || "Cliente").trim(),
       }
+      
     })
   });
 
@@ -2604,10 +2608,16 @@ async function createInlinePixPayment(orderId, total){
   if (!response.ok || !data?.paymentId) {
     throw new Error(data?.error || "Não foi possível gerar o PIX.");
   }
-
+  console.log("MP RESPONSE:", data);
+console.log("qrCode bruto:", JSON.stringify(data.qrCode));
+console.log("qrCode length:", String(data.qrCode || "").length);
+console.log("qrCodeBase64 exists:", !!data.qrCodeBase64);
   state.mp.currentPaymentId = data.paymentId;
   state.mp.currentPaymentStatus = data.status || "pending";
-  state.mp.pixCode = data.qrCode || "";
+state.mp.pixCode = String(data.qrCode || "")
+  .replace(/\r/g, "")
+  .replace(/\n/g, "")
+  .trim();
   state.mp.qrCodeBase64 = data.qrCodeBase64 || "";
 
   const img = document.getElementById("mpPixQrImage");
@@ -2618,7 +2628,7 @@ async function createInlinePixPayment(orderId, total){
     img.src = `data:image/png;base64,${data.qrCodeBase64}`;
     img.classList.remove("hidden");
   }
-  if (code) code.value = data.qrCode || "";
+ if (code) code.value = state.mp.pixCode;
   if (status) status.textContent = "PIX gerado. Aguardando pagamento...";
 
   await updateOrderPaymentState(orderId, {
