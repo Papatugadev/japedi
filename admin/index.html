@@ -8,15 +8,110 @@
 </head>
 
 <body>
-<div class="login" id="loginScreen">
-  <h2>Painel do Restaurante</h2>
+<div class="login authShell" id="loginScreen">
+  <section id="authLoginView" class="authView authView--login">
+    <div class="authBrandPill">Painel do Restaurante</div>
+    <h2 class="authTitle">Entre no seu painel</h2>
+    <p class="authText">Acesse pedidos, produtos e o financeiro do seu restaurante. Se você ainda não tem conta, cadastre seu restaurante e escolha um plano.</p>
 
-  <input id="email" placeholder="Email" class="input"/>
-  <input id="password" type="password" placeholder="Senha" class="input"/>
+    <div class="authFormGrid">
+      <input id="email" placeholder="Email" class="input"/>
+      <input id="password" type="password" placeholder="Senha" class="input"/>
+    </div>
 
-  <button id="loginBtn" class="btn">Entrar</button>
+    <div class="authActions">
+      <button id="loginBtn" class="btn" type="button">Entrar</button>
+      <button id="openSignupBtn" class="ghost authSecondaryBtn" type="button">Cadastrar restaurante</button>
+    </div>
 
-  <p id="loginError" class="error"></p>
+    <div class="authHintRow">
+      <span>Login do restaurante</span>
+      <span>Login master separado</span>
+    </div>
+
+    <p id="loginError" class="error"></p>
+  </section>
+
+  <section id="authSignupView" class="authView authView--signup hidden">
+    <div class="signupHero">
+      <div>
+        <div class="authBrandPill">Novo restaurante</div>
+        <h2 class="authTitle">Cadastre seu restaurante e escolha um plano</h2>
+        <p class="authText">Preencha seus dados, selecione o plano ideal e deixe tudo pronto para ativação. O visual foi pensado como uma mini landing page, sem misturar com o resto do admin.</p>
+      </div>
+      <button id="backToLoginBtn" class="ghost" type="button">Voltar para login</button>
+    </div>
+
+    <div class="signupLandingGrid">
+      <div class="signupPlansPanel">
+        <div class="signupSectionTitle">Escolha seu plano</div>
+        <div id="signupPlans" class="signupPlans"></div>
+        <div class="signupDisclaimer">O plano escolhido fica salvo no seu cadastro para ativação e cobrança.</div>
+      </div>
+
+      <form id="signupForm" class="signupFormCard">
+        <div class="signupSectionTitle">Dados do restaurante</div>
+        <div class="signupFormGrid">
+          <label class="signupField">
+            <span>Nome do restaurante</span>
+            <input id="signupRestaurantName" class="input" required />
+          </label>
+          <label class="signupField">
+            <span>Seu nome</span>
+            <input id="signupOwnerName" class="input" required />
+          </label>
+          <label class="signupField">
+            <span>WhatsApp</span>
+            <input id="signupWhatsapp" class="input" required />
+          </label>
+          <label class="signupField">
+            <span>Email</span>
+            <input id="signupEmail" class="input" type="email" required />
+          </label>
+          <label class="signupField">
+            <span>Senha</span>
+            <input id="signupPassword" class="input" type="password" required />
+          </label>
+          <label class="signupField">
+            <span>Confirmar senha</span>
+            <input id="signupPassword2" class="input" type="password" required />
+          </label>
+        </div>
+
+        <input id="signupPlanTier" type="hidden" value="gold" />
+
+        <label class="signupField signupField--full">
+          <span>Observações</span>
+          <textarea id="signupNotes" class="input signupTextarea" placeholder="Ex.: pizzaria, hamburgueria, cidade, necessidade de financeiro, promoções, etc."></textarea>
+        </label>
+
+        <div class="signupSubmitRow">
+          <div class="signupPriceBox">
+            <span>Plano escolhido</span>
+            <strong id="signupSelectedPlanLabel">Gold</strong>
+            <small id="signupSelectedPlanPrice">R$ 99,90 / mês</small>
+          </div>
+          <button id="signupSubmitBtn" class="btn" type="submit">Cadastrar restaurante</button>
+        </div>
+
+        <p id="signupError" class="error"></p>
+      </form>
+    </div>
+  </section>
+
+  <section id="authPendingView" class="authView authView--pending hidden">
+    <div class="authBrandPill">Cadastro enviado</div>
+    <h2 class="authTitle">Recebemos o seu restaurante</h2>
+    <p class="authText">Seu cadastro ficou salvo com o plano escolhido. Agora basta ativar o restaurante no painel master para liberar o acesso completo ao admin.</p>
+    <div class="pendingCard">
+      <strong id="pendingRestaurantName">Seu restaurante</strong>
+      <span id="pendingPlanTier">Plano selecionado</span>
+      <small id="pendingContactInfo">Assim que o restaurante for vinculado, este login passará a abrir o painel normal.</small>
+    </div>
+    <div class="authActions">
+      <button id="pendingBackToLoginBtn" class="btn" type="button">Voltar para login</button>
+    </div>
+  </section>
 </div>
 
 <div id="panel" class="hidden">
@@ -937,6 +1032,220 @@
         <div class="setFooter muted" id="setStatus">-</div>
       </section>
     </main>
+  </div>
+</div>
+
+
+<div id="masterPanel" class="hidden masterPanelRoot">
+  <header class="masterTop">
+    <div>
+      <div class="masterKicker">Gestão da plataforma</div>
+      <strong id="masterTitle">Painel Master</strong>
+      <div class="masterSub">Gerencie restaurantes, planos, cobrança e vencimentos sem misturar com o admin do restaurante.</div>
+    </div>
+    <div class="masterTopActions">
+      <button id="masterRefreshBtn" class="ghost" type="button">Atualizar</button>
+      <button id="masterLogoutBtn" class="ghost" type="button">Sair</button>
+    </div>
+  </header>
+
+  <main class="masterWrap">
+    <div class="masterTabs">
+      <button id="masterTabBtnRestaurants" class="masterTabBtn is-active" type="button">Restaurantes</button>
+      <button id="masterTabBtnPlans" class="masterTabBtn" type="button">Planos</button>
+    </div>
+
+    <section id="masterTabRestaurants" class="masterTabPage">
+      <section class="masterHero">
+        <div class="masterHero__copy">
+          <span class="masterHero__eyebrow">SaaS control center</span>
+          <h2 class="masterHero__title">Restaurantes e assinaturas</h2>
+          <p class="masterHero__text">Veja plano atual, mensalidade, vencimento, último pagamento e altere tudo em um drawer lateral premium.</p>
+        </div>
+        <div class="masterHero__badge">Master</div>
+      </section>
+
+      <section class="masterStats" id="masterStats">
+        <article class="masterStatCard"><span>Total</span><strong id="msTotal">0</strong><small>restaurantes</small></article>
+        <article class="masterStatCard"><span>Gold+</span><strong id="msGold">0</strong><small>planos avançados</small></article>
+        <article class="masterStatCard"><span>Ativos</span><strong id="msActive">0</strong><small>assinaturas em dia</small></article>
+        <article class="masterStatCard"><span>Expirando</span><strong id="msExpiring">0</strong><small>até 7 dias</small></article>
+        <article class="masterStatCard"><span>Pendentes</span><strong id="msPending">0</strong><small>cadastros aguardando ativação</small></article>
+      </section>
+
+      <section class="masterToolbar">
+        <label class="masterField masterField--search">
+          <span>Buscar restaurante</span>
+          <input id="masterSearch" class="input" placeholder="Nome, contato, email ou id" />
+        </label>
+        <label class="masterField">
+          <span>Plano</span>
+          <select id="masterPlanFilter" class="input">
+            <option value="all">Todos</option>
+            <option value="basic">Basic</option>
+            <option value="gold">Gold</option>
+            <option value="diamond">Diamond</option>
+          </select>
+        </label>
+        <label class="masterField">
+          <span>Status</span>
+          <select id="masterStatusFilter" class="input">
+            <option value="all">Todos</option>
+            <option value="active">Ativo</option>
+            <option value="trial">Trial</option>
+            <option value="expired">Expirado</option>
+            <option value="overdue">Atrasado</option>
+            <option value="canceled">Cancelado</option>
+          </select>
+        </label>
+      </section>
+
+      <section class="masterTableCard">
+        <div class="masterTableHead">
+          <div>
+            <div class="masterTableTitle">Cadastros pendentes</div>
+            <div class="masterTableHint">Ative o restaurante e aplique automaticamente o plano escolhido no cadastro.</div>
+          </div>
+          <div id="masterPendingCount" class="masterCountBadge">0 pendentes</div>
+        </div>
+        <div class="masterTableWrap">
+          <table class="masterTable">
+            <thead>
+              <tr>
+                <th>Restaurante</th>
+                <th>Email</th>
+                <th>WhatsApp</th>
+                <th>Plano escolhido</th>
+                <th>Valor</th>
+                <th>Cadastro</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="masterPendingBody"></tbody>
+          </table>
+        </div>
+        <div id="masterPendingEmpty" class="masterEmpty hidden">
+          <div class="masterEmpty__icon">✨</div>
+          <strong>Nenhum cadastro pendente</strong>
+          <p>Quando um restaurante se cadastrar pela landing, ele aparece aqui para ativação.</p>
+        </div>
+      </section>
+
+      <section class="masterTableCard">
+        <div class="masterTableHead">
+          <div>
+            <div class="masterTableTitle">Lista de restaurantes</div>
+            <div class="masterTableHint">Clique em um restaurante para editar plano, vencimento e cobrança.</div>
+          </div>
+          <div id="masterCount" class="masterCountBadge">0 itens</div>
+        </div>
+        <div class="masterTableWrap">
+          <table class="masterTable">
+            <thead>
+              <tr>
+                <th>Restaurante</th>
+                <th>Plano</th>
+                <th>Status</th>
+                <th>Mensalidade</th>
+                <th>Vencimento</th>
+                <th>Último pagamento</th>
+                <th>Expiração</th>
+                <th>Ação</th>
+              </tr>
+            </thead>
+            <tbody id="masterRestaurantsBody"></tbody>
+          </table>
+        </div>
+        <div id="masterEmpty" class="masterEmpty hidden">
+          <div class="masterEmpty__icon">🏪</div>
+          <strong>Nenhum restaurante encontrado</strong>
+          <p>Tente ajustar a busca ou os filtros.</p>
+        </div>
+      </section>
+    </section>
+
+    <section id="masterTabPlans" class="masterTabPage hidden">
+      <section class="masterHero masterHero--plans">
+        <div class="masterHero__copy">
+          <span class="masterHero__eyebrow">Planos da plataforma</span>
+          <h2 class="masterHero__title">Preço e permissões de cada plano</h2>
+          <p class="masterHero__text">Defina o valor padrão do Basic, Gold e Diamond e escolha quais telas cada plano pode ver no admin do restaurante.</p>
+        </div>
+        <div class="masterHero__badge">Planos</div>
+      </section>
+
+      <section class="masterPlansBoard">
+        <div class="masterPlansHead">
+          <div>
+            <div class="masterTableTitle">Configuração global dos planos</div>
+            <div class="masterTableHint">Essas permissões controlam o que cada restaurante vê ao logar no painel normal.</div>
+          </div>
+          <button id="masterPlansSaveBtn" class="btn" type="button">Salvar planos</button>
+        </div>
+
+        <div id="masterPlansCards" class="masterPlansCards"></div>
+
+        <div id="masterPlansStatus" class="masterDrawerStatus">Pronto para editar os planos.</div>
+      </section>
+    </section>
+  </main>
+
+  <div id="masterDrawer" class="masterDrawer hidden" aria-hidden="true">
+    <div id="masterDrawerScrim" class="masterDrawerScrim"></div>
+    <aside class="masterDrawerPanel">
+      <div class="masterDrawerHead">
+        <div>
+          <div class="masterDrawerEyebrow">Editar assinatura</div>
+          <div id="masterDrawerRestaurantName" class="masterDrawerTitle">Restaurante</div>
+          <div id="masterDrawerRestaurantId" class="masterDrawerHint">—</div>
+        </div>
+        <button id="masterDrawerClose" class="ghost" type="button">Fechar</button>
+      </div>
+
+      <div class="masterDrawerBody">
+        <div class="masterDrawerGrid">
+          <label class="masterField"><span>Nome do restaurante</span><input id="mName" class="input" /></label>
+          <label class="masterField"><span>Contato</span><input id="mContact" class="input" /></label>
+          <label class="masterField"><span>Email financeiro</span><input id="mBillingEmail" class="input" /></label>
+          <label class="masterField"><span>Plano</span>
+            <select id="mPlanTier" class="input">
+              <option value="basic">Basic</option>
+              <option value="gold">Gold</option>
+              <option value="diamond">Diamond</option>
+            </select>
+          </label>
+          <label class="masterField"><span>Status</span>
+            <select id="mPlanStatus" class="input">
+              <option value="active">Ativo</option>
+              <option value="trial">Trial</option>
+              <option value="expired">Expirado</option>
+              <option value="overdue">Atrasado</option>
+              <option value="canceled">Cancelado</option>
+            </select>
+          </label>
+          <label class="masterField"><span>Mensalidade (R$)</span><input id="mMonthlyPrice" class="input" type="number" step="0.01" min="0" /></label>
+          <label class="masterField"><span>Dia do vencimento</span><input id="mDueDay" class="input" type="number" min="1" max="31" /></label>
+          <label class="masterField"><span>Último pagamento</span><input id="mPaidAt" class="input" type="date" /></label>
+          <label class="masterField"><span>Expiração</span><input id="mExpiresAt" class="input" type="date" /></label>
+          <label class="masterField"><span>Fim do trial</span><input id="mTrialEndsAt" class="input" type="date" /></label>
+        </div>
+
+        <label class="masterField"><span>Observações</span><textarea id="mNotes" class="input masterTextarea" placeholder="Anotações internas sobre cobrança, acordo comercial, observações..."></textarea></label>
+
+        <div class="masterQuickActions">
+          <button id="masterMarkPaidBtn" class="btn" type="button">Marcar pago hoje</button>
+          <button id="masterSet30Btn" class="ghost" type="button">Expirar em 30 dias</button>
+          <button id="masterSet7Btn" class="ghost" type="button">Expirar em 7 dias</button>
+        </div>
+
+        <div id="masterDrawerStatus" class="masterDrawerStatus">Pronto para editar.</div>
+      </div>
+
+      <div class="masterDrawerFoot">
+        <button id="masterDeleteTrialBtn" class="ghost" type="button">Limpar trial</button>
+        <button id="masterSaveBtn" class="btn" type="button">Salvar alterações</button>
+      </div>
+    </aside>
   </div>
 </div>
 

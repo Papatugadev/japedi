@@ -32,6 +32,17 @@ let RESTAURANT_ID = null;
 let ADMIN_UID = "";
 let ADMIN_OK = false;
 
+const PLATFORM_OWNER_EMAILS = [
+  "jopinha@gmail.com"
+];
+
+let IS_MASTER_PANEL = false;
+let MASTER_UNSUB_RESTAURANTS = null;
+let MASTER_RESTAURANTS_CACHE = [];
+let MASTER_SELECTED_ID = null;
+let MASTER_UNSUB_PENDING = null;
+let MASTER_PENDING_CACHE = [];
+
 
 async function loadRestaurantIdFromUser() {
   const u = auth.currentUser;
@@ -110,15 +121,254 @@ const errorEl = document.getElementById("loginError");
 
 const panelEl = document.getElementById("panel");
 const loginScreenEl = document.getElementById("loginScreen");
+const masterPanelEl = document.getElementById("masterPanel");
+const authLoginViewEl = document.getElementById("authLoginView");
+const authSignupViewEl = document.getElementById("authSignupView");
+const authPendingViewEl = document.getElementById("authPendingView");
+const openSignupBtn = document.getElementById("openSignupBtn");
+const backToLoginBtn = document.getElementById("backToLoginBtn");
+const pendingBackToLoginBtn = document.getElementById("pendingBackToLoginBtn");
+const signupFormEl = document.getElementById("signupForm");
+const signupPlansHost = document.getElementById("signupPlans");
+const signupPlanTierEl = document.getElementById("signupPlanTier");
+const signupRestaurantNameEl = document.getElementById("signupRestaurantName");
+const signupOwnerNameEl = document.getElementById("signupOwnerName");
+const signupWhatsappEl = document.getElementById("signupWhatsapp");
+const signupEmailEl = document.getElementById("signupEmail");
+const signupPasswordEl = document.getElementById("signupPassword");
+const signupPassword2El = document.getElementById("signupPassword2");
+const signupNotesEl = document.getElementById("signupNotes");
+const signupErrorEl = document.getElementById("signupError");
+const signupSelectedPlanLabelEl = document.getElementById("signupSelectedPlanLabel");
+const signupSelectedPlanPriceEl = document.getElementById("signupSelectedPlanPrice");
+const pendingRestaurantNameEl = document.getElementById("pendingRestaurantName");
+const pendingPlanTierEl = document.getElementById("pendingPlanTier");
+const pendingContactInfoEl = document.getElementById("pendingContactInfo");
 
 const ordersWrap = document.getElementById("orders");
+
+const masterRefs = {
+  refreshBtn: document.getElementById("masterRefreshBtn"),
+  logoutBtn: document.getElementById("masterLogoutBtn"),
+  search: document.getElementById("masterSearch"),
+  planFilter: document.getElementById("masterPlanFilter"),
+  statusFilter: document.getElementById("masterStatusFilter"),
+  body: document.getElementById("masterRestaurantsBody"),
+  empty: document.getElementById("masterEmpty"),
+  count: document.getElementById("masterCount"),
+  statTotal: document.getElementById("msTotal"),
+  statGold: document.getElementById("msGold"),
+  statActive: document.getElementById("msActive"),
+  statExpiring: document.getElementById("msExpiring"),
+  drawer: document.getElementById("masterDrawer"),
+  drawerScrim: document.getElementById("masterDrawerScrim"),
+  drawerClose: document.getElementById("masterDrawerClose"),
+  drawerRestaurantName: document.getElementById("masterDrawerRestaurantName"),
+  drawerRestaurantId: document.getElementById("masterDrawerRestaurantId"),
+  drawerStatus: document.getElementById("masterDrawerStatus"),
+  saveBtn: document.getElementById("masterSaveBtn"),
+  markPaidBtn: document.getElementById("masterMarkPaidBtn"),
+  set30Btn: document.getElementById("masterSet30Btn"),
+  set7Btn: document.getElementById("masterSet7Btn"),
+  clearTrialBtn: document.getElementById("masterDeleteTrialBtn"),
+  fName: document.getElementById("mName"),
+  fContact: document.getElementById("mContact"),
+  fBillingEmail: document.getElementById("mBillingEmail"),
+  fTier: document.getElementById("mPlanTier"),
+  fStatus: document.getElementById("mPlanStatus"),
+  fMonthlyPrice: document.getElementById("mMonthlyPrice"),
+  fDueDay: document.getElementById("mDueDay"),
+  fPaidAt: document.getElementById("mPaidAt"),
+  fExpiresAt: document.getElementById("mExpiresAt"),
+  fTrialEndsAt: document.getElementById("mTrialEndsAt"),
+  fNotes: document.getElementById("mNotes")
+};
+
+const masterPendingRefs = {
+  body: document.getElementById("masterPendingBody"),
+  empty: document.getElementById("masterPendingEmpty"),
+  count: document.getElementById("masterPendingCount"),
+  statPending: document.getElementById("msPending")
+};
+
 const restNameEl = document.getElementById("restName");
+
+const DEFAULT_MASTER_PLAN_CONFIG = {
+  basic: {
+    priceBRL: 0,
+    features: { orders: true, products: true, finance: false, customers: false, promos: false, settings: true }
+  },
+  gold: {
+    priceBRL: 99.9,
+    features: { orders: true, products: true, finance: true, customers: true, promos: true, settings: true }
+  },
+  diamond: {
+    priceBRL: 149.9,
+    features: { orders: true, products: true, finance: true, customers: true, promos: true, settings: true }
+  }
+};
+
+let PLATFORM_PLAN_CONFIG = JSON.parse(JSON.stringify(DEFAULT_MASTER_PLAN_CONFIG));
+let ACTIVE_RESTAURANT_PAGE = "orders";
+
+const masterPlansRefs = {
+  tabRestaurants: document.getElementById("masterTabBtnRestaurants"),
+  tabPlans: document.getElementById("masterTabBtnPlans"),
+  pageRestaurants: document.getElementById("masterTabRestaurants"),
+  pagePlans: document.getElementById("masterTabPlans"),
+  saveBtn: document.getElementById("masterPlansSaveBtn"),
+  status: document.getElementById("masterPlansStatus"),
+  cardsHost: document.getElementById("masterPlansCards")
+};
 
 let unsubOrders = null;
 
 /** Helpers */
 function brl(v) {
   return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
+function showAuthSubView(which = "login") {
+  authLoginViewEl?.classList.toggle("hidden", which !== "login");
+  authSignupViewEl?.classList.toggle("hidden", which !== "signup");
+  authPendingViewEl?.classList.toggle("hidden", which !== "pending");
+}
+
+function _friendlyAuthError(e) {
+  const code = String(e?.code || "");
+  if (code.includes("email-already-in-use")) return "Esse email já está cadastrado.";
+  if (code.includes("invalid-email")) return "Digite um email válido.";
+  if (code.includes("weak-password")) return "A senha precisa ter pelo menos 6 caracteres.";
+  if (code.includes("network-request-failed")) return "Falha de rede. Tente novamente.";
+  return "Não foi possível concluir o cadastro.";
+}
+
+function updateSignupPlanSummary(tier = "gold") {
+  const key = _masterNormalizeTier(tier);
+  const cfg = getPlanConfigForTier(key);
+  if (signupPlanTierEl) signupPlanTierEl.value = key;
+  if (signupSelectedPlanLabelEl) signupSelectedPlanLabelEl.textContent = key.charAt(0).toUpperCase() + key.slice(1);
+  if (signupSelectedPlanPriceEl) signupSelectedPlanPriceEl.textContent = `${brl(cfg.priceBRL || 0)} / mês`;
+  if (!signupPlansHost) return;
+  signupPlansHost.querySelectorAll("[data-signup-plan]").forEach(card => {
+    card.classList.toggle("is-selected", card.dataset.signupPlan === key);
+  });
+}
+
+function renderSignupPlans() {
+  if (!signupPlansHost) return;
+  const cfg = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, PLATFORM_PLAN_CONFIG || {});
+  const order = ["basic", "gold", "diamond"];
+  const labels = { basic: "Basic", gold: "Gold", diamond: "Diamond" };
+  const desc = {
+    basic: "Essencial para operar pedidos e produtos.",
+    gold: "Mais completo para vender melhor com promoções e financeiro.",
+    diamond: "Plano avançado para operação completa da plataforma."
+  };
+  signupPlansHost.innerHTML = order.map(tier => {
+    const item = cfg[tier] || DEFAULT_MASTER_PLAN_CONFIG[tier];
+    const feats = Object.entries(item.features || {}).filter(([,v]) => !!v).map(([k]) => ({
+      orders: "Pedidos",
+      products: "Produtos",
+      finance: "Financeiro",
+      customers: "Clientes",
+      promos: "Promoções",
+      settings: "Configurações"
+    }[k] || k));
+    return `
+      <button class="signupPlanCard ${tier === (signupPlanTierEl?.value || 'gold') ? 'is-selected' : ''}" type="button" data-signup-plan="${tier}">
+        <div class="signupPlanTop">
+          <strong>${labels[tier]}</strong>
+          <span>${brl(item.priceBRL || 0)}/mês</span>
+        </div>
+        <p>${desc[tier]}</p>
+        <div class="signupPlanFeatures">${feats.map(f => `<span>${f}</span>`).join("")}</div>
+      </button>`;
+  }).join("");
+  signupPlansHost.querySelectorAll("[data-signup-plan]").forEach(btn => {
+    btn.addEventListener("click", () => updateSignupPlanSummary(btn.dataset.signupPlan || "gold"));
+  });
+  updateSignupPlanSummary(signupPlanTierEl?.value || "gold");
+}
+
+async function refreshPublicSignupPlans() {
+  try { await loadPlatformPlanConfig(); } catch (_) {}
+  renderSignupPlans();
+}
+
+function fillPendingSignupView(userData = {}) {
+  const restName = userData?.requestedRestaurantName || userData?.onboarding?.restaurantName || "Seu restaurante";
+  const tier = _masterNormalizeTier(userData?.requestedPlan || userData?.onboarding?.planTier || "gold");
+  const contact = userData?.phone || userData?.onboarding?.phone || userData?.email || "";
+  if (pendingRestaurantNameEl) pendingRestaurantNameEl.textContent = restName;
+  if (pendingPlanTierEl) pendingPlanTierEl.textContent = `Plano ${tier.charAt(0).toUpperCase() + tier.slice(1)}`;
+  if (pendingContactInfoEl) pendingContactInfoEl.textContent = contact ? `Contato informado: ${contact}` : "Assim que o restaurante for vinculado, este login passará a abrir o painel normal.";
+}
+
+async function handleRestaurantSignup(ev) {
+  ev?.preventDefault?.();
+  if (!signupFormEl) return;
+  if (signupErrorEl) signupErrorEl.textContent = "";
+
+  const restaurantName = String(signupRestaurantNameEl?.value || "").trim();
+  const ownerName = String(signupOwnerNameEl?.value || "").trim();
+  const whatsapp = String(signupWhatsappEl?.value || "").trim();
+  const email = String(signupEmailEl?.value || "").trim();
+  const password = String(signupPasswordEl?.value || "");
+  const password2 = String(signupPassword2El?.value || "");
+  const notes = String(signupNotesEl?.value || "").trim();
+  const tier = _masterNormalizeTier(signupPlanTierEl?.value || "gold");
+  const cfg = getPlanConfigForTier(tier);
+
+  if (!restaurantName || !ownerName || !whatsapp || !email || !password || !password2) {
+    if (signupErrorEl) signupErrorEl.textContent = "Preencha todos os campos obrigatórios.";
+    return;
+  }
+  if (password !== password2) {
+    if (signupErrorEl) signupErrorEl.textContent = "As senhas não conferem.";
+    return;
+  }
+
+  const submitBtn = document.getElementById("signupSubmitBtn");
+  if (submitBtn) submitBtn.disabled = true;
+
+  try {
+    const cred = await Auth.createUserWithEmailAndPassword(auth, email, password);
+    const uid = cred.user.uid;
+    await Firestore.setDoc(Firestore.doc(db, "users", uid), {
+      email,
+      name: ownerName,
+      phone: whatsapp,
+      role: "owner",
+      restaurantId: null,
+      signupStatus: "pending_setup",
+      requestedPlan: tier,
+      requestedPriceBRL: Number(cfg.priceBRL || 0),
+      requestedRestaurantName: restaurantName,
+      onboarding: {
+        restaurantName,
+        ownerName,
+        phone: whatsapp,
+        planTier: tier,
+        notes,
+        source: "login_landing",
+        createdAt: Firestore.serverTimestamp()
+      },
+      updatedAt: Firestore.serverTimestamp(),
+      createdAt: Firestore.serverTimestamp()
+    }, { merge: true });
+
+    fillPendingSignupView({ requestedRestaurantName: restaurantName, requestedPlan: tier, phone: whatsapp, email });
+    try { await Auth.signOut(auth); } catch (_) {}
+    signupFormEl.reset();
+    updateSignupPlanSummary("gold");
+    showAuthSubView("pending");
+  } catch (e) {
+    console.error("Erro ao cadastrar restaurante:", e?.code || e, e?.message || "");
+    if (signupErrorEl) signupErrorEl.textContent = _friendlyAuthError(e);
+  } finally {
+    if (submitBtn) submitBtn.disabled = false;
+  }
 }
 
 function _normalizeAdminPayment(order) {
@@ -863,6 +1113,187 @@ function statusColor(s) {
   return "#16a34a";
 }
 
+
+function _deepClone(v) {
+  return JSON.parse(JSON.stringify(v));
+}
+
+function _mergePlanConfig(baseCfg, incoming) {
+  const out = _deepClone(baseCfg || DEFAULT_MASTER_PLAN_CONFIG);
+  const src = incoming && typeof incoming === "object" ? incoming : {};
+  ["basic", "gold", "diamond"].forEach((tier) => {
+    const item = src[tier] || {};
+    out[tier] = out[tier] || { priceBRL: 0, features: {} };
+    out[tier].priceBRL = Number(item.priceBRL ?? out[tier].priceBRL ?? 0) || 0;
+    const incomingFeatures = item.features && typeof item.features === "object" ? item.features : {};
+    out[tier].features = Object.assign({}, out[tier].features || {}, incomingFeatures);
+  });
+  return out;
+}
+
+async function loadPlatformPlanConfig() {
+  try {
+    const snap = await Firestore.getDoc(Firestore.doc(db, "restaurants", "_platform"));
+    const data = snap.exists() ? (snap.data() || {}) : {};
+    PLATFORM_PLAN_CONFIG = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, data.masterPlans || {});
+  } catch (e) {
+    console.warn("Falha ao carregar configuração global de planos:", e?.code || e, e?.message || "");
+    PLATFORM_PLAN_CONFIG = _deepClone(DEFAULT_MASTER_PLAN_CONFIG);
+  }
+  try { renderMasterPlansEditor(); } catch (_) {}
+  return PLATFORM_PLAN_CONFIG;
+}
+
+function getPlanConfigForTier(tier) {
+  const key = String(tier || "basic").toLowerCase();
+  return _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, PLATFORM_PLAN_CONFIG || {})[key] || _deepClone(DEFAULT_MASTER_PLAN_CONFIG.basic);
+}
+
+function restaurantHasFeature(feature, tier) {
+  const cfg = getPlanConfigForTier(tier || SUBSCRIPTION_INFO?.tier || "basic");
+  return !!cfg?.features?.[feature];
+}
+
+function applyRestaurantPlanVisibility() {
+  const tier = SUBSCRIPTION_INFO?.tier || "basic";
+  const buttons = Array.from(document.querySelectorAll("#panel .menuItem[data-page]"));
+  if (!buttons.length) return;
+
+  buttons.forEach((btn) => {
+    const page = btn.dataset.page;
+    const allowed = restaurantHasFeature(page, tier);
+    btn.classList.toggle("hidden", !allowed);
+    btn.disabled = !allowed;
+    btn.setAttribute("aria-hidden", allowed ? "false" : "true");
+  });
+
+  Array.from(document.querySelectorAll("#panel .page[id^='page-']")).forEach((section) => {
+    const page = section.id.replace("page-", "");
+    const allowed = restaurantHasFeature(page, tier);
+    if (!allowed) section.classList.remove("active");
+  });
+
+  if (!restaurantHasFeature(ACTIVE_RESTAURANT_PAGE, tier)) {
+    const fallback = ["orders", "products", "settings"].find((page) => restaurantHasFeature(page, tier)) || "orders";
+    const btn = document.querySelector(`#panel .menuItem[data-page="${fallback}"]`);
+    if (btn) btn.click();
+  }
+}
+
+function setMasterPlansStatus(text, tone = "default") {
+  if (!masterPlansRefs.status) return;
+  masterPlansRefs.status.textContent = text;
+  masterPlansRefs.status.style.borderColor = tone === "error" ? "rgba(239,68,68,.25)" : tone === "ok" ? "rgba(34,197,94,.25)" : "#e2e8f0";
+  masterPlansRefs.status.style.background = tone === "error" ? "#fff1f2" : tone === "ok" ? "#f0fdf4" : "#f8fafc";
+  masterPlansRefs.status.style.color = tone === "error" ? "#991b1b" : tone === "ok" ? "#166534" : "#334155";
+}
+
+function renderMasterPlansEditor() {
+  if (!masterPlansRefs.cardsHost) return;
+  const cfg = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, PLATFORM_PLAN_CONFIG || {});
+  const labels = {
+    orders: "Pedidos",
+    products: "Produtos",
+    finance: "Financeiro",
+    customers: "Clientes",
+    promos: "Promoções",
+    settings: "Configurações"
+  };
+
+  masterPlansRefs.cardsHost.innerHTML = ["basic","gold","diamond"].map((tier) => {
+    const item = cfg[tier] || {};
+    const title = tier === "basic" ? "Basic" : tier === "gold" ? "Gold" : "Diamond";
+    const features = item.features || {};
+    const checks = Object.entries(labels).map(([key, label]) => `
+      <label class="masterPlanCheck">
+        <input type="checkbox" data-plan-tier="${tier}" data-plan-feature="${key}" ${features[key] ? "checked" : ""}/>
+        <span>${label}</span>
+      </label>
+    `).join("");
+    return `
+      <article class="masterPlanCard plan-${tier}">
+        <div class="masterPlanCardHead">
+          <div>
+            <div class="masterPlanTag">Plano ${title}</div>
+            <div class="masterPlanName">${title}</div>
+            <div class="masterPlanHint">Defina preço padrão e o que esse plano enxerga no painel do restaurante.</div>
+          </div>
+          <span class="masterPill plan-${tier}">${title}</span>
+        </div>
+
+        <div class="masterPlanPriceRow">
+          <label class="masterField">
+            <span>Preço mensal padrão (R$)</span>
+            <input class="input" type="number" step="0.01" min="0" data-plan-tier="${tier}" data-plan-price value="${Number(item.priceBRL || 0)}" />
+          </label>
+        </div>
+
+        <div class="masterPlanChecks">
+          ${checks}
+        </div>
+      </article>
+    `;
+  }).join("");
+}
+
+function getMasterPlansPayloadFromUI() {
+  const out = _deepClone(DEFAULT_MASTER_PLAN_CONFIG);
+  ["basic","gold","diamond"].forEach((tier) => {
+    const priceInput = document.querySelector(`[data-plan-tier="${tier}"][data-plan-price]`);
+    out[tier].priceBRL = Number(priceInput?.value || out[tier].priceBRL || 0) || 0;
+    Object.keys(out[tier].features).forEach((feature) => {
+      const check = document.querySelector(`[data-plan-tier="${tier}"][data-plan-feature="${feature}"]`);
+      out[tier].features[feature] = !!check?.checked;
+    });
+  });
+  return out;
+}
+
+async function saveMasterPlansConfig() {
+  try {
+    const payload = getMasterPlansPayloadFromUI();
+    await Firestore.setDoc(Firestore.doc(db, "restaurants", "_platform"), {
+      name: "_platform",
+      type: "platform_settings",
+      masterPlans: payload,
+      updatedAt: Firestore.serverTimestamp()
+    }, { merge: true });
+    PLATFORM_PLAN_CONFIG = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, payload);
+    setMasterPlansStatus("Planos salvos com sucesso.", "ok");
+    applyRestaurantPlanVisibility();
+  } catch (e) {
+    console.error("Erro ao salvar configuração global de planos:", e?.code || e, e?.message || "");
+    setMasterPlansStatus("Não foi possível salvar os planos. Verifique as permissões do Firestore.", "error");
+  }
+}
+
+function showMasterTab(which = "restaurants") {
+  const isPlans = which === "plans";
+  masterPlansRefs.tabRestaurants?.classList.toggle("is-active", !isPlans);
+  masterPlansRefs.tabPlans?.classList.toggle("is-active", isPlans);
+  masterPlansRefs.pageRestaurants?.classList.toggle("hidden", isPlans);
+  masterPlansRefs.pagePlans?.classList.toggle("hidden", !isPlans);
+  if (isPlans) {
+    renderMasterPlansEditor();
+  }
+}
+
+function bindMasterTabs() {
+  if (masterPlansRefs.tabRestaurants && masterPlansRefs.tabRestaurants.dataset.boundMasterTabs !== "1") {
+    masterPlansRefs.tabRestaurants.dataset.boundMasterTabs = "1";
+    masterPlansRefs.tabRestaurants.addEventListener("click", () => showMasterTab("restaurants"));
+  }
+  if (masterPlansRefs.tabPlans && masterPlansRefs.tabPlans.dataset.boundMasterTabs !== "1") {
+    masterPlansRefs.tabPlans.dataset.boundMasterTabs = "1";
+    masterPlansRefs.tabPlans.addEventListener("click", () => showMasterTab("plans"));
+  }
+  if (masterPlansRefs.saveBtn && masterPlansRefs.saveBtn.dataset.boundMasterPlans !== "1") {
+    masterPlansRefs.saveBtn.dataset.boundMasterPlans = "1";
+    masterPlansRefs.saveBtn.addEventListener("click", saveMasterPlansConfig);
+  }
+}
+
+
 /** Auth: login */
 loginBtn.onclick = async () => {
   errorEl.textContent = "";
@@ -873,12 +1304,25 @@ loginBtn.onclick = async () => {
   }
 };
 
-document.getElementById("logoutBtn").onclick = async () => {
+openSignupBtn?.addEventListener("click", async () => {
+  await refreshPublicSignupPlans();
+  showAuthSubView("signup");
+});
+backToLoginBtn?.addEventListener("click", () => showAuthSubView("login"));
+pendingBackToLoginBtn?.addEventListener("click", () => showAuthSubView("login"));
+signupFormEl?.addEventListener("submit", handleRestaurantSignup);
+refreshPublicSignupPlans();
+
+async function logoutEverywhere() {
   if (unsubOrders) unsubOrders();
   try { _stopProductsListener(); } catch (_) {}
+  if (MASTER_UNSUB_RESTAURANTS) { try { MASTER_UNSUB_RESTAURANTS(); } catch (_) {} }
   await Auth.signOut(auth);
   location.reload();
-};
+}
+
+document.getElementById("logoutBtn").onclick = logoutEverywhere;
+if (masterRefs.logoutBtn) masterRefs.logoutBtn.onclick = logoutEverywhere;
 
 /** Carrega nome do restaurante */
 async function loadRestaurantHeader() {
@@ -947,6 +1391,8 @@ async function checkSubscriptionGate() {
     }
 
     SUBSCRIPTION_INFO = { status, tier, trialEndsAtMs, expired, priceBRL: plan.priceBRL || null };
+    await loadPlatformPlanConfig();
+    applyRestaurantPlanVisibility();
 
     // Se expirou e não é active -> bloqueia
     if (expired && status !== "active") {
@@ -1225,8 +1671,8 @@ async function setOrderStatus(orderId, newStatus, options = {}) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
   }
 
-  // 3) Se for ENTREGUE ou CANCELADO: arquiva no histórico, MAS NÃO DELETA (não some hoje)
-  if (newStatus === "entregue" || newStatus === "cancelado") {
+  // 3) Se for ENTREGUE: arquiva no histórico, MAS NÃO DELETA (não some hoje)
+  if (newStatus === "entregue") {
     try {
       // tenta pegar dados do privado, se não der pega do público
       let baseData = null;
@@ -1248,9 +1694,8 @@ async function setOrderStatus(orderId, newStatus, options = {}) {
         {
           ...(baseData || {}),
           id: orderId,
-          status: newStatus,
-          ...(newStatus === "entregue" ? { deliveredAt: Firestore.serverTimestamp() } : {}),
-          ...(newStatus === "cancelado" ? { canceledAt: Firestore.serverTimestamp() } : {}),
+          status: "entregue",
+          deliveredAt: Firestore.serverTimestamp(),
           archivedAt: Firestore.serverTimestamp(),
           updatedAt: Firestore.serverTimestamp(),
         },
@@ -1351,14 +1796,13 @@ function renderOrders(list) {
   // helper para escolher coluna
   function bucketStatus(s, paymentStatus) {
     const pay = String(paymentStatus || "").toLowerCase();
-    const normalizedStatus = String(s || "").toLowerCase();
-    if (normalizedStatus === "aguardando_pagamento") return "aguardando_pagamento";
+    if (s === "aguardando_pagamento") return "aguardando_pagamento";
     if (pay && pay !== "approved") return "aguardando_pagamento";
-    if (normalizedStatus === "cancelado" || normalizedStatus === "canceled" || normalizedStatus === "cancelled") return "cancelado";
     // pedido novo pode vir "recebido" (ou vazio) => em_preparo
-    if (!normalizedStatus || normalizedStatus === "recebido" || normalizedStatus === "em_preparo") return "em_preparo";
-    if (normalizedStatus === "saiu_pra_entrega") return "saiu_pra_entrega";
-    if (normalizedStatus === "entregue") return "entregue";
+    if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
+    if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
+    if (s === "entregue") return "entregue";
+    if (s === "cancelado") return "cancelado";
     return "em_preparo";
   }
 
@@ -1366,7 +1810,7 @@ function renderOrders(list) {
     if (!prepEl && !outEl && !doneEl && !canceledEl) return legacyWrap;
     if (status === "saiu_pra_entrega") return outEl;
     if (status === "entregue") return doneEl;
-    if (status === "cancelado") return canceledEl || prepEl;
+    if (status === "cancelado") return canceledEl;
     return prepEl;
   }
 
@@ -1401,8 +1845,13 @@ function renderOrders(list) {
         <button class="ghost small" data-act="reprint" data-id="${o.id}">Reimprimir comanda</button>
         <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
       `;
+    } else if (col === "entregue") {
+      // entregue: apenas informações, sem botões
+      actions = "";
+    } else if (col === "cancelado") {
+      // cancelado: apenas informações, sem botões
+      actions = "";
     } else {
-      // entregue ou cancelado = só infos, sem ações
       actions = "";
     }
 
@@ -1431,7 +1880,9 @@ div.innerHTML = `
     ${paymentChangeText ? `<div class="paymentMeta">${paymentChangeText}</div>` : ``}
   </div>
 
-  ${actions ? `<div class="cardActions">${actions}</div>` : ``}
+  <div class="cardActions">
+    ${actions}
+  </div>
 `;const host = hostFor(col);
     if (host) host.appendChild(div);
   }
@@ -1823,16 +2274,509 @@ function startOrdersListener() {
   }, _msUntilNextMidnight());
 }
 
+function _masterNormalizeStatus(v) {
+  return String(v || "active").trim().toLowerCase() || "active";
+}
+
+function _masterNormalizeTier(v) {
+  const tier = String(v || "basic").trim().toLowerCase();
+  return ["basic","gold","diamond"].includes(tier) ? tier : "basic";
+}
+
+function _dateInputValueFromAny(v) {
+  if (!v) return "";
+  try {
+    let d = null;
+    if (typeof v === "string") {
+      if (/^\d{4}-\d{2}-\d{2}$/.test(v)) return v;
+      const parsed = new Date(v);
+      if (!Number.isNaN(parsed.getTime())) d = parsed;
+    } else if (typeof v === "number") {
+      d = new Date(v);
+    } else if (v?.toDate) {
+      d = v.toDate();
+    }
+    if (!d || Number.isNaN(d.getTime())) return "";
+    const y = d.getFullYear();
+    const m = String(d.getMonth() + 1).padStart(2, "0");
+    const day = String(d.getDate()).padStart(2, "0");
+    return `${y}-${m}-${day}`;
+  } catch (_) { return ""; }
+}
+
+function _tsFromDateInput(dateStr, endOfDay = false) {
+  if (!dateStr) return null;
+  const iso = endOfDay ? `${dateStr}T23:59:59` : `${dateStr}T12:00:00`;
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return null;
+  return Firestore.Timestamp.fromDate(d);
+}
+
+function isMasterUser(user, userData = null) {
+  const email = String(user?.email || "").trim().toLowerCase();
+  const allowedEmails = PLATFORM_OWNER_EMAILS.map(v => String(v || "").trim().toLowerCase()).filter(Boolean);
+  if (email && allowedEmails.includes(email)) return true;
+
+  const data = userData || {};
+  const role = String(data.role || data.platformRole || "").trim().toLowerCase();
+  if (["super_admin","platform_admin","master"].includes(role)) return true;
+  if (data.platformOwner === true) return true;
+  return false;
+}
+
+function showOnlyPanel(which) {
+  loginScreenEl.classList.add("hidden");
+  if (panelEl) panelEl.classList.add("hidden");
+  if (masterPanelEl) masterPanelEl.classList.add("hidden");
+  if (which === "restaurant" && panelEl) panelEl.classList.remove("hidden");
+  if (which === "master" && masterPanelEl) {
+    masterPanelEl.classList.remove("hidden");
+    bindMasterTabs();
+    showMasterTab("restaurants");
+  }
+}
+
+function masterLabelStatus(v) {
+  const map = {
+    active: "Ativo",
+    trial: "Trial",
+    expired: "Expirado",
+    overdue: "Atrasado",
+    canceled: "Cancelado"
+  };
+  const key = _masterNormalizeStatus(v);
+  return map[key] || key || "-";
+}
+
+function _masterGetRestaurantSummary(item) {
+
+  const plan = item.plan || {};
+  const billing = item.billing || {};
+  const tier = _masterNormalizeTier(plan.tier || billing.tier);
+  const status = _masterNormalizeStatus(plan.status || billing.status);
+  const monthlyPrice = Number(billing.monthlyPriceBRL ?? plan.priceBRL ?? 0) || 0;
+  const dueDay = Number(billing.dueDay ?? plan.dueDay ?? 0) || 0;
+  const paidAt = billing.paidAt || plan.paidAt || null;
+  const expiresAt = billing.expiresAt || plan.expiresAt || null;
+  const trialEndsAt = plan.trialEndsAt || null;
+  const contact = billing.contact || item.contact || item.phone || item.whatsapp || "";
+  const billingEmail = billing.billingEmail || item.email || "";
+  const notes = billing.notes || "";
+  return { tier, status, monthlyPrice, dueDay, paidAt, expiresAt, trialEndsAt, contact, billingEmail, notes };
+}
+
+
+function _pendingToMillis(v) {
+  return tsToMillis(v);
+}
+
+function _pendingSignupSummary(item) {
+  const onboarding = item?.onboarding || {};
+  const requestedPlan = _masterNormalizeTier(item?.requestedPlan || onboarding?.planTier || "gold");
+  const planCfg = getPlanConfigForTier(requestedPlan);
+  return {
+    uid: item.id || "",
+    ownerName: String(item?.name || onboarding?.ownerName || "").trim(),
+    restaurantName: String(item?.requestedRestaurantName || onboarding?.restaurantName || "").trim(),
+    email: String(item?.email || "").trim(),
+    phone: String(item?.phone || onboarding?.phone || "").trim(),
+    notes: String(onboarding?.notes || "").trim(),
+    planTier: requestedPlan,
+    priceBRL: Number(item?.requestedPriceBRL ?? planCfg?.priceBRL ?? 0) || 0,
+    createdAt: onboarding?.createdAt || item?.createdAt || item?.updatedAt || null
+  };
+}
+
+function renderMasterPendingTable() {
+  if (!masterPendingRefs.body) return;
+  const list = [...MASTER_PENDING_CACHE].sort((a,b) => (_pendingToMillis(_pendingSignupSummary(b).createdAt)||0) - (_pendingToMillis(_pendingSignupSummary(a).createdAt)||0));
+  if (masterPendingRefs.count) masterPendingRefs.count.textContent = `${list.length} pendente${list.length === 1 ? "" : "s"}`;
+  if (masterPendingRefs.statPending) masterPendingRefs.statPending.textContent = String(list.length);
+  if (!list.length) {
+    masterPendingRefs.body.innerHTML = "";
+    masterPendingRefs.empty?.classList.remove("hidden");
+    return;
+  }
+  masterPendingRefs.empty?.classList.add("hidden");
+  masterPendingRefs.body.innerHTML = list.map((item) => {
+    const s = _pendingSignupSummary(item);
+    const created = _fmtDateTime(s.createdAt);
+    return `
+      <tr>
+        <td>
+          <div class="masterRestaurantCell">
+            <strong>${_escapeHtml(s.restaurantName || "Sem nome")}</strong>
+            <small>${_escapeHtml(s.ownerName || "Sem responsável")}</small>
+          </div>
+        </td>
+        <td>${_escapeHtml(s.email || "—")}</td>
+        <td>${_escapeHtml(s.phone || "—")}</td>
+        <td><span class="masterPlanBadge is-${s.planTier}">${s.planTier.toUpperCase()}</span></td>
+        <td>${brl(s.priceBRL || 0)}</td>
+        <td>${created || "—"}</td>
+        <td>
+          <div class="masterActions">
+            <button class="btn small" type="button" data-activate-signup="${_escapeHtml(s.uid)}">Ativar restaurante</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  masterPendingRefs.body.querySelectorAll('[data-activate-signup]').forEach((btn) => {
+    btn.addEventListener('click', () => activatePendingSignup(btn.getAttribute('data-activate-signup') || ''));
+  });
+}
+
+async function activatePendingSignup(uid) {
+  const item = MASTER_PENDING_CACHE.find(v => v.id === uid);
+  if (!item) return;
+  const s = _pendingSignupSummary(item);
+  const confirmed = window.confirm(`Ativar ${s.restaurantName || 'este restaurante'} no plano ${s.planTier.toUpperCase()}?`);
+  if (!confirmed) return;
+
+  try {
+    setMasterDrawerStatus(`Ativando ${s.restaurantName || 'restaurante'}...`);
+    const planCfg = getPlanConfigForTier(s.planTier);
+    const monthlyPrice = Number(s.priceBRL || planCfg?.priceBRL || 0) || 0;
+    const restaurantPayload = {
+      name: s.restaurantName || s.ownerName || 'Novo restaurante',
+      createdAt: Firestore.serverTimestamp(),
+      updatedAt: Firestore.serverTimestamp(),
+      billing: {
+        contact: s.phone || '',
+        billingEmail: s.email || '',
+        monthlyPriceBRL: monthlyPrice,
+        dueDay: 5,
+        paidAt: null,
+        expiresAt: null,
+        notes: s.notes || '',
+        status: 'active'
+      },
+      plan: {
+        tier: s.planTier,
+        status: 'active',
+        priceBRL: monthlyPrice,
+        paidAt: null,
+        expiresAt: null,
+        trialEndsAt: null
+      }
+    };
+
+    const restaurantRef = await Firestore.addDoc(Firestore.collection(db, 'restaurants'), restaurantPayload);
+    await Firestore.setDoc(Firestore.doc(db, 'users', uid), {
+      restaurantId: restaurantRef.id,
+      role: 'owner',
+      signupStatus: 'active',
+      requestedPlan: s.planTier,
+      activatedAt: Firestore.serverTimestamp(),
+      activationSource: 'master_panel',
+      updatedAt: Firestore.serverTimestamp()
+    }, { merge: true });
+
+    setMasterDrawerStatus(`Restaurante ativado no plano ${s.planTier.toUpperCase()}.`, 'ok');
+  } catch (e) {
+    console.error('Erro ao ativar cadastro pendente:', e?.code || e, e?.message || '');
+    const msg = String(e?.code || '').includes('permission')
+      ? 'Sem permissão para ativar cadastro. Ajuste as rules de /users para permitir update do master.'
+      : 'Não foi possível ativar o cadastro pendente.';
+    setMasterDrawerStatus(msg, 'error');
+  }
+}
+
+function startMasterPendingListener(force = false) {
+  if (!IS_MASTER_PANEL) return;
+  if (MASTER_UNSUB_PENDING && !force) return;
+  if (MASTER_UNSUB_PENDING && force) { try { MASTER_UNSUB_PENDING(); } catch (_) {} MASTER_UNSUB_PENDING = null; }
+
+  const q = Firestore.query(Firestore.collection(db, 'users'), Firestore.where('signupStatus', '==', 'pending_setup'));
+  MASTER_UNSUB_PENDING = Firestore.onSnapshot(q, (snap) => {
+    MASTER_PENDING_CACHE = snap.docs
+      .map(doc => ({ id: doc.id, ...(doc.data() || {}) }))
+      .filter(item => !item.restaurantId);
+    renderMasterPendingTable();
+  }, (err) => {
+    console.error('Erro ao listar cadastros pendentes:', err?.code || err, err?.message || '');
+    if (masterPendingRefs.body) masterPendingRefs.body.innerHTML = '';
+    masterPendingRefs.empty?.classList.remove('hidden');
+  });
+}
+
+function renderMasterStats(list) {
+  const now = Date.now();
+  const in7 = now + 7 * 24 * 60 * 60 * 1000;
+  const goldCount = list.filter(item => ["gold","diamond"].includes(_masterGetRestaurantSummary(item).tier)).length;
+  const activeCount = list.filter(item => _masterGetRestaurantSummary(item).status === "active").length;
+  const expiringCount = list.filter(item => {
+    const exp = tsToMillis(_masterGetRestaurantSummary(item).expiresAt);
+    return exp && exp >= now && exp <= in7;
+  }).length;
+  if (masterRefs.statTotal) masterRefs.statTotal.textContent = String(list.length);
+  if (masterRefs.statGold) masterRefs.statGold.textContent = String(goldCount);
+  if (masterRefs.statActive) masterRefs.statActive.textContent = String(activeCount);
+  if (masterRefs.statExpiring) masterRefs.statExpiring.textContent = String(expiringCount);
+}
+
+function renderMasterTable() {
+  if (!masterRefs.body) return;
+  const search = String(masterRefs.search?.value || "").trim().toLowerCase();
+  const planFilter = String(masterRefs.planFilter?.value || "all");
+  const statusFilter = String(masterRefs.statusFilter?.value || "all");
+
+  const filtered = MASTER_RESTAURANTS_CACHE.filter(item => {
+    const s = _masterGetRestaurantSummary(item);
+    const hay = [item.name, item.id, s.contact, s.billingEmail].join(" ").toLowerCase();
+    if (search && !hay.includes(search)) return false;
+    if (planFilter !== "all" && s.tier !== planFilter) return false;
+    if (statusFilter !== "all" && s.status !== statusFilter) return false;
+    return true;
+  });
+
+  renderMasterStats(MASTER_RESTAURANTS_CACHE);
+  if (masterRefs.count) masterRefs.count.textContent = `${filtered.length} item(ns)`;
+  masterRefs.body.innerHTML = filtered.map(item => {
+    const s = _masterGetRestaurantSummary(item);
+    const paidAt = _dateInputValueFromAny(s.paidAt) || "—";
+    const expiresAt = _dateInputValueFromAny(s.expiresAt) || "—";
+    const dueDay = s.dueDay ? `Dia ${s.dueDay}` : "—";
+    return `
+      <tr>
+        <td>
+          <div class="masterRestName">${item.name || "Restaurante sem nome"}</div>
+          <div class="masterRestMeta">${item.id}<br>${s.contact || "Sem contato"}</div>
+        </td>
+        <td><span class="masterPill plan-${s.tier}">${s.tier.toUpperCase()}</span></td>
+        <td><span class="masterPill status-${s.status}">${masterLabelStatus(s.status)}</span></td>
+        <td>${brl(s.monthlyPrice)}</td>
+        <td>${dueDay}</td>
+        <td>${paidAt}</td>
+        <td>${expiresAt}</td>
+        <td><button class="masterActionBtn" type="button" data-master-open="${item.id}">Gerenciar</button></td>
+      </tr>
+    `;
+  }).join("");
+
+  const hasItems = filtered.length > 0;
+  if (masterRefs.empty) masterRefs.empty.classList.toggle("hidden", hasItems);
+
+  masterRefs.body.querySelectorAll("[data-master-open]").forEach(btn => {
+    btn.addEventListener("click", () => openMasterDrawer(btn.dataset.masterOpen));
+  });
+}
+
+function bindMasterPanelEvents() {
+  [masterRefs.search, masterRefs.planFilter, masterRefs.statusFilter].forEach(el => {
+    if (!el || el.dataset.boundMaster === "1") return;
+    el.dataset.boundMaster = "1";
+    el.addEventListener("input", renderMasterTable);
+    el.addEventListener("change", renderMasterTable);
+  });
+
+  if (masterRefs.refreshBtn && masterRefs.refreshBtn.dataset.boundMaster !== "1") {
+    masterRefs.refreshBtn.dataset.boundMaster = "1";
+    masterRefs.refreshBtn.addEventListener("click", () => startMasterRestaurantsListener(true));
+  }
+  if (masterRefs.drawerClose && masterRefs.drawerClose.dataset.boundMaster !== "1") {
+    masterRefs.drawerClose.dataset.boundMaster = "1";
+    masterRefs.drawerClose.addEventListener("click", closeMasterDrawer);
+  }
+  if (masterRefs.drawerScrim && masterRefs.drawerScrim.dataset.boundMaster !== "1") {
+    masterRefs.drawerScrim.dataset.boundMaster = "1";
+    masterRefs.drawerScrim.addEventListener("click", closeMasterDrawer);
+  }
+  if (masterRefs.markPaidBtn && masterRefs.markPaidBtn.dataset.boundMaster !== "1") {
+    masterRefs.markPaidBtn.dataset.boundMaster = "1";
+    masterRefs.markPaidBtn.addEventListener("click", () => {
+      const today = _dateInputValueFromAny(new Date());
+      if (masterRefs.fPaidAt) masterRefs.fPaidAt.value = today;
+      if (masterRefs.fStatus) masterRefs.fStatus.value = "active";
+      setMasterDrawerStatus("Último pagamento definido para hoje.");
+    });
+  }
+  if (masterRefs.set30Btn && masterRefs.set30Btn.dataset.boundMaster !== "1") {
+    masterRefs.set30Btn.dataset.boundMaster = "1";
+    masterRefs.set30Btn.addEventListener("click", () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 30);
+      if (masterRefs.fExpiresAt) masterRefs.fExpiresAt.value = _dateInputValueFromAny(d);
+      if (masterRefs.fStatus) masterRefs.fStatus.value = "active";
+      setMasterDrawerStatus("Expiração ajustada para 30 dias à frente.");
+    });
+  }
+  if (masterRefs.set7Btn && masterRefs.set7Btn.dataset.boundMaster !== "1") {
+    masterRefs.set7Btn.dataset.boundMaster = "1";
+    masterRefs.set7Btn.addEventListener("click", () => {
+      const d = new Date();
+      d.setDate(d.getDate() + 7);
+      if (masterRefs.fExpiresAt) masterRefs.fExpiresAt.value = _dateInputValueFromAny(d);
+      setMasterDrawerStatus("Expiração ajustada para 7 dias à frente.");
+    });
+  }
+  if (masterRefs.clearTrialBtn && masterRefs.clearTrialBtn.dataset.boundMaster !== "1") {
+    masterRefs.clearTrialBtn.dataset.boundMaster = "1";
+    masterRefs.clearTrialBtn.addEventListener("click", () => {
+      if (masterRefs.fTrialEndsAt) masterRefs.fTrialEndsAt.value = "";
+      setMasterDrawerStatus("Fim do trial removido do formulário.");
+    });
+  }
+  if (masterRefs.saveBtn && masterRefs.saveBtn.dataset.boundMaster !== "1") {
+    masterRefs.saveBtn.dataset.boundMaster = "1";
+    masterRefs.saveBtn.addEventListener("click", saveMasterRestaurant);
+  }
+}
+
+function setMasterDrawerStatus(text, tone = "default") {
+  if (!masterRefs.drawerStatus) return;
+  masterRefs.drawerStatus.textContent = text;
+  masterRefs.drawerStatus.style.borderColor = tone === "error" ? "rgba(239,68,68,.25)" : "#e2e8f0";
+  masterRefs.drawerStatus.style.background = tone === "error" ? "#fff1f2" : "#f8fafc";
+  masterRefs.drawerStatus.style.color = tone === "error" ? "#991b1b" : "#334155";
+}
+
+function openMasterDrawer(restaurantId) {
+  const item = MASTER_RESTAURANTS_CACHE.find(v => v.id === restaurantId);
+  if (!item || !masterRefs.drawer) return;
+  MASTER_SELECTED_ID = restaurantId;
+  const s = _masterGetRestaurantSummary(item);
+  if (masterRefs.drawerRestaurantName) masterRefs.drawerRestaurantName.textContent = item.name || "Restaurante";
+  if (masterRefs.drawerRestaurantId) masterRefs.drawerRestaurantId.textContent = item.id;
+  if (masterRefs.fName) masterRefs.fName.value = item.name || "";
+  if (masterRefs.fContact) masterRefs.fContact.value = s.contact || "";
+  if (masterRefs.fBillingEmail) masterRefs.fBillingEmail.value = s.billingEmail || "";
+  if (masterRefs.fTier) {
+    masterRefs.fTier.value = s.tier;
+    masterRefs.fTier.onchange = () => {
+      const cfg = getPlanConfigForTier(masterRefs.fTier?.value || "basic");
+      if (masterRefs.fMonthlyPrice && (!masterRefs.fMonthlyPrice.value || Number(masterRefs.fMonthlyPrice.value) === 0)) {
+        masterRefs.fMonthlyPrice.value = String(Number(cfg.priceBRL || 0));
+      }
+    };
+  }
+  if (masterRefs.fStatus) masterRefs.fStatus.value = s.status;
+  if (masterRefs.fMonthlyPrice) masterRefs.fMonthlyPrice.value = String(s.monthlyPrice || 0);
+  if (masterRefs.fDueDay) masterRefs.fDueDay.value = s.dueDay ? String(s.dueDay) : "";
+  if (masterRefs.fPaidAt) masterRefs.fPaidAt.value = _dateInputValueFromAny(s.paidAt);
+  if (masterRefs.fExpiresAt) masterRefs.fExpiresAt.value = _dateInputValueFromAny(s.expiresAt);
+  if (masterRefs.fTrialEndsAt) masterRefs.fTrialEndsAt.value = _dateInputValueFromAny(s.trialEndsAt);
+  if (masterRefs.fNotes) masterRefs.fNotes.value = s.notes || "";
+  masterRefs.drawer.classList.remove("hidden");
+  masterRefs.drawer.setAttribute("aria-hidden", "false");
+  document.body.style.overflow = "hidden";
+  setMasterDrawerStatus("Edite os campos e salve para atualizar este restaurante.");
+}
+
+function closeMasterDrawer() {
+  if (!masterRefs.drawer) return;
+  masterRefs.drawer.classList.add("hidden");
+  masterRefs.drawer.setAttribute("aria-hidden", "true");
+  document.body.style.overflow = "";
+  MASTER_SELECTED_ID = null;
+}
+
+async function saveMasterRestaurant() {
+  if (!MASTER_SELECTED_ID) return;
+  try {
+    setMasterDrawerStatus("Salvando alterações...");
+    const ref = Firestore.doc(db, "restaurants", MASTER_SELECTED_ID);
+    await Firestore.setDoc(ref, {
+      name: masterRefs.fName?.value?.trim() || "",
+      billing: {
+        contact: masterRefs.fContact?.value?.trim() || "",
+        billingEmail: masterRefs.fBillingEmail?.value?.trim() || "",
+        monthlyPriceBRL: Number(masterRefs.fMonthlyPrice?.value || 0) || 0,
+        dueDay: Number(masterRefs.fDueDay?.value || 0) || 0,
+        paidAt: _tsFromDateInput(masterRefs.fPaidAt?.value || ""),
+        expiresAt: _tsFromDateInput(masterRefs.fExpiresAt?.value || "", true),
+        notes: masterRefs.fNotes?.value?.trim() || "",
+        status: _masterNormalizeStatus(masterRefs.fStatus?.value || "active")
+      },
+      plan: {
+        tier: _masterNormalizeTier(masterRefs.fTier?.value || "basic"),
+        status: _masterNormalizeStatus(masterRefs.fStatus?.value || "active"),
+        priceBRL: Number(masterRefs.fMonthlyPrice?.value || 0) || 0,
+        paidAt: _tsFromDateInput(masterRefs.fPaidAt?.value || ""),
+        expiresAt: _tsFromDateInput(masterRefs.fExpiresAt?.value || "", true),
+        trialEndsAt: _tsFromDateInput(masterRefs.fTrialEndsAt?.value || "", true)
+      },
+      updatedAt: Firestore.serverTimestamp()
+    }, { merge: true });
+
+    setMasterDrawerStatus("Restaurante atualizado com sucesso.");
+  } catch (e) {
+    console.error("Erro ao salvar restaurante no master panel:", e?.code || e, e?.message || "");
+    setMasterDrawerStatus("Não foi possível salvar. Verifique as permissões do Firestore.", "error");
+  }
+}
+
+function startMasterRestaurantsListener(force = false) {
+  if (!IS_MASTER_PANEL) return;
+  bindMasterPanelEvents();
+  bindMasterTabs();
+  loadPlatformPlanConfig();
+  if (MASTER_UNSUB_RESTAURANTS && !force) return;
+  if (MASTER_UNSUB_RESTAURANTS && force) { try { MASTER_UNSUB_RESTAURANTS(); } catch (_) {} MASTER_UNSUB_RESTAURANTS = null; }
+
+  const q = Firestore.query(Firestore.collection(db, "restaurants"), Firestore.orderBy("name", "asc"));
+  MASTER_UNSUB_RESTAURANTS = Firestore.onSnapshot(q, (snap) => {
+    MASTER_RESTAURANTS_CACHE = snap.docs
+      .map(doc => ({ id: doc.id, ...(doc.data() || {}) }))
+      .filter(item => item.id !== "_platform");
+    renderMasterTable();
+  }, (err) => {
+    console.error("Erro ao listar restaurantes no painel master:", err?.code || err, err?.message || "");
+    if (masterRefs.body) masterRefs.body.innerHTML = "";
+    if (masterRefs.empty) masterRefs.empty.classList.remove("hidden");
+    setMasterDrawerStatus("Sem acesso para ler /restaurants. Ajuste as regras do Firestore.", "error");
+  });
+}
+
 /** Auth state */
 Auth.onAuthStateChanged(auth, async (user) => {
-  if (!user) return;
+  if (!user) {
+    IS_MASTER_PANEL = false;
+    if (MASTER_UNSUB_PENDING) { try { MASTER_UNSUB_PENDING(); } catch (_) {} MASTER_UNSUB_PENDING = null; }
+    if (MASTER_UNSUB_RESTAURANTS) { try { MASTER_UNSUB_RESTAURANTS(); } catch (_) {} MASTER_UNSUB_RESTAURANTS = null; }
+    if (panelEl) panelEl.classList.add("hidden");
+    if (masterPanelEl) masterPanelEl.classList.add("hidden");
+    loginScreenEl?.classList.remove("hidden");
+    showAuthSubView("login");
+    return;
+  }
 
-  loginScreenEl.classList.add("hidden");
-  panelEl.classList.remove("hidden");
+  let userData = null;
+  try {
+    const usnap = await Firestore.getDoc(Firestore.doc(db, "users", user.uid));
+    userData = usnap.exists() ? (usnap.data() || {}) : null;
+  } catch (e) {
+    console.warn("Falha ao carregar users/{uid}:", e?.code || e, e?.message || "");
+  }
+
+  if (isMasterUser(user, userData)) {
+    IS_MASTER_PANEL = true;
+    showOnlyPanel("master");
+    startMasterRestaurantsListener(true);
+    startMasterPendingListener(true);
+    return;
+  }
+
+  if (!userData?.restaurantId && String(userData?.signupStatus || "") === "pending_setup") {
+    IS_MASTER_PANEL = false;
+    if (MASTER_UNSUB_PENDING) { try { MASTER_UNSUB_PENDING(); } catch (_) {} MASTER_UNSUB_PENDING = null; }
+    if (MASTER_UNSUB_RESTAURANTS) { try { MASTER_UNSUB_RESTAURANTS(); } catch (_) {} MASTER_UNSUB_RESTAURANTS = null; }
+    if (panelEl) panelEl.classList.add("hidden");
+    if (masterPanelEl) masterPanelEl.classList.add("hidden");
+    loginScreenEl?.classList.remove("hidden");
+    fillPendingSignupView(userData || {});
+    showAuthSubView("pending");
+    return;
+  }
+
+  IS_MASTER_PANEL = false;
+  showOnlyPanel("restaurant");
 
   // 🔥 Multi-tenant: descobre o restaurante pelo users/{uid}.restaurantId
   try {
-    RESTAURANT_ID = await loadRestaurantIdFromUser();
+    RESTAURANT_ID = userData?.restaurantId || await loadRestaurantIdFromUser();
   } catch (e) {
     console.warn("Falha ao carregar restaurantId do usuário:", e?.code || e, e?.message || "");
   }
@@ -1844,7 +2788,8 @@ Auth.onAuthStateChanged(auth, async (user) => {
   if (guardIfSubscriptionBlocked()) return;
 
   if (unsubOrders) unsubOrders();
-  startOrdersListener();});
+  startOrdersListener();
+});
 
 /* ===== Menu lateral (telas) ===== */
 (function(){
@@ -1855,6 +2800,12 @@ Auth.onAuthStateChanged(auth, async (user) => {
   const titleEl = document.getElementById("pageTitle");
 
   function show(page){
+    const tier = SUBSCRIPTION_INFO?.tier || "basic";
+    if (!restaurantHasFeature(page, tier)) {
+      alert("Esse recurso não está liberado no seu plano.");
+      return;
+    }
+    ACTIVE_RESTAURANT_PAGE = page;
     buttons.forEach(b => b.classList.toggle("active", b.dataset.page === page));
     pages.forEach(p => p.classList.remove("active"));
     const target = document.getElementById("page-" + page);
@@ -2177,81 +3128,121 @@ function _ensureProductModal(){
   modal.id = "prodModal";
   modal.className = "prodModal hidden";
   modal.innerHTML = `
-    <div class="prodModalContent" role="dialog" aria-modal="true">
-      <button type="button" class="modalClose" id="prodModalClose" aria-label="Fechar">
-        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
-      </button>
-
-      <div class="modalHeader">
-        <div class="modalOrderNum" id="prodModalTitle">Novo produto</div>
-        <div class="modalMeta" id="prodModalSub">Preencha os dados abaixo.</div>
-      </div>
-
-      <div class="modalSection">
-        <div class="formGrid">
-          <div class="formRow">
-            <div class="label">Nome</div>
-            <input id="pName" class="input" placeholder="Ex: X-Salada" />
-          </div>
-
-          <div class="formRow">
-            <div class="label">Preço (R$)</div>
-            <input id="pPrice" class="input" inputmode="decimal" placeholder="Ex: 25,90" />
-          </div>
-
-          <div class="formRow">
-            <div class="label">Categoria</div>
-            <input id="pCategory" class="input" placeholder="Ex: Lanches" />
-          </div>
-
-          <div class="formRow">
-            <div class="label">Imagem (URL) (opcional)</div>
-            <input id="pImage" class="input" placeholder="https://..." />
-          </div>
-
-          <div class="formRow">
-            <div class="label">Upload da imagem (opcional)</div>
-            <input id="pImageFile" class="input" type="file" accept="image/*" />
-            <div class="muted" id="pImageStatus" style="margin-top:6px"></div>
-
-            <div class="prodImgWrap" style="margin-top:10px;display:flex;justify-content:center">
-              <img id="pImagePreview" alt="Preview" class="prodImgPreview"
-                   style="display:none;max-width:100%;max-height:200px;border-radius:14px;border:1px solid #e5e7eb;background:#fff" />
+    <div class="prodModalContent prodDrawerContent" role="dialog" aria-modal="true" aria-labelledby="prodModalTitle">
+      <div class="prodModalHeader prodDrawerHeader">
+        <div class="prodModalHero prodDrawerHero">
+          <div class="prodModalHero__badge">Catálogo premium</div>
+          <div class="prodModalHero__head">
+            <div>
+              <div class="modalOrderNum" id="prodModalTitle">Novo produto</div>
+              <div class="modalMeta" id="prodModalSub">Preencha os dados abaixo.</div>
             </div>
           </div>
         </div>
 
-        <div class="formRow" style="margin-top:10px">
-          <div class="label">Descrição (opcional)</div>
-          <textarea id="pDesc" class="input textarea" placeholder="Ex: pão, hamburguer, queijo..."></textarea>
-        </div>
+        <button type="button" class="modalClose prodModalCloseBtn" id="prodModalClose" aria-label="Fechar">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" /></svg>
+        </button>
+      </div>
 
-        
-        <div class="formRow" style="margin-top:14px">
-          <div class="label">Tamanhos (opcional)</div>
-          <div class="muted" style="margin-top:-2px">Defina opções de tamanho e o preço final de cada tamanho.</div>
-          <div id="pSizes" class="optList"></div>
-          <button type="button" class="ghost small" id="btnAddSize">+ Adicionar tamanho</button>
-        </div>
+      <div class="prodModalBody prodDrawerBody">
+        <div class="modalSection prodModalSection">
+          <div class="prodModalCard prodModalCard--compact">
+            <div class="prodModalCard__title">Informações principais</div>
 
-        <div class="formRow" style="margin-top:14px">
-          <div class="label">Adicionais (opcional)</div>
-          <div class="muted" style="margin-top:-2px">Itens extras que o cliente pode escolher.</div>
-          <div id="pAddons" class="optList"></div>
-          <button type="button" class="ghost small" id="btnAddAddon">+ Adicionar adicional</button>
-        </div>
-<div class="toggleRow" style="margin-top:10px">
-          <input id="pActive" type="checkbox" />
-          <div>
-            <div style="font-weight:900;color:#0f172a">Ativo</div>
-            <div class="muted">Se desativar, some do cardápio do cliente.</div>
+            <div class="prodInfoLayout">
+              <div class="prodInfoMain">
+                <div class="formGrid prodMainGrid">
+                  <div class="formRow">
+                    <div class="label">Nome</div>
+                    <input id="pName" class="input" placeholder="Ex: X-Salada" />
+                  </div>
+
+                  <div class="formRow">
+                    <div class="label">Preço base (R$)</div>
+                    <input id="pPrice" class="input" inputmode="decimal" placeholder="Ex: 25,90" />
+                  </div>
+
+                  <div class="formRow">
+                    <div class="label">Categoria</div>
+                    <input id="pCategory" class="input" placeholder="Ex: Lanches" />
+                  </div>
+
+                  <div class="formRow">
+                    <div class="label">Imagem por URL</div>
+                    <input id="pImage" class="input" placeholder="https://..." />
+                  </div>
+
+                  <div class="formRow prodModalTextareaRow prodModalTextareaRow--compact">
+                    <div class="label">Descrição (opcional)</div>
+                    <textarea id="pDesc" class="input textarea" placeholder="Ex: pão, hamburguer, queijo..."></textarea>
+                  </div>
+                </div>
+              </div>
+
+              <aside class="prodPreviewAside">
+                <div class="prodPreviewHead">
+                  <div>
+                    <div class="label">Imagem do produto</div>
+                    <div class="muted prodPreviewHint">Preview imediato, sem precisar abrir outra tela.</div>
+                  </div>
+                </div>
+
+                <div class="prodImagePreviewCard prodImagePreviewCard--compact">
+                  <img id="pImagePreview" alt="Preview" class="prodImgPreview" />
+                  <div class="prodImagePreviewEmpty" id="pImagePreviewEmpty">A prévia da imagem vai aparecer aqui</div>
+                </div>
+
+                <label class="prodUploadBox prodUploadBox--compact" for="pImageFile">
+                  <input id="pImageFile" class="input prodUploadInput" type="file" accept="image/*" />
+                  <span class="prodUploadIcon" aria-hidden="true">+</span>
+                  <div class="prodUploadText">
+                    <strong>Selecionar imagem</strong>
+                    <span>PNG, JPG ou WEBP até 4MB</span>
+                  </div>
+                </label>
+                <div class="muted prodImageStatus" id="pImageStatus"></div>
+              </aside>
+            </div>
+          </div>
+
+          <div class="prodModalSplit">
+            <div class="prodModalCard">
+              <div class="prodModalCard__head">
+                <div>
+                  <div class="prodModalCard__title">Tamanhos</div>
+                  <div class="muted">Defina opções de tamanho e o preço final de cada tamanho.</div>
+                </div>
+                <button type="button" class="ghost small prodActionBtn" id="btnAddSize">+ Adicionar tamanho</button>
+              </div>
+              <div id="pSizes" class="optList"></div>
+            </div>
+
+            <div class="prodModalCard">
+              <div class="prodModalCard__head">
+                <div>
+                  <div class="prodModalCard__title">Adicionais</div>
+                  <div class="muted">Itens extras que o cliente pode escolher.</div>
+                </div>
+                <button type="button" class="ghost small prodActionBtn" id="btnAddAddon">+ Adicionar adicional</button>
+              </div>
+              <div id="pAddons" class="optList"></div>
+            </div>
+          </div>
+
+          <div class="toggleRow prodToggleRow">
+            <input id="pActive" type="checkbox" />
+            <div>
+              <div class="prodToggleTitle">Produto ativo</div>
+              <div class="muted">Se desativar, some do cardápio do cliente.</div>
+            </div>
           </div>
         </div>
       </div>
 
-      <div class="modalFooter">
+      <div class="modalFooter prodModalFooter prodDrawerFooter">
         <button type="button" class="ghost small" id="prodCancel">Cancelar</button>
-        <button type="button" class="btn small" id="prodSave">Salvar</button>
+        <button type="button" class="btn small prodSaveBtn" id="prodSave">Salvar produto</button>
       </div>
     </div>
   `;
@@ -2327,15 +3318,27 @@ function openProductModal(prod){
   const previewImg = modal.querySelector("#pImagePreview");
   const statusEl = modal.querySelector("#pImageStatus");
 
+  const previewEmpty = modal.querySelector("#pImagePreviewEmpty");
+
   function setPreview(src) {
     if (!previewImg) return;
-    if (!src) {
+    const value = String(src || "").trim();
+    if (!value) {
       previewImg.style.display = "none";
       previewImg.removeAttribute("src");
+      if (previewEmpty) previewEmpty.style.display = "flex";
       return;
     }
-    previewImg.src = src;
-    previewImg.style.display = "block";
+    previewImg.onload = () => {
+      previewImg.style.display = "block";
+      if (previewEmpty) previewEmpty.style.display = "none";
+    };
+    previewImg.onerror = () => {
+      previewImg.style.display = "none";
+      previewImg.removeAttribute("src");
+      if (previewEmpty) previewEmpty.style.display = "flex";
+    };
+    previewImg.src = value;
   }
 
   // preview inicial (se já tem url salva)
