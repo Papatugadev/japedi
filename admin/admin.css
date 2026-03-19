@@ -3246,3 +3246,303 @@ textarea.input:focus{
     width:100%;
   }
 }
+
+.paymentChip{
+  margin-top:8px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:8px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+  letter-spacing:.03em;
+  text-align:center;
+  border:1px solid rgba(15,23,42,.10);
+  background:#fff;
+  color:#0f172a;
+}
+.paymentChip.paid{background:#dcfce7;color:#166534;border-color:#86efac;}
+.paymentChip.cash{background:#fff7ed;color:#9a3412;border-color:#fdba74;}
+.paymentChip.card{background:#eff6ff;color:#1d4ed8;border-color:#93c5fd;}
+.paymentChip.pix{background:#f8fafc;color:#0f172a;border-color:#cbd5e1;}
+.paymentChip.default{background:#fff;color:#0f172a;border-color:rgba(15,23,42,.10);}
+
+.paymentMeta{
+  text-align:center;
+  font-size:12px;
+  font-weight:700;
+  line-height:1.3;
+  color:#334155;
+  max-width:100%;
+}
+
+
+/* =========================================================
+   PEDIDOS — OVERRIDE FINAL LIMPO E FUNCIONAL
+   ========================================================= */
+.contentArea{
+  background: linear-gradient(180deg, #f8fafc 0%, #eef2f7 100%) !important;
+}
+
+.kanban{
+  display:grid !important;
+  grid-template-columns: repeat(3, minmax(320px, 1fr)) !important;
+  gap:18px !important;
+  align-items:start !important;
+}
+
+.kanCol{
+  min-height: calc(100vh - 120px) !important;
+  padding:14px !important;
+  border-radius:24px !important;
+  background: rgba(255,255,255,.88) !important;
+  backdrop-filter: blur(10px) !important;
+  border:1px solid rgba(15,23,42,.08) !important;
+  box-shadow: 0 12px 30px rgba(15,23,42,.06) !important;
+}
+
+.kanHead{
+  position: sticky !important;
+  top: 0 !important;
+  z-index: 4 !important;
+  margin: -14px -14px 14px -14px !important;
+  padding: 14px 14px 12px !important;
+  border-radius: 24px 24px 0 0 !important;
+  background: rgba(255,255,255,.96) !important;
+  backdrop-filter: blur(10px) !important;
+  border-bottom: 1px solid rgba(15,23,42,.08) !important;
+}
+
+.kanTitle{
+  padding: 8px 14px !important;
+  border-radius: 999px !important;
+  font-size: 13px !important;
+  font-weight: 900 !important;
+  letter-spacing: .04em !important;
+}
+
+.kanList{
+  display:grid !important;
+  grid-template-columns: 1fr !important;
+  gap:14px !important;
+  align-content:start !important;
+  overflow:auto !important;
+  padding-right: 4px !important;
+}
+
+.order{
+  min-height: 0 !important;
+  padding: 16px !important;
+  border-radius: 22px !important;
+  background: #ffffff !important;
+  border: 1px solid rgba(15,23,42,.08) !important;
+  box-shadow: 0 10px 24px rgba(15,23,42,.06) !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:stretch !important;
+  justify-content:flex-start !important;
+  gap:12px !important;
+  position:relative !important;
+  cursor:default !important;
+}
+
+.order:hover{
+  transform: translateY(-2px) !important;
+  box-shadow: 0 16px 32px rgba(15,23,42,.08) !important;
+}
+
+.cardTop{
+  position: static !important;
+  display:flex !important;
+  justify-content:flex-start !important;
+  margin: 0 !important;
+  pointer-events:auto !important;
+}
+
+.timePill{
+  display:inline-flex !important;
+  align-items:center !important;
+  gap:8px !important;
+  padding: 6px 12px !important;
+  border-radius: 999px !important;
+  font-size: 12px !important;
+  font-weight: 800 !important;
+  color: #166534 !important;
+  background: #ecfdf5 !important;
+  border: 1px solid #bbf7d0 !important;
+  animation: none !important;
+  box-shadow: none !important;
+}
+
+.timePillDot{
+  width: 8px !important;
+  height: 8px !important;
+  background: #22c55e !important;
+}
+
+.timePill.late{
+  color: #9a3412 !important;
+  background: #fff7ed !important;
+  border-color: #fdba74 !important;
+}
+
+.timePill.late .timePillDot{
+  background: #f97316 !important;
+}
+
+.cardBody{
+  margin-top: 0 !important;
+  display:flex !important;
+  flex-direction:column !important;
+  align-items:flex-start !important;
+  gap:10px !important;
+}
+
+.cardCustomer{
+  font-size: 20px !important;
+  line-height: 1.08 !important;
+  font-weight: 900 !important;
+  text-align:left !important;
+  text-transform: uppercase !important;
+  color:#0f172a !important;
+  letter-spacing: -.02em !important;
+  max-width: 14ch !important;
+}
+
+.cardOrderNum{
+  font-size: 34px !important;
+  line-height: 1 !important;
+  font-weight: 900 !important;
+  color:#0f172a !important;
+  letter-spacing: -.03em !important;
+}
+
+.badge,
+.metaRow .badge{
+  display:inline-flex !important;
+  align-items:center !important;
+  justify-content:center !important;
+  min-height: 42px !important;
+  padding: 10px 14px !important;
+  border-radius: 999px !important;
+  font-size: 14px !important;
+  font-weight: 900 !important;
+  text-align:center !important;
+  line-height:1.15 !important;
+}
+
+.metaRow{
+  display:flex !important;
+  flex-wrap:wrap !important;
+  gap:8px !important;
+  margin-top:0 !important;
+}
+
+.cardActions{
+  width:100% !important;
+  display:grid !important;
+  grid-template-columns: 1fr !important;
+  gap:8px !important;
+  margin-top:4px !important;
+}
+
+.cardActions .btn,
+.cardActions .ghost,
+.cardActions button{
+  width:100% !important;
+  min-height: 44px !important;
+  border-radius: 14px !important;
+  font-size: 14px !important;
+  font-weight: 800 !important;
+  padding: 10px 12px !important;
+}
+
+.cardActions .btn.small{
+  background:#16a34a !important;
+  color:#ffffff !important;
+}
+
+.cardActions .ghost.small{
+  background:#f8fafc !important;
+  color:#0f172a !important;
+  border:1px solid rgba(15,23,42,.12) !important;
+}
+
+.cardActions .ghost.small.danger{
+  background:#fff5f5 !important;
+  color:#b91c1c !important;
+  border-color:#fecaca !important;
+}
+
+#orders-prep .order{
+  border-top: 4px solid #f59e0b !important;
+}
+
+#orders-out .order{
+  border-top: 4px solid #3b82f6 !important;
+}
+
+#orders-done .order{
+  border-top: 4px solid #10b981 !important;
+  opacity: .97;
+}
+
+#orders-prep .kanHead{
+  background: linear-gradient(180deg, rgba(255,251,235,.96), rgba(255,255,255,.96)) !important;
+}
+#orders-out .kanHead{
+  background: linear-gradient(180deg, rgba(239,246,255,.96), rgba(255,255,255,.96)) !important;
+}
+#orders-done .kanHead{
+  background: linear-gradient(180deg, rgba(236,253,245,.96), rgba(255,255,255,.96)) !important;
+}
+
+#orders-prep .kanTitle{
+  background:#f59e0b !important;
+  color:#ffffff !important;
+}
+#orders-out .kanTitle{
+  background:#3b82f6 !important;
+  color:#ffffff !important;
+}
+#orders-done .kanTitle{
+  background:#10b981 !important;
+  color:#ffffff !important;
+}
+
+@media (max-width: 1280px){
+  .kanban{
+    grid-template-columns: repeat(2, minmax(300px, 1fr)) !important;
+  }
+}
+
+@media (max-width: 900px){
+  .kanban{
+    grid-template-columns: 1fr !important;
+  }
+  .kanCol{
+    min-height: auto !important;
+  }
+  .cardCustomer{
+    max-width: none !important;
+  }
+}
+/* ===== Ajuste pedidos: coluna cancelados + entregue sem ações ===== */
+.dotCancel{ background:#ef4444; }
+
+.kanCol[data-col="cancelado"] .kanHead{
+  background: rgba(239,68,68,.08) !important;
+  border-bottom: 1px solid rgba(239,68,68,.18) !important;
+}
+
+.kanCol[data-col="cancelado"] .kanTitle{
+  background:#ef4444 !important;
+  color:#fff !important;
+}
+
+@media (min-width: 981px){
+  .kanban{
+    grid-template-columns: repeat(4, minmax(280px, 1fr)) !important;
+  }
+}

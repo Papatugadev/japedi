@@ -54,6 +54,9 @@ const state = {
   showImages: true,
   checkoutMode: "delivery",
   paymentMethod: "pix",
+  deliveryPaymentMethod: "cash",
+  changeNeeded: false,
+  changeFor: null,
   couponCode: "",
   products: [],
   cart: [], // [{id,name,price,qty}]
@@ -806,32 +809,21 @@ function _ensurePromoBanner(){
 
 // ===== util: copiar =====
 async function _copyText(text){
-  const value = String(text || "").replace(/\s+/g, "").trim();
-  if (!value) throw new Error("empty_text");
-
-  if (navigator.clipboard && window.isSecureContext) {
-    await navigator.clipboard.writeText(value);
+  if (navigator.clipboard && window.isSecureContext){
+    await navigator.clipboard.writeText(text);
     return true;
   }
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.value = value;
-  input.setAttribute("readonly", "");
-  input.style.position = "fixed";
-  input.style.top = "0";
-  input.style.left = "0";
-  input.style.opacity = "0.01";
-  input.style.zIndex = "-1";
-
-  document.body.appendChild(input);
-  input.focus();
-  input.select();
-  input.setSelectionRange(0, input.value.length);
-
+  // fallback antigo
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  ta.style.top = "0";
+  document.body.appendChild(ta);
+  ta.focus();
+  ta.select();
   const ok = document.execCommand("copy");
-  document.body.removeChild(input);
-
+  document.body.removeChild(ta);
   if (!ok) throw new Error("copy_failed");
   return true;
 }
@@ -992,6 +984,11 @@ if (banner){
   else if (hasCash) state.paymentMethod = "cash";
   else if (hasCard) state.paymentMethod = "card";
   else state.paymentMethod = "cash";
+
+  state.deliveryPaymentMethod = hasCash ? "cash" : (hasCard ? "card" : "cash");
+  if (state.paymentMethod !== "pix" && !["cash", "card"].includes(state.paymentMethod)) {
+    state.paymentMethod = state.deliveryPaymentMethod;
+  }
 
   // link externo menuUrl (opcional)
   try{
@@ -1584,8 +1581,19 @@ function ensureCheckoutUI(){
     box.className = "coBox";
     box.innerHTML = `
       <div class="coTitle">Pagamento</div>
-      <div class="coChips" id="coPayChips"></div>
-      <div class="muted" id="coPayNote" style="margin-top:6px"></div>
+      <div class="coPayPrimary" id="coPayPrimary"></div>
+      <div id="coDeliveryPayWrap" class="coDeliveryPayWrap hidden">
+        <div class="coFieldLabel">Na entrega</div>
+        <div class="coPaySecondary" id="coDeliveryPayMethods"></div>
+        <div id="coCashChangeWrap" class="coCashChangeWrap hidden">
+          <div class="coFieldLabel">Precisa de troco?</div>
+          <div class="coPaySecondary" id="coChangeChoices"></div>
+          <div id="coChangeInputWrap" class="coChangeInputWrap hidden">
+            <label class="label" for="coChangeAmount">Troco para quanto?</label>
+            <input id="coChangeAmount" class="input" type="number" min="0" step="0.01" inputmode="decimal" placeholder="Ex: 50" />
+          </div>
+        </div>
+      </div>
     `;
     content.appendChild(box);
   }
@@ -1753,41 +1761,136 @@ function updateCheckoutUIFromConfig(){
   }catch(_){}
 
   // Pagamento
-  const payChips = document.getElementById("coPayChips");
-  const payNote = document.getElementById("coPayNote");
-  if (payChips){
-    payChips.innerHTML = "";
-    const opts = [];
-    if (String(pay.pixKey || "").trim()) opts.push({ id:"pix", label:"PIX" });
-    if (pay.cash !== false) opts.push({ id:"cash", label:"Dinheiro" });
-    if (pay.cardOnDelivery) opts.push({ id:"card", label:"Cartão" });
+  const primaryWrap = document.getElementById("coPayPrimary");
+  const deliveryWrap = document.getElementById("coDeliveryPayWrap");
+  const deliveryMethodsWrap = document.getElementById("coDeliveryPayMethods");
+  const cashChangeWrap = document.getElementById("coCashChangeWrap");
+  const changeChoicesWrap = document.getElementById("coChangeChoices");
+  const changeInputWrap = document.getElementById("coChangeInputWrap");
+  const changeInput = document.getElementById("coChangeAmount");
 
-    // garante método válido
-    if (!opts.find(o => o.id === state.paymentMethod)){
-      state.paymentMethod = opts[0]?.id || "cash";
-    }
+  const hasPix = !!String(pay.pixKey || "").trim();
+  const hasCash = (pay.cash !== false);
+  const hasCard = !!pay.cardOnDelivery;
 
-    opts.forEach(o => {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "chip" + (state.paymentMethod === o.id ? " is-active" : "");
-      b.textContent = o.label;
-      b.addEventListener("click", () => {
-        state.paymentMethod = o.id;
+  if (state.paymentMethod === "pix" && !hasPix) {
+    state.paymentMethod = hasCash ? "cash" : (hasCard ? "card" : "pix");
+  }
+  if (state.paymentMethod === "cash" && !hasCash) {
+    state.paymentMethod = hasCard ? "card" : (hasPix ? "pix" : "cash");
+  }
+  if (state.paymentMethod === "card" && !hasCard) {
+    state.paymentMethod = hasCash ? "cash" : (hasPix ? "pix" : "card");
+  }
+  if (!["pix", "cash", "card"].includes(state.paymentMethod)) {
+    state.paymentMethod = hasPix ? "pix" : (hasCash ? "cash" : "card");
+  }
+
+  if (!hasCash && state.deliveryPaymentMethod === "cash") state.deliveryPaymentMethod = hasCard ? "card" : "cash";
+  if (!hasCard && state.deliveryPaymentMethod === "card") state.deliveryPaymentMethod = hasCash ? "cash" : "card";
+
+  if (primaryWrap) {
+    primaryWrap.innerHTML = "";
+    const options = [];
+    if (hasPix) options.push({ id: "pix", label: "PIX" });
+    if (hasCash || hasCard) options.push({ id: "delivery", label: "Pagar na entrega" });
+
+    options.forEach((opt) => {
+      const active = opt.id === "pix"
+        ? state.paymentMethod === "pix"
+        : state.paymentMethod === "cash" || state.paymentMethod === "card";
+
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "coPayBtn" + (active ? " is-active" : "");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", () => {
+        if (opt.id === "pix") {
+          state.paymentMethod = "pix";
+          state.changeNeeded = false;
+          state.changeFor = null;
+          if (changeInput) changeInput.value = "";
+        } else {
+          state.paymentMethod = state.deliveryPaymentMethod || (hasCash ? "cash" : "card");
+        }
         updateCheckoutUIFromConfig();
         updateCheckoutTotals();
       });
-      payChips.appendChild(b);
+      primaryWrap.appendChild(btn);
     });
   }
-  if (payNote){
-    const parts = [];
-    if (state.paymentMethod === "pix" && (pay.pixName || pay.pixKey)){
-      parts.push(`Chave PIX: ${pay.pixKey || ""}`.trim());
-      if (pay.pixName) parts.push(`Nome: ${pay.pixName}`);
+
+  const usingDelivery = state.paymentMethod === "cash" || state.paymentMethod === "card";
+  if (deliveryWrap) deliveryWrap.classList.toggle("hidden", !usingDelivery);
+
+  if (deliveryMethodsWrap) {
+    deliveryMethodsWrap.innerHTML = "";
+    const deliveryOptions = [];
+    if (hasCash) deliveryOptions.push({ id: "cash", label: "Dinheiro" });
+    if (hasCard) deliveryOptions.push({ id: "card", label: "Cartão" });
+
+    deliveryOptions.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "coPayBtn coPayBtn--sub" + (state.paymentMethod === opt.id ? " is-active" : "");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", () => {
+        state.deliveryPaymentMethod = opt.id;
+        state.paymentMethod = opt.id;
+        if (opt.id !== "cash") {
+          state.changeNeeded = false;
+          state.changeFor = null;
+          if (changeInput) changeInput.value = "";
+        }
+        updateCheckoutUIFromConfig();
+        updateCheckoutTotals();
+      });
+      deliveryMethodsWrap.appendChild(btn);
+    });
+  }
+
+  const showCash = usingDelivery && state.paymentMethod === "cash";
+  if (cashChangeWrap) cashChangeWrap.classList.toggle("hidden", !showCash);
+
+  if (changeChoicesWrap) {
+    changeChoicesWrap.innerHTML = "";
+    [
+      { label: "Sem troco", value: false },
+      { label: "Preciso de troco", value: true }
+    ].forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "coPayBtn coPayBtn--sub" + (state.changeNeeded === opt.value ? " is-active" : "");
+      btn.textContent = opt.label;
+      btn.addEventListener("click", () => {
+        state.changeNeeded = opt.value;
+        if (!opt.value) {
+          state.changeFor = null;
+          if (changeInput) changeInput.value = "";
+        }
+        updateCheckoutUIFromConfig();
+      });
+      changeChoicesWrap.appendChild(btn);
+    });
+  }
+
+  if (changeInputWrap) {
+    changeInputWrap.classList.toggle("hidden", !(showCash && state.changeNeeded));
+  }
+  if (changeInput) {
+    if (state.changeNeeded && state.changeFor) {
+      changeInput.value = String(state.changeFor).replace(".", ",");
+    } else if (!state.changeNeeded) {
+      changeInput.value = "";
     }
-    if (pay.note) parts.push(pay.note);
-    payNote.textContent = parts.join(" • ");
+    if (changeInput.dataset.bound !== "1") {
+      changeInput.dataset.bound = "1";
+      changeInput.addEventListener("input", () => {
+        const raw = String(changeInput.value || "").replace(",", ".");
+        const num = Number(raw);
+        state.changeFor = Number.isFinite(num) ? num : null;
+      });
+    }
   }
 
   renderInlinePaymentUI();
@@ -2314,6 +2417,21 @@ async function createOrder(options = {}) {
   const totalsCalc = computeOrderTotals();
   const { subtotal, qty, deliveryFee, discount, total, couponOk, couponPct, minOk, minOrder } = totalsCalc;
 
+  if (state.paymentMethod === "cash" && state.changeNeeded) {
+    const rawChange = String(document.getElementById("coChangeAmount")?.value || "").replace(",", ".");
+    const changeFor = Number(rawChange);
+    if (!Number.isFinite(changeFor) || changeFor <= 0) {
+      return alert("Informe o valor do troco.");
+    }
+    if (changeFor < Number(total || 0)) {
+      return alert("O troco precisa ser para um valor maior ou igual ao total do pedido.");
+    }
+    state.changeFor = changeFor;
+  } else {
+    state.changeNeeded = false;
+    state.changeFor = null;
+  }
+
   if (!minOk) {
     alert(`Pedido mínimo para entrega: ${moneyBRL(minOrder)}.`);
     return;
@@ -2323,6 +2441,8 @@ async function createOrder(options = {}) {
   const checkout = {
     mode: (state.checkoutMode || "delivery"),
     paymentMethod: (state.paymentMethod || null),
+    changeNeeded: state.paymentMethod === "cash" ? !!state.changeNeeded : false,
+    changeFor: state.paymentMethod === "cash" && state.changeNeeded ? Number(state.changeFor || 0) : null,
     couponCode: ((state.couponCode || "").trim() || null),
     couponOk: !!couponOk,
     couponPct: Number(couponPct || 0),
@@ -2338,9 +2458,17 @@ async function createOrder(options = {}) {
   const initialStatus = (options?.status || "recebido");
   const initialPaymentStatus = String(options?.paymentStatus || (initialStatus === "aguardando_pagamento" ? "pending" : "approved") || "").trim();
 
+  const adminPaymentLabel = state.paymentMethod === "pix"
+    ? (initialPaymentStatus === "approved" ? "PAGO" : "PIX PENDENTE")
+    : (state.paymentMethod === "card" ? "CARTÃO NA ENTREGA" : "DINHEIRO NA ENTREGA");
+
   const orderData = {
     status: initialStatus,
     paymentStatus: initialPaymentStatus || null,
+    paymentMethod: state.paymentMethod || null,
+    paymentLabel: adminPaymentLabel,
+    changeNeeded: state.paymentMethod === "cash" ? !!state.changeNeeded : false,
+    changeFor: state.paymentMethod === "cash" && state.changeNeeded ? Number(state.changeFor || 0) : null,
     createdAt: Firestore.serverTimestamp(),
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
@@ -2356,7 +2484,7 @@ async function createOrder(options = {}) {
       optionsText: i.optionsText || "",
       meta: i.meta || null
     })),
-    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null }
+    totals: { qty, subtotal, deliveryFee, deliveryDistanceKm: Number(state.deliveryQuote?.distanceKm || 0), discount, total, couponOk, couponPct, couponCode: (state.couponCode||'').trim(), checkoutMode: state.checkoutMode || 'delivery', paymentMethod: state.paymentMethod || null, changeNeeded: state.paymentMethod === "cash" ? !!state.changeNeeded : false, changeFor: state.paymentMethod === "cash" && state.changeNeeded ? Number(state.changeFor || 0) : null }
   };
 
   const ordersRef = Firestore.collection(db, "restaurants", state.restaurant.id, "orders");
@@ -2374,6 +2502,10 @@ async function createOrder(options = {}) {
   {
     status: orderData.status,
     paymentStatus: orderData.paymentStatus || null,
+    paymentMethod: orderData.paymentMethod || null,
+    paymentLabel: orderData.paymentLabel || null,
+    changeNeeded: orderData.changeNeeded === true,
+    changeFor: orderData.changeFor ?? null,
     createdAt: orderData.createdAt,
     updatedAt: orderData.updatedAt,
     orderNumber: orderData.orderNumber,
@@ -2456,7 +2588,7 @@ function shouldUseInlineMercadoPagoPix(){
 }
 
 function shouldUseInlineMercadoPagoCard(){
-  return state.paymentMethod === "card" && !!getMercadoPagoPublicKey() && typeof window.MercadoPago === "function";
+  return false;
 }
 
 function normalizeMercadoPagoEmail(value){
@@ -2620,10 +2752,7 @@ async function createInlinePixPayment(orderId, total){
   const img = document.getElementById("mpPixQrImage");
   const code = document.getElementById("mpPixCode");
   const status = document.getElementById("mpPixStatus");
-
-  const cleanPixCode = String(data.qrCode || "")
-    .replace(/\s+/g, "")
-    .trim();
+  const cleanPixCode = String(data.qrCode || "").replace(/\s+/g, "").trim();
 
   state.mp.currentPaymentId = data.paymentId;
   state.mp.currentPaymentStatus = data.status || "pending";
@@ -2634,7 +2763,6 @@ async function createInlinePixPayment(orderId, total){
     img.src = `data:image/png;base64,${data.qrCodeBase64}`;
     img.classList.remove("hidden");
   }
-
   if (code) code.value = cleanPixCode;
   if (status) status.textContent = "PIX gerado. Aguardando pagamento...";
 
@@ -2648,50 +2776,6 @@ async function createInlinePixPayment(orderId, total){
   updateConfirmOrderButton(false);
   renderInlinePaymentUI();
   startPixAutoPolling();
-}
-
-async function checkInlinePixPaymentStatus(options = {}){
-  if (!state.mp.currentPaymentId || !state.mp.currentOrderId) return;
-  const { silent = false, auto = false } = options;
-  const statusEl = document.getElementById("mpPixStatus");
-  if (!silent && statusEl) statusEl.textContent = auto ? "Confirmando pagamento..." : "Verificando pagamento...";
-
-  const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/getMercadoPagoPaymentStatus`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      restaurantId: state.restaurant?.id || "",
-      orderId: state.mp.currentOrderId,
-      paymentId: state.mp.currentPaymentId
-    })
-  });
-  const data = await response.json();
-  if (!response.ok) throw new Error(data?.error || "Falha ao consultar pagamento.");
-
-  state.mp.currentPaymentStatus = data.status || "";
-  if (data.status === "approved"){
-    await updateOrderPaymentState(state.mp.currentOrderId, {
-      status: "recebido",
-      paymentStatus: "approved",
-      mpPaymentId: state.mp.currentPaymentId,
-      mpPaymentMethod: "pix"
-    });
-    if (statusEl) statusEl.textContent = "Pagamento aprovado ✅";
-    const orderId = state.mp.currentOrderId;
-    stopPixAutoPolling();
-    showPaymentSuccessOverlay("Pagamento efetuado com sucesso! Fechando o checkout...");
-    setTimeout(() => {
-      resetMercadoPagoState();
-      finishOrderFlow(orderId);
-    }, 1400);
-    return;
-  }
-
-  if (statusEl && !silent) {
-    statusEl.textContent = data.status === "pending"
-      ? "Pagamento ainda pendente. Assim que cair, o checkout fecha sozinho."
-      : `Status atual: ${data.status || "desconhecido"}`;
-  }
 }
 
 async function ensureInlineCardBrick(orderId, total){
@@ -4243,16 +4327,17 @@ document.getElementById("saveProfileDataBtn")?.addEventListener("click", handleS
 document.getElementById("useProfileOnCheckoutBtn")?.addEventListener("click", fillCheckoutWithProfile);
 
 document.getElementById("copyPixCodeBtn")?.addEventListener("click", async () => {
-  const code = String(state.mp.pixCode || "").replace(/\s+/g, "").trim();
-  if (!code) return;
+  const code = String(state.mp.pixCode || "")
+    .replace(/\s+/g, "")
+    .trim();
 
+  if (!code) return;
   try {
     await _copyText(code);
     const status = document.getElementById("mpPixStatus");
     if (status) status.textContent = "Código Pix copiado ✅";
-  } catch (err) {
+  } catch(err) {
     console.error("Erro ao copiar PIX:", err);
-    alert("Não foi possível copiar o código PIX.");
   }
 });
 const checkPixStatusBtn = document.getElementById("checkPixStatusBtn");

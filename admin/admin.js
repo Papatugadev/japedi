@@ -121,6 +121,589 @@ function brl(v) {
   return Number(v || 0).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 }
 
+function _normalizeAdminPayment(order) {
+  const checkout = order?.checkout || {};
+  const totals = order?.totals || {};
+
+  const paymentMethod = String(
+    order?.paymentMethod ||
+    checkout?.paymentMethod ||
+    totals?.paymentMethod ||
+    order?.mpPaymentMethod ||
+    ""
+  ).trim().toLowerCase();
+
+  const paymentStatus = String(order?.paymentStatus || order?.mpPaymentStatus || "").trim().toLowerCase();
+  const status = String(order?.status || "").trim().toLowerCase();
+  const paymentLabelRaw = String(order?.paymentLabel || checkout?.paymentLabel || "").trim().toLowerCase();
+
+  const total = Number(
+    totals?.total ??
+    checkout?.total ??
+    order?.total ??
+    order?.amount ??
+    0
+  );
+
+  const changeNeeded = !!(
+    order?.changeNeeded ??
+    checkout?.changeNeeded ??
+    totals?.changeNeeded ??
+    false
+  );
+
+  const changeFor = Number(
+    order?.changeFor ??
+    checkout?.changeFor ??
+    totals?.changeFor ??
+    0
+  );
+
+  const pixPaid = paymentMethod === "pix" && (
+    paymentStatus === "approved" ||
+    paymentStatus === "paid" ||
+    status === "pago" ||
+    order?.paid === true
+  );
+
+  const isCash = paymentMethod === "cash" || paymentLabelRaw.includes("dinheiro");
+  const isCard = paymentMethod === "card" || paymentLabelRaw.includes("cartão") || paymentLabelRaw.includes("cartao");
+  const isPix = paymentMethod === "pix" || paymentLabelRaw === "pix";
+
+  return { paymentMethod, paymentStatus, status, paymentLabelRaw, total, changeNeeded, changeFor, pixPaid, isCash, isCard, isPix };
+}
+
+function getAdminPaymentPresentation(order) {
+  const pay = _normalizeAdminPayment(order);
+
+  if (pay.pixPaid || pay.paymentLabelRaw === "pago") return { text: "PAGO", chipClass: "paid" };
+  if (pay.isCash) return { text: "DINHEIRO NA ENTREGA", chipClass: "cash" };
+  if (pay.isCard) return { text: "CARTÃO NA ENTREGA", chipClass: "card" };
+  if (pay.isPix) return { text: "PIX PENDENTE", chipClass: "pix" };
+  return { text: "PAGAMENTO", chipClass: "default" };
+}
+
+function getAdminChangeText(order, total) {
+  const pay = _normalizeAdminPayment(order);
+  if (!pay.isCash) return "";
+
+const orderTotal = Number((total ?? pay.total) || 0);
+
+  if (!pay.changeNeeded || !pay.changeFor) return "Não precisa";
+
+  return `Troco para ${brl(pay.changeFor)} · devolver ${brl(Math.max(0, pay.changeFor - orderTotal))}`;
+}
+
+
+function getAdminText(order, total) {
+  return getAdminChangeText(order, total);
+}
+
+function getAdminPaymentText(order) {
+  return getAdminPaymentPresentation(order)?.text || "PAGAMENTO";
+}
+
+
+function _numMoney(v) {
+  const n = Number(String(v ?? '').replace(',', '.').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function _getItemUnitPrice(item) {
+  return _numMoney(
+    item?.unitPrice ??
+    item?.price ??
+    item?.basePrice ??
+    item?.unit_amount ??
+    0
+  );
+}
+
+function _getItemQty(item) {
+  const qty = Number(item?.qty ?? item?.quantity ?? 1);
+  return Number.isFinite(qty) && qty > 0 ? qty : 1;
+}
+
+function _getItemTotalPrice(item) {
+  return _numMoney(
+    item?.total ??
+    item?.lineTotal ??
+    item?.subtotal ??
+    item?.amount ??
+    (_getItemUnitPrice(item) * _getItemQty(item))
+  );
+}
+
+function _getItemOriginalTotal(item) {
+  const direct = _numMoney(
+    item?.originalTotal ??
+    item?.subtotalOriginal ??
+    item?.lineOriginalTotal ??
+    item?.totalBeforeDiscount ??
+    item?.amountBeforeDiscount ??
+    0
+  );
+  if (direct > 0) return direct;
+
+  const unitOriginal = _numMoney(item?.originalUnitPrice ?? item?.unitPriceOriginal ?? item?.priceBeforeDiscount ?? 0);
+  if (unitOriginal > 0) return unitOriginal * _getItemQty(item);
+
+  return _getItemTotalPrice(item);
+}
+
+function _getItemDiscountValue(item) {
+  const explicit = _numMoney(
+    item?.discount ??
+    item?.discountValue ??
+    item?.off ??
+    item?.couponDiscount ??
+    0
+  );
+  if (explicit > 0) return explicit;
+  return Math.max(0, _getItemOriginalTotal(item) - _getItemTotalPrice(item));
+}
+
+function _getOrderTotalsSummary(order) {
+  const totals = order?.totals || {};
+  const checkout = order?.checkout || {};
+
+  const total = _numMoney(totals?.total ?? checkout?.total ?? order?.total ?? order?.amount ?? 0);
+  const subtotal = _numMoney(totals?.subtotal ?? checkout?.subtotal ?? order?.subtotal ?? total);
+  const deliveryFee = _numMoney(totals?.deliveryFee ?? checkout?.deliveryFee ?? order?.deliveryFee ?? order?.shipping ?? 0);
+
+  const explicitDiscount = _numMoney(
+    totals?.discount ??
+    totals?.discountValue ??
+    checkout?.discount ??
+    checkout?.discountValue ??
+    order?.discount ??
+    order?.discountValue ??
+    order?.couponDiscount ??
+    0
+  );
+
+  const itemDiscount = (Array.isArray(order?.items) ? order.items : []).reduce((acc, item) => acc + _getItemDiscountValue(item), 0);
+  const discount = Math.max(explicitDiscount, itemDiscount, Math.max(0, subtotal + deliveryFee - total));
+
+  return { subtotal, deliveryFee, discount, total };
+}
+
+function _toOptionArray(value) {
+  if (Array.isArray(value)) return value;
+  if (!value) return [];
+  if (typeof value === 'object') return Object.values(value);
+  return [];
+}
+
+function _getItemOptionsLines(item) {
+  const parts = [];
+
+  const sizes = _toOptionArray(
+    item?.meta?.size ??
+    item?.meta?.sizes ??
+    item?.sizes ??
+    item?.selectedSizes ??
+    item?.sizeOptions ??
+    item?.selectedSize ??
+    item?.size
+  );
+
+  const addons = _toOptionArray(
+    item?.meta?.addons ??
+    item?.addons ??
+    item?.selectedAddons ??
+    item?.additionals ??
+    item?.adicionais ??
+    item?.extras ??
+    item?.extraItems ??
+    item?.selectedExtras ??
+    item?.additionalItems
+  );
+
+  const sizeTextFallback = String(item?.meta?.sizeText || item?.sizeText || '').trim();
+  const optionsText = String(item?.optionsText || '').trim();
+
+  if (sizes.length) {
+    parts.push('Tamanho: ' + sizes.map((opt) => {
+      const raw = opt?.name || opt?.label || opt?.title || opt?.value || String(opt || '').trim();
+      const name = _escapeHtml(raw);
+      const price = _numMoney(opt?.price ?? opt?.valuePrice ?? opt?.amount ?? 0);
+      return name ? (price > 0 ? `${name} (+${brl(price)})` : name) : '';
+    }).filter(Boolean).join(', '));
+  } else if (sizeTextFallback) {
+    parts.push('Tamanho: ' + _escapeHtml(sizeTextFallback));
+  }
+
+  if (addons.length) {
+    parts.push('Adicionais: ' + addons.map((opt) => {
+      const qty = Number(opt?.qty ?? opt?.quantity ?? opt?.amountQty ?? 1);
+      const raw = opt?.name || opt?.label || opt?.title || opt?.value || String(opt || '').trim();
+      const name = _escapeHtml(raw);
+      const price = _numMoney(opt?.price ?? opt?.valuePrice ?? opt?.amount ?? 0);
+      const qtyText = Number.isFinite(qty) && qty > 1 ? `${qty}x ` : '';
+      const priceText = price > 0 ? ` (+${brl(price)})` : '';
+      return name ? `${qtyText}${name}${priceText}` : '';
+    }).filter(Boolean).join(', '));
+  }
+
+  if (optionsText) {
+    const lower = optionsText.toLowerCase();
+    const alreadyHasAddons = parts.some((line) => line.startsWith('Adicionais:'));
+    const alreadyHasSize = parts.some((line) => line.startsWith('Tamanho:'));
+    if (!alreadyHasAddons && (lower.includes('adicional') || lower.includes('extra'))) {
+      parts.push(_escapeHtml(optionsText));
+    } else if (!alreadyHasSize && lower.includes('tamanho')) {
+      parts.push(_escapeHtml(optionsText));
+    } else if (!parts.length) {
+      parts.push(_escapeHtml(optionsText));
+    }
+  }
+
+  const obs = String(item?.obs || item?.observation || item?.notes || item?.meta?.notes || '').trim();
+  if (obs) parts.push('Obs: ' + _escapeHtml(obs));
+
+  return parts;
+}
+
+function _getOrderWhatsapp(order) {
+  const raw = (
+    order?.customer?.phone ??
+    order?.customer?.whatsapp ??
+    order?.checkout?.customer?.phone ??
+    order?.checkout?.phone ??
+    order?.checkout?.customerPhone ??
+    order?.phone ??
+    order?.whatsapp ??
+    order?.contactPhone ??
+    order?.contact?.phone ??
+    ''
+  );
+  return String(raw || '').trim();
+}
+
+function _getOrderAddress(order) {
+  const raw = (
+    order?.checkout?.deliveryAddress ??
+    order?.customer?.address ??
+    order?.checkout?.address ??
+    order?.deliveryAddress ??
+    order?.address ??
+    order?.checkout?.pickupNote ??
+    ''
+  );
+  return String(raw || '').trim();
+}
+
+function _renderOrderItemsDetailed(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return `<div class="modalEmpty">Sem itens</div>`;
+
+  return list.map((item) => {
+    const qty = _getItemQty(item);
+    const name = _escapeHtml(item?.name || '-');
+    const unitPrice = _getItemUnitPrice(item);
+    const lineTotal = _getItemTotalPrice(item);
+    const discount = _getItemDiscountValue(item);
+    const optionLines = _getItemOptionsLines(item);
+
+    return `
+      <div class="modalItem">
+        <div class="miLeft">
+          <div class="miName">${qty}x ${name}</div>
+          <div class="miMeta">Unitário: ${brl(unitPrice)}</div>
+          ${discount > 0 ? `<div class="miMeta">Desconto: -${brl(discount)}</div>` : ``}
+          ${optionLines.map(line => `<div class="miMeta">${line}</div>`).join('')}
+        </div>
+        <div class="miRight">${brl(lineTotal)}</div>
+      </div>
+    `;
+  }).join('');
+}
+
+function _renderComandaItemsHtml(items) {
+  const list = Array.isArray(items) ? items : [];
+  if (!list.length) return '<div class="line">Sem itens</div>';
+
+  return list.map((item) => {
+    const qty = _getItemQty(item);
+    const name = _escapeHtml(item?.name || 'Item');
+    const lineTotal = _getItemTotalPrice(item);
+    const optionLines = _getItemOptionsLines(item);
+
+    const additionalLines = optionLines
+      .filter((line) => /^adicionais:/i.test(String(line || '').trim()))
+      .flatMap((line) => {
+        const raw = String(line || '').replace(/^adicionais:\s*/i, '').trim();
+        if (!raw) return [];
+        return raw
+          .split(/\s*,\s*/)
+          .map(part => _escapeHtml(part.replace(/\s*\([^)]+\)\s*$/, '').trim()))
+          .filter(Boolean);
+      });
+
+    const otherLines = optionLines
+      .filter((line) => !/^adicionais:/i.test(String(line || '').trim()));
+
+    return `
+      <div class="item">
+        <div class="item-name">${qty}x ${name}</div>
+        <div class="item-price">${brl(lineTotal)}</div>
+        ${otherLines.map(line => `<div class="item-extra">${line}</div>`).join('')}
+        ${additionalLines.length ? `
+          <div class="item-extra item-extra-title">Adicionais:</div>
+          ${additionalLines.map(line => `<div class="item-extra item-extra-list">${line}</div>`).join('')}
+        ` : ``}
+      </div>
+    `;
+  }).join('');
+}
+
+
+function _buildComandaHtml(order) {
+  const customerName = _escapeHtml(order?.customer?.name || order?.customerName || 'Cliente');
+  const phone = _escapeHtml(_getOrderWhatsapp(order) || '-');
+  const address = _escapeHtml(_getOrderAddress(order) || '-');
+  const paymentLabel = _escapeHtml(getAdminPaymentPresentation(order)?.text || 'PAGAMENTO');
+  const totals = _getOrderTotalsSummary(order);
+  const pay = _normalizeAdminPayment(order);
+
+  const createdAtRaw = order?.createdAt?.toDate ? order.createdAt.toDate() : (order?.createdAt ? new Date(order.createdAt) : new Date());
+  const createdAt = Number.isNaN(createdAtRaw?.getTime?.()) ? new Date() : createdAtRaw;
+  const createdLabel = _escapeHtml(createdAt.toLocaleString('pt-BR'));
+
+  const rawMode = String(
+    order?.totals?.checkoutMode ||
+    order?.checkout?.checkoutMode ||
+    order?.checkout?.mode ||
+    order?.checkoutMode ||
+    (order?.checkout?.deliveryAddress ? 'delivery' : '')
+  ).trim().toLowerCase();
+  const modeLabel = rawMode === 'pickup' ? 'RETIRADA' : 'ENTREGA';
+
+  const codeValueRaw = String(order?.orderNumber ?? order?.code ?? order?.displayCode ?? order?.shortCode ?? '').replace(/\D/g, '');
+  const orderCode = (codeValueRaw ? codeValueRaw.slice(-4).padStart(4, '0') : '----');
+
+  const trocoText = _escapeHtml(getAdminChangeText(order, totals.total) || '');
+
+  return `
+  <html>
+    <head>
+      <meta charset="utf-8" />
+      <title>Comanda</title>
+      <style>
+        @page { size: auto; margin: 2.5mm; }
+        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
+        body { font-size: 13px; line-height: 1.35; }
+        .wrap {
+          width: 76mm;
+          margin: 0 auto;
+          padding: 2.8mm 2.2mm 3.2mm;
+        }
+        .topbar {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 8px;
+          margin-bottom: 10px;
+        }
+        .modeBlock {
+          flex: 1;
+          min-width: 0;
+        }
+        .modeLabel {
+          margin: 0 0 3px;
+          font-size: 15px;
+          font-weight: 800;
+          letter-spacing: .04em;
+        }
+        .dateLabel {
+          font-size: 12px;
+          color: #333;
+        }
+        .codeBox {
+          min-width: 62px;
+          padding: 5px 6px 4px;
+          border: 1.5px solid #111;
+          border-radius: 8px;
+          text-align: center;
+        }
+        .codeCaption {
+          margin: 0 0 2px;
+          font-size: 9px;
+          font-weight: 800;
+          letter-spacing: .16em;
+          color: #444;
+        }
+        .codeValue {
+          margin: 0;
+          font-size: 24px;
+          line-height: 1;
+          font-weight: 900;
+          letter-spacing: .04em;
+        }
+        .divider {
+          border-top: 1px dashed #bdbdbd;
+          margin: 10px 0;
+        }
+        .section {
+          margin-top: 10px;
+        }
+        .sectionTitle {
+          margin: 0 0 8px;
+          font-size: 12px;
+          font-weight: 800;
+          letter-spacing: .16em;
+          text-transform: uppercase;
+        }
+        .line {
+          margin: 0 0 6px;
+          font-size: 13px;
+          line-height: 1.45;
+          word-break: break-word;
+        }
+        .line strong {
+          font-weight: 800;
+        }
+        .item {
+          padding: 0 0 11px;
+          margin: 0 0 11px;
+          border-bottom: 1px dashed #d2d2d2;
+        }
+        .item:last-child {
+          border-bottom: 0;
+          padding-bottom: 0;
+          margin-bottom: 0;
+        }
+        .item-name {
+          font-size: 15px;
+          font-weight: 800;
+          margin: 0 0 6px;
+          line-height: 1.35;
+          word-break: break-word;
+        }
+        .item-price {
+          font-size: 14px;
+          font-weight: 800;
+          margin: 0 0 7px;
+        }
+        .item-extra {
+          margin: 0 0 5px;
+          font-size: 13px;
+          line-height: 1.4;
+          word-break: break-word;
+        }
+        .item-extra-title {
+          margin-top: 2px;
+          font-weight: 800;
+        }
+        .item-extra-list {
+          padding-left: 10px;
+        }
+        .summary {
+          border-top: 1px solid #111;
+          border-bottom: 1px solid #111;
+          padding: 8px 0 6px;
+          margin-top: 2px;
+        }
+        .summaryLine {
+          display: flex;
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 12px;
+          margin: 0 0 7px;
+          font-size: 13px;
+          line-height: 1.35;
+        }
+        .summaryLine span:first-child {
+          flex: 1;
+          min-width: 0;
+        }
+        .summaryLine strong {
+          font-weight: 800;
+        }
+        .summaryTotal {
+          margin-top: 3px;
+          padding-top: 6px;
+          border-top: 1px dashed #d2d2d2;
+          font-size: 16px;
+          font-weight: 900;
+        }
+        .paymentBox {
+          padding-top: 2px;
+        }
+        .paymentLine {
+          margin: 0 0 7px;
+          font-size: 13px;
+          line-height: 1.45;
+          word-break: break-word;
+        }
+        .paymentMethod {
+          font-weight: 800;
+          text-transform: uppercase;
+        }
+        .note {
+          margin-top: 9px;
+          font-size: 11.5px;
+          line-height: 1.45;
+          color: #333;
+        }
+      </style>
+    </head>
+    <body>
+      <div class="wrap">
+        <div class="topbar">
+          <div class="modeBlock">
+            <div class="modeLabel">${modeLabel}</div>
+            <div class="dateLabel">${createdLabel}</div>
+          </div>
+          <div class="codeBox">
+            <div class="codeCaption">PEDIDO</div>
+            <div class="codeValue">${orderCode}</div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+          <div class="sectionTitle">CLIENTE</div>
+          <div class="line"><strong>Nome:</strong> ${customerName}</div>
+          <div class="line"><strong>WhatsApp cliente:</strong> ${phone}</div>
+          <div class="line"><strong>Endereço:</strong> ${address}</div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+          <div class="sectionTitle">ITENS DO PEDIDO</div>
+          ${_renderComandaItemsHtml(order?.items)}
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section">
+          <div class="sectionTitle">RESUMO</div>
+          <div class="summary">
+            <div class="summaryLine"><span>Subtotal</span><strong>${brl(totals.subtotal)}</strong></div>
+            <div class="summaryLine"><span>Entrega</span><strong>${brl(totals.deliveryFee)}</strong></div>
+            ${totals.discount > 0 ? `<div class="summaryLine"><span>Desconto</span><strong>-${brl(totals.discount)}</strong></div>` : ``}
+            <div class="summaryLine summaryTotal"><span>Total</span><strong>${brl(totals.total)}</strong></div>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="section paymentBox">
+          <div class="sectionTitle">PAGAMENTO</div>
+          <div class="paymentLine paymentMethod">${paymentLabel}</div>
+          ${pay.isCash ? `<div class="paymentLine"><strong>Troco:</strong> ${trocoText || 'Não precisa'}</div>` : ``}
+          <div class="note">Confira os itens antes de finalizar o preparo</div>
+        </div>
+      </div>
+    </body>
+  </html>`;
+}
+
 function minsSince(ts) {
   if (!ts?.toDate) return null;
   const ms = Date.now() - ts.toDate().getTime();
@@ -428,8 +1011,161 @@ function guardIfSubscriptionBlocked() {
 
 
 
+
+let __JPED_AUTO_PRINT_LOCK = new Set();
+
+function _isOrderPaidForKitchen(order) {
+  const pay = _normalizeAdminPayment(order);
+  return !!pay?.pixPaid;
+}
+
+async function _fetchOrderById(orderId) {
+  const privateRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders", orderId);
+  const publicRef = Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId);
+
+  let publicData = null;
+  let privateData = null;
+
+  try {
+    const snap = await Firestore.getDoc(publicRef);
+    if (snap.exists()) publicData = { id: snap.id, ...snap.data() };
+  } catch (e) {
+    console.warn("Falha ao buscar pedido público:", e?.code || e, e?.message || "");
+  }
+
+  try {
+    const snap = await Firestore.getDoc(privateRef);
+    if (snap.exists()) privateData = { id: snap.id, ...snap.data() };
+  } catch (e) {
+    console.warn("Falha ao buscar pedido privado:", e?.code || e, e?.message || "");
+  }
+
+  if (!publicData && !privateData) return null;
+
+  const merged = {
+    ...(publicData || {}),
+    ...(privateData || {})
+  };
+
+  merged.id = orderId;
+  merged.customer = {
+    ...((publicData && publicData.customer) || {}),
+    ...((privateData && privateData.customer) || {})
+  };
+  merged.checkout = {
+    ...((publicData && publicData.checkout) || {}),
+    ...((privateData && privateData.checkout) || {})
+  };
+
+  const publicItems = Array.isArray(publicData?.items) ? publicData.items : [];
+  const privateItems = Array.isArray(privateData?.items) ? privateData.items : [];
+  merged.items = privateItems.length ? privateItems : publicItems;
+
+  const publicTotals = publicData?.totals && typeof publicData.totals === "object" ? publicData.totals : {};
+  const privateTotals = privateData?.totals && typeof privateData.totals === "object" ? privateData.totals : {};
+  merged.totals = { ...publicTotals, ...privateTotals };
+
+  return merged;
+}
+
+async function _markOrderPrinted(orderId, extra = {}) {
+  const payload = { kitchenPrintedAt: Firestore.serverTimestamp(), ...extra };
+  const refs = [
+    Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders_public", orderId),
+    Firestore.doc(db, "restaurants", RESTAURANT_ID, "orders", orderId)
+  ];
+
+  for (const ref of refs) {
+    try {
+      await Firestore.setDoc(ref, payload, { merge: true });
+    } catch (e) {
+      console.warn("Falha ao marcar impressão da comanda:", e?.code || e, e?.message || "");
+    }
+  }
+}
+
+async function printOrderComanda(orderOrId, options = {}) {
+  const orderId = typeof orderOrId === "string" ? orderOrId : orderOrId?.id;
+  const order = orderId ? await _fetchOrderById(orderId) : null;
+  if (!order?.id) throw new Error("Pedido não encontrado para impressão.");
+
+  const html = _buildComandaHtml(order);
+  const iframe = document.createElement("iframe");
+  iframe.style.position = "fixed";
+  iframe.style.right = "0";
+  iframe.style.bottom = "0";
+  iframe.style.width = "0";
+  iframe.style.height = "0";
+  iframe.style.border = "0";
+  document.body.appendChild(iframe);
+
+  await new Promise((resolve, reject) => {
+    const win = iframe.contentWindow;
+    if (!win) {
+      reject(new Error("Janela de impressão indisponível."));
+      return;
+    }
+
+    const done = () => {
+      setTimeout(() => {
+        try { iframe.remove(); } catch (_) {}
+      }, 1500);
+      resolve();
+    };
+
+    try {
+      win.document.open();
+      win.document.write(html);
+      win.document.close();
+      setTimeout(() => {
+        try {
+          win.focus();
+          win.print();
+          done();
+        } catch (err) {
+          reject(err);
+        }
+      }, 300);
+    } catch (err) {
+      reject(err);
+    }
+  });
+
+  await _markOrderPrinted(order.id, options.auto ? { kitchenAutoPrintedAt: Firestore.serverTimestamp() } : {});
+}
+
+async function _maybeAutoPrintOrder(order) {
+  const orderId = order?.id;
+  if (!orderId || __JPED_AUTO_PRINT_LOCK.has(orderId)) return;
+  if (String(order?.status || "").trim().toLowerCase() !== "em_preparo") return;
+  if (order?.kitchenAutoPrintedAt) return;
+
+  __JPED_AUTO_PRINT_LOCK.add(orderId);
+  try {
+    await printOrderComanda(order, { auto: true });
+  } catch (e) {
+    console.warn("Falha ao imprimir comanda automática:", e?.code || e, e?.message || "");
+  } finally {
+    setTimeout(() => __JPED_AUTO_PRINT_LOCK.delete(orderId), 3000);
+  }
+}
+
+async function _syncPaidOrderToKitchen(order) {
+  if (!order?.id) return;
+  const status = String(order?.status || "").trim().toLowerCase();
+  if (!_isOrderPaidForKitchen(order)) return;
+  if (["em_preparo", "saiu_pra_entrega", "entregue", "cancelado"].includes(status)) return;
+
+  try {
+    await setOrderStatus(order.id, "em_preparo", { autoTriggered: true });
+  } catch (e) {
+    console.warn("Falha ao mover pedido pago para em_preparo:", e?.code || e, e?.message || "");
+  }
+}
+
+
 /** Atualiza status do pedido */
-async function setOrderStatus(orderId, newStatus) {
+async function setOrderStatus(orderId, newStatus, options = {}) {
   if (!SUBSCRIPTION_OK) {
     alert("Assinatura expirada. Ative um plano para mudar status.");
     return;
@@ -489,8 +1225,8 @@ async function setOrderStatus(orderId, newStatus) {
     console.warn("Sem permissão para atualizar orders:", e?.code || e, e?.message || "");
   }
 
-  // 3) Se for ENTREGUE: arquiva no histórico, MAS NÃO DELETA (não some hoje)
-  if (newStatus === "entregue") {
+  // 3) Se for ENTREGUE ou CANCELADO: arquiva no histórico, MAS NÃO DELETA (não some hoje)
+  if (newStatus === "entregue" || newStatus === "cancelado") {
     try {
       // tenta pegar dados do privado, se não der pega do público
       let baseData = null;
@@ -512,8 +1248,9 @@ async function setOrderStatus(orderId, newStatus) {
         {
           ...(baseData || {}),
           id: orderId,
-          status: "entregue",
-          deliveredAt: Firestore.serverTimestamp(),
+          status: newStatus,
+          ...(newStatus === "entregue" ? { deliveredAt: Firestore.serverTimestamp() } : {}),
+          ...(newStatus === "cancelado" ? { canceledAt: Firestore.serverTimestamp() } : {}),
           archivedAt: Firestore.serverTimestamp(),
           updatedAt: Firestore.serverTimestamp(),
         },
@@ -528,6 +1265,15 @@ async function setOrderStatus(orderId, newStatus) {
   if (!publicOk) {
     console.warn("ATENÇÃO: status não foi gravado em orders_public; o cliente não vai ver a mudança.");
   }
+
+  if (newStatus === "em_preparo") {
+    try {
+      const latestOrder = await _fetchOrderById(orderId);
+      await _maybeAutoPrintOrder(latestOrder || { id: orderId, status: "em_preparo" });
+    } catch (e) {
+      console.warn("Falha ao disparar impressão automática:", e?.code || e, e?.message || "");
+    }
+  }
 }
 
 
@@ -540,7 +1286,6 @@ async function setOrderStatus(orderId, newStatus) {
     const btn = e.target.closest("[data-act][data-id]");
     if (!btn) return;
 
-    // não deixar o clique abrir o modal
     e.preventDefault();
     e.stopPropagation();
 
@@ -548,28 +1293,33 @@ async function setOrderStatus(orderId, newStatus) {
     const act = btn.getAttribute("data-act");
 
     try {
+      if (act === "reprint") {
+        await printOrderComanda(orderId, { auto: false });
+        return;
+      }
       await setOrderStatus(orderId, act);
     } catch (err) {
       console.error(err);
-      alert("Erro ao mudar status. Veja o console (F12).");
+      alert(act === "reprint" ? "Erro ao reimprimir comanda. Veja o console (F12)." : "Erro ao mudar status. Veja o console (F12).");
     }
   });
 })();
 
 /** Renderiza pedidos */
 function renderOrders(list) {
-  // containers das 3 colunas
+  // containers das colunas
   const prepEl = document.getElementById("orders-prep");
   const outEl = document.getElementById("orders-out");
   const doneEl = document.getElementById("orders-done");
+  const canceledEl = document.getElementById("orders-canceled");
 
   // fallback antigo (caso o HTML ainda esteja no formato antigo)
   const legacyWrap = document.getElementById("orders");
 
   const clear = (el) => { if (el) el.innerHTML = ""; };
 
-  clear(prepEl); clear(outEl); clear(doneEl);
-  if (legacyWrap && !prepEl && !outEl && !doneEl) legacyWrap.innerHTML = "";
+  clear(prepEl); clear(outEl); clear(doneEl); clear(canceledEl);
+  if (legacyWrap && !prepEl && !outEl && !doneEl && !canceledEl) legacyWrap.innerHTML = "";
 
   // Diag de permissão no topo (sem atrapalhar)
   const attachDiag = (host) => {
@@ -601,19 +1351,22 @@ function renderOrders(list) {
   // helper para escolher coluna
   function bucketStatus(s, paymentStatus) {
     const pay = String(paymentStatus || "").toLowerCase();
-    if (s === "aguardando_pagamento") return "aguardando_pagamento";
+    const normalizedStatus = String(s || "").toLowerCase();
+    if (normalizedStatus === "aguardando_pagamento") return "aguardando_pagamento";
     if (pay && pay !== "approved") return "aguardando_pagamento";
+    if (normalizedStatus === "cancelado" || normalizedStatus === "canceled" || normalizedStatus === "cancelled") return "cancelado";
     // pedido novo pode vir "recebido" (ou vazio) => em_preparo
-    if (!s || s === "recebido" || s === "em_preparo") return "em_preparo";
-    if (s === "saiu_pra_entrega") return "saiu_pra_entrega";
-    if (s === "entregue") return "entregue";
+    if (!normalizedStatus || normalizedStatus === "recebido" || normalizedStatus === "em_preparo") return "em_preparo";
+    if (normalizedStatus === "saiu_pra_entrega") return "saiu_pra_entrega";
+    if (normalizedStatus === "entregue") return "entregue";
     return "em_preparo";
   }
 
   function hostFor(status) {
-    if (!prepEl && !outEl && !doneEl) return legacyWrap;
+    if (!prepEl && !outEl && !doneEl && !canceledEl) return legacyWrap;
     if (status === "saiu_pra_entrega") return outEl;
     if (status === "entregue") return doneEl;
+    if (status === "cancelado") return canceledEl || prepEl;
     return prepEl;
   }
 
@@ -639,18 +1392,18 @@ function renderOrders(list) {
     if (col === "em_preparo") {
       actions = `
         <button class="btn small" data-act="saiu_pra_entrega" data-id="${o.id}">Despachar</button>
+        <button class="ghost small" data-act="reprint" data-id="${o.id}">Reimprimir comanda</button>
         <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
       `;
     } else if (col === "saiu_pra_entrega") {
       actions = `
         <button class="btn small" data-act="entregue" data-id="${o.id}">Entregue</button>
+        <button class="ghost small" data-act="reprint" data-id="${o.id}">Reimprimir comanda</button>
         <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
       `;
     } else {
-      // entregue
-      actions = `
-        <button class="ghost small danger" data-act="cancelado" data-id="${o.id}">Cancelar</button>
-      `;
+      // entregue ou cancelado = só infos, sem ações
+      actions = "";
     }
 
     
@@ -659,6 +1412,9 @@ const ageMs = Date.now() - createdMs;
 const late = ageMs >= 20 * 60 * 1000;
 
 div.dataset.id = o.id;
+
+    const paymentView = getAdminPaymentPresentation(o);
+    const paymentChangeText = getAdminChangeText(o, o?.totals?.total ?? o?.checkout?.total ?? o?.total ?? o?.amount ?? 0);
 
 div.innerHTML = `
   <div class="cardTop">
@@ -671,11 +1427,11 @@ div.innerHTML = `
   <div class="cardBody">
     <div class="cardCustomer">${o.customer?.name || o.customerName || "Cliente"}</div>
     <div class="cardOrderNum">#${o.orderNumber || "----"}</div>
+    <div class="paymentChip ${paymentView.chipClass}">${paymentView.text}</div>
+    ${paymentChangeText ? `<div class="paymentMeta">${paymentChangeText}</div>` : ``}
   </div>
 
-  <div class="cardActions">
-    ${actions}
-  </div>
+  ${actions ? `<div class="cardActions">${actions}</div>` : ``}
 `;const host = hostFor(col);
     if (host) host.appendChild(div);
   }
@@ -926,27 +1682,28 @@ async function openOrderModal(orderId){
   const phone = data.customer?.phone || "-";
   const address = data.customer?.address || "-";
   const status = data.status || "recebido";
-  const subtotal = data.totals?.subtotal ?? 0;
+  const totalsSummary = _getOrderTotalsSummary(data);
+  const subtotal = totalsSummary.subtotal;
+  const total = totalsSummary.total;
+  const paymentView = getAdminPaymentPresentation(data);
+  const paymentLabel = paymentView.text;
+  const trocoLabel = getAdminChangeText(data, total);
 
   modal.querySelector("#modalOrderNum").textContent = `#${orderNum}`;
   modal.querySelector("#modalCustomer").textContent = customerName;
-  modal.querySelector("#modalMeta").textContent = `${statusLabel(status)} • ${brl(subtotal)}`;
+  modal.querySelector("#modalMeta").textContent = `${statusLabel(status)} • ${brl(total)}`;
 
   const items = Array.isArray(data.items) ? data.items : [];
-  modal.querySelector("#modalItems").innerHTML = items.length
-    ? items.map(i => `
-        <div class="modalItem">
-          <div class="miLeft">
-            <div class="miName">${i.name || "-"}</div>
-          </div>
-          <div class="miRight">${i.qty || 0}x</div>
-        </div>
-      `).join("")
-    : `<div class="modalEmpty">Sem itens</div>`;
+  modal.querySelector("#modalItems").innerHTML = _renderOrderItemsDetailed(items);
 
   modal.querySelector("#modalDelivery").innerHTML = `
     <div><strong>Status:</strong> ${statusLabel(status)}</div>
-    <div style="margin-top:6px"><strong>Total:</strong> ${brl(subtotal)}</div>
+    <div style="margin-top:6px"><strong>Subtotal:</strong> ${brl(subtotal)}</div>
+    ${totalsSummary.discount > 0 ? `<div style="margin-top:6px"><strong>Desconto:</strong> -${brl(totalsSummary.discount)}</div>` : ''}
+    ${totalsSummary.deliveryFee > 0 ? `<div style="margin-top:6px"><strong>Entrega:</strong> ${brl(totalsSummary.deliveryFee)}</div>` : ''}
+    <div style="margin-top:6px"><strong>Total:</strong> ${brl(total)}</div>
+    <div style="margin-top:6px"><strong>Pagamento:</strong> ${paymentLabel}</div>
+    ${paymentView.chipClass === 'cash' ? `<div style="margin-top:6px"><strong>Troco:</strong> ${trocoLabel}</div>` : ''}
     <div style="margin-top:6px"><strong>Whats:</strong> ${phone}</div>
     <div style="margin-top:6px"><strong>Endereço:</strong> ${address}</div>
   `;
@@ -1048,6 +1805,10 @@ function startOrdersListener() {
     q,
     (snap) => {
       const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      for (const order of list) {
+        _syncPaidOrderToKitchen(order);
+        _maybeAutoPrintOrder(order);
+      }
       renderOrders(list);
       _startTimeBadges();
     },
