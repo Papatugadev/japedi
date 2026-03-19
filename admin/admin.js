@@ -208,7 +208,18 @@ const DEFAULT_MASTER_PLAN_CONFIG = {
   }
 };
 
+const DEFAULT_MASTER_BILLING_CONFIG = {
+  platformName: "JPED",
+  signatureName: "Equipe JPED",
+  pixKey: "",
+  pixHolder: "",
+  supportWhatsapp: "",
+  supportEmail: "",
+  instructions: "Envie o comprovante do pagamento para que a ativação ou renovação do plano seja confirmada."
+};
+
 let PLATFORM_PLAN_CONFIG = JSON.parse(JSON.stringify(DEFAULT_MASTER_PLAN_CONFIG));
+let PLATFORM_BILLING_CONFIG = JSON.parse(JSON.stringify(DEFAULT_MASTER_BILLING_CONFIG));
 let ACTIVE_RESTAURANT_PAGE = "orders";
 
 const masterPlansRefs = {
@@ -218,7 +229,12 @@ const masterPlansRefs = {
   pagePlans: document.getElementById("masterTabPlans"),
   saveBtn: document.getElementById("masterPlansSaveBtn"),
   status: document.getElementById("masterPlansStatus"),
-  cardsHost: document.getElementById("masterPlansCards")
+  cardsHost: document.getElementById("masterPlansCards"),
+  pixKey: document.getElementById("masterBillingPixKey"),
+  pixHolder: document.getElementById("masterBillingPixHolder"),
+  supportWhatsapp: document.getElementById("masterBillingWhatsapp"),
+  supportEmail: document.getElementById("masterBillingEmail"),
+  instructions: document.getElementById("masterBillingInstructions")
 };
 
 let unsubOrders = null;
@@ -1131,14 +1147,29 @@ function _mergePlanConfig(baseCfg, incoming) {
   return out;
 }
 
+function _mergeBillingConfig(baseCfg, incoming) {
+  const out = Object.assign({}, baseCfg || DEFAULT_MASTER_BILLING_CONFIG);
+  const src = incoming && typeof incoming === "object" ? incoming : {};
+  out.platformName = String(src.platformName ?? out.platformName ?? "JPED").trim() || "JPED";
+  out.signatureName = String(src.signatureName ?? out.signatureName ?? `Equipe ${out.platformName || 'JPED'}`).trim() || `Equipe ${out.platformName || 'JPED'}`;
+  out.pixKey = String(src.pixKey ?? out.pixKey ?? "").trim();
+  out.pixHolder = String(src.pixHolder ?? out.pixHolder ?? "").trim();
+  out.supportWhatsapp = String(src.supportWhatsapp ?? out.supportWhatsapp ?? "").trim();
+  out.supportEmail = String(src.supportEmail ?? out.supportEmail ?? "").trim();
+  out.instructions = String(src.instructions ?? out.instructions ?? "").trim();
+  return out;
+}
+
 async function loadPlatformPlanConfig() {
   try {
     const snap = await Firestore.getDoc(Firestore.doc(db, "restaurants", "_platform"));
     const data = snap.exists() ? (snap.data() || {}) : {};
     PLATFORM_PLAN_CONFIG = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, data.masterPlans || {});
+    PLATFORM_BILLING_CONFIG = _mergeBillingConfig(DEFAULT_MASTER_BILLING_CONFIG, data.masterBilling || {});
   } catch (e) {
     console.warn("Falha ao carregar configuração global de planos:", e?.code || e, e?.message || "");
     PLATFORM_PLAN_CONFIG = _deepClone(DEFAULT_MASTER_PLAN_CONFIG);
+    PLATFORM_BILLING_CONFIG = _deepClone(DEFAULT_MASTER_BILLING_CONFIG);
   }
   try { renderMasterPlansEditor(); } catch (_) {}
   return PLATFORM_PLAN_CONFIG;
@@ -1191,6 +1222,7 @@ function setMasterPlansStatus(text, tone = "default") {
 function renderMasterPlansEditor() {
   if (!masterPlansRefs.cardsHost) return;
   const cfg = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, PLATFORM_PLAN_CONFIG || {});
+  const billingCfg = _mergeBillingConfig(DEFAULT_MASTER_BILLING_CONFIG, PLATFORM_BILLING_CONFIG || {});
   const labels = {
     orders: "Pedidos",
     products: "Produtos",
@@ -1234,6 +1266,12 @@ function renderMasterPlansEditor() {
       </article>
     `;
   }).join("");
+
+  if (masterPlansRefs.pixKey) masterPlansRefs.pixKey.value = billingCfg.pixKey || "";
+  if (masterPlansRefs.pixHolder) masterPlansRefs.pixHolder.value = billingCfg.pixHolder || "";
+  if (masterPlansRefs.supportWhatsapp) masterPlansRefs.supportWhatsapp.value = billingCfg.supportWhatsapp || "";
+  if (masterPlansRefs.supportEmail) masterPlansRefs.supportEmail.value = billingCfg.supportEmail || "";
+  if (masterPlansRefs.instructions) masterPlansRefs.instructions.value = billingCfg.instructions || "";
 }
 
 function getMasterPlansPayloadFromUI() {
@@ -1249,17 +1287,30 @@ function getMasterPlansPayloadFromUI() {
   return out;
 }
 
+function getMasterBillingPayloadFromUI() {
+  return _mergeBillingConfig(DEFAULT_MASTER_BILLING_CONFIG, {
+    pixKey: masterPlansRefs.pixKey?.value || "",
+    pixHolder: masterPlansRefs.pixHolder?.value || "",
+    supportWhatsapp: masterPlansRefs.supportWhatsapp?.value || "",
+    supportEmail: masterPlansRefs.supportEmail?.value || "",
+    instructions: masterPlansRefs.instructions?.value || ""
+  });
+}
+
 async function saveMasterPlansConfig() {
   try {
     const payload = getMasterPlansPayloadFromUI();
+    const billingPayload = getMasterBillingPayloadFromUI();
     await Firestore.setDoc(Firestore.doc(db, "restaurants", "_platform"), {
       name: "_platform",
       type: "platform_settings",
       masterPlans: payload,
+      masterBilling: billingPayload,
       updatedAt: Firestore.serverTimestamp()
     }, { merge: true });
     PLATFORM_PLAN_CONFIG = _mergePlanConfig(DEFAULT_MASTER_PLAN_CONFIG, payload);
-    setMasterPlansStatus("Planos salvos com sucesso.", "ok");
+    PLATFORM_BILLING_CONFIG = _mergeBillingConfig(DEFAULT_MASTER_BILLING_CONFIG, billingPayload);
+    setMasterPlansStatus("Planos e cobrança salvos com sucesso.", "ok");
     applyRestaurantPlanVisibility();
   } catch (e) {
     console.error("Erro ao salvar configuração global de planos:", e?.code || e, e?.message || "");
@@ -2387,6 +2438,178 @@ function _pendingSignupSummary(item) {
   };
 }
 
+
+function _getMasterBillingConfig() {
+  return _mergeBillingConfig(DEFAULT_MASTER_BILLING_CONFIG, PLATFORM_BILLING_CONFIG || {});
+}
+
+function _buildBillingEmailPayload(ctx = {}) {
+  const billing = _getMasterBillingConfig();
+  const restaurantName = String(ctx.restaurantName || "seu restaurante").trim();
+  const ownerName = String(ctx.ownerName || "").trim();
+  const tier = _masterNormalizeTier(ctx.planTier || "gold");
+  const tierLabel = tier.charAt(0).toUpperCase() + tier.slice(1);
+  const monthlyPrice = Number(ctx.priceBRL || 0) || 0;
+  const dueDay = Number(ctx.dueDay || 0) || 0;
+  const dueText = dueDay ? `dia ${dueDay}` : "conforme combinado";
+  const pixKey = billing.pixKey || "[preencha a chave PIX]";
+  const pixHolder = billing.pixHolder || "[preencha o favorecido]";
+  const supportWhatsapp = billing.supportWhatsapp || "";
+  const supportEmail = billing.supportEmail || "";
+  const notes = String(ctx.notes || "").trim();
+  const platformName = String(billing.platformName || "JPED").trim() || "JPED";
+  const signatureName = String(billing.signatureName || `Equipe ${platformName}`).trim() || `Equipe ${platformName}`;
+  const customInstructions = String(billing.instructions || "").trim();
+
+  const subject = ctx.isPending
+    ? `Ativação da sua assinatura — ${tierLabel} | ${restaurantName}`
+    : `Renovação da sua assinatura — ${tierLabel} | ${restaurantName}`;
+
+  const greeting = ownerName ? `Olá, ${ownerName}!` : `Olá, ${restaurantName}!`;
+  const lines = [greeting, ""];
+
+  if (ctx.isPending) {
+    lines.push("Seu cadastro foi recebido e o seu acesso ao painel está pronto para ativação.");
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("DADOS DA ASSINATURA");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push(`Plano contratado: ${tierLabel}`);
+    lines.push(`Valor mensal: ${brl(monthlyPrice)}`);
+    lines.push(`Vencimento: ${dueText}`);
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("PAGAMENTO VIA PIX");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push(`Chave PIX: ${pixKey}`);
+    lines.push(`Favorecido: ${pixHolder}`);
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("IMPORTANTE");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("Para ativarmos o seu plano, é necessário enviar o comprovante de pagamento após a transferência.");
+    lines.push("Sem o comprovante, a ativação não será concluída.");
+  } else {
+    lines.push("Segue a cobrança referente à renovação da sua assinatura no painel.");
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("RESUMO DA RENOVAÇÃO");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push(`Plano atual: ${tierLabel}`);
+    lines.push(`Valor da mensalidade: ${brl(monthlyPrice)}`);
+    lines.push(`Vencimento: ${dueText}`);
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("PAGAMENTO VIA PIX");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push(`Chave PIX: ${pixKey}`);
+    lines.push(`Favorecido: ${pixHolder}`);
+    lines.push("");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("CONFIRMAÇÃO NECESSÁRIA");
+    lines.push("━━━━━━━━━━━━━━━━━━");
+    lines.push("Após o pagamento, envie o comprovante para que a renovação seja confirmada e o plano continue ativo sem interrupções.");
+  }
+
+  lines.push("");
+  lines.push("━━━━━━━━━━━━━━━━━━");
+  lines.push("ENVIO DO COMPROVANTE");
+  lines.push("━━━━━━━━━━━━━━━━━━");
+  if (supportWhatsapp) lines.push(`WhatsApp: ${supportWhatsapp}`);
+  if (supportEmail) lines.push(`E-mail: ${supportEmail}`);
+  lines.push("Você também pode responder este email com o comprovante em anexo.");
+
+  if (customInstructions) {
+    lines.push("");
+    lines.push(customInstructions);
+  }
+
+  if (notes) {
+    lines.push("");
+    lines.push(`Observações: ${notes}`);
+  }
+
+  lines.push("");
+  lines.push("Assim que recebermos a confirmação, seguimos com a liberação do acesso ou com a manutenção do plano.");
+  lines.push("");
+  lines.push("Atenciosamente,");
+  lines.push(signatureName);
+
+return { subject, body: lines.join("\n") };
+}
+
+async function _copyBillingEmailFallback(payload) {
+  const text = `Assunto: ${payload.subject}\n\n${payload.body}`;
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch (_) {
+    return false;
+  }
+}
+
+async function openBillingEmailForPending(uid) {
+  const item = MASTER_PENDING_CACHE.find(v => v.id === uid);
+  if (!item) return;
+  const s = _pendingSignupSummary(item);
+  const payload = _buildBillingEmailPayload({
+    restaurantName: s.restaurantName,
+    ownerName: s.ownerName,
+    planTier: s.planTier,
+    priceBRL: s.priceBRL,
+    dueDay: 5,
+    notes: s.notes,
+    isPending: true
+  });
+
+  if (!s.email) {
+    const copied = await _copyBillingEmailFallback(payload);
+    setMasterDrawerStatus(copied
+      ? "Cadastro sem email. Texto da cobrança copiado para a área de transferência."
+      : "Cadastro sem email. Defina um email para disparar a cobrança.", copied ? "ok" : "error");
+    return;
+  }
+
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=${encodeURIComponent(s.email)}&su=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent(payload.body)}`;
+  const win = window.open(gmailUrl, '_blank', 'noopener');
+  if (!win) {
+    const mailto = `mailto:${encodeURIComponent(s.email)}?subject=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent(payload.body)}`;
+    window.location.href = mailto;
+  }
+  setMasterDrawerStatus(`Rascunho de cobrança aberto para ${s.restaurantName || "restaurante"}.`, "ok");
+}
+
+async function openBillingEmailForRestaurant(id) {
+  const item = MASTER_RESTAURANTS_CACHE.find(v => v.id === id);
+  if (!item) return;
+  const s = _masterGetRestaurantSummary(item);
+  const payload = _buildBillingEmailPayload({
+    restaurantName: item.name || "Restaurante",
+    ownerName: "",
+    planTier: s.tier,
+    priceBRL: s.monthlyPrice,
+    dueDay: s.dueDay,
+    notes: s.notes,
+    isPending: false
+  });
+
+  if (!s.billingEmail) {
+    const copied = await _copyBillingEmailFallback(payload);
+    setMasterDrawerStatus(copied
+      ? "Restaurante sem email financeiro. Texto da cobrança copiado para a área de transferência."
+      : "Restaurante sem email financeiro. Preencha o email no cadastro.", copied ? "ok" : "error");
+    return;
+  }
+
+  const gmailUrl = `https://mail.google.com/mail/?view=cm&fs=1&tf=1&to=${encodeURIComponent(s.billingEmail)}&su=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent(payload.body)}`;
+  const win = window.open(gmailUrl, '_blank', 'noopener');
+  if (!win) {
+    const mailto = `mailto:${encodeURIComponent(s.billingEmail)}?subject=${encodeURIComponent(payload.subject)}&body=${encodeURIComponent(payload.body)}`;
+    window.location.href = mailto;
+  }
+  setMasterDrawerStatus(`Rascunho de cobrança aberto para ${item.name || "restaurante"}.`, "ok");
+}
+
 function renderMasterPendingTable() {
   if (!masterPendingRefs.body) return;
   const list = [...MASTER_PENDING_CACHE].sort((a,b) => (_pendingToMillis(_pendingSignupSummary(b).createdAt)||0) - (_pendingToMillis(_pendingSignupSummary(a).createdAt)||0));
@@ -2416,6 +2639,7 @@ function renderMasterPendingTable() {
         <td>${created || "—"}</td>
         <td>
           <div class="masterActions">
+            <button class="ghost small" type="button" data-billing-pending="${_escapeHtml(s.uid)}">Email cobrança</button>
             <button class="btn small" type="button" data-activate-signup="${_escapeHtml(s.uid)}">Ativar restaurante</button>
           </div>
         </td>
@@ -2425,6 +2649,9 @@ function renderMasterPendingTable() {
 
   masterPendingRefs.body.querySelectorAll('[data-activate-signup]').forEach((btn) => {
     btn.addEventListener('click', () => activatePendingSignup(btn.getAttribute('data-activate-signup') || ''));
+  });
+  masterPendingRefs.body.querySelectorAll('[data-billing-pending]').forEach((btn) => {
+    btn.addEventListener('click', () => openBillingEmailForPending(btn.getAttribute('data-billing-pending') || ''));
   });
 }
 
@@ -2551,7 +2778,12 @@ function renderMasterTable() {
         <td>${dueDay}</td>
         <td>${paidAt}</td>
         <td>${expiresAt}</td>
-        <td><button class="masterActionBtn" type="button" data-master-open="${item.id}">Gerenciar</button></td>
+        <td>
+          <div class="masterActions">
+            <button class="ghost small" type="button" data-billing-restaurant="${item.id}">Email cobrança</button>
+            <button class="masterActionBtn" type="button" data-master-open="${item.id}">Gerenciar</button>
+          </div>
+        </td>
       </tr>
     `;
   }).join("");
@@ -2561,6 +2793,9 @@ function renderMasterTable() {
 
   masterRefs.body.querySelectorAll("[data-master-open]").forEach(btn => {
     btn.addEventListener("click", () => openMasterDrawer(btn.dataset.masterOpen));
+  });
+  masterRefs.body.querySelectorAll("[data-billing-restaurant]").forEach(btn => {
+    btn.addEventListener("click", () => openBillingEmailForRestaurant(btn.dataset.billingRestaurant));
   });
 }
 

@@ -1185,6 +1185,39 @@
 
         <div id="masterPlansCards" class="masterPlansCards"></div>
 
+        <section class="masterBillingConfig">
+          <div class="masterBillingConfigHead">
+            <div>
+              <div class="masterTableTitle">Cobrança por email / PIX</div>
+              <div class="masterTableHint">Esses dados entram no rascunho de cobrança dos botões “Email cobrança” dos restaurantes pendentes e ativos.</div>
+            </div>
+          </div>
+
+          <div class="masterBillingGrid">
+            <label class="masterField">
+              <span>Chave PIX</span>
+              <input id="masterBillingPixKey" class="input" placeholder="email, CPF/CNPJ, telefone ou chave aleatória" />
+            </label>
+            <label class="masterField">
+              <span>Favorecido / recebedor</span>
+              <input id="masterBillingPixHolder" class="input" placeholder="Nome de quem recebe o PIX" />
+            </label>
+            <label class="masterField">
+              <span>WhatsApp para comprovante</span>
+              <input id="masterBillingWhatsapp" class="input" placeholder="(11) 99999-9999" />
+            </label>
+            <label class="masterField">
+              <span>Email para comprovante</span>
+              <input id="masterBillingEmail" class="input" placeholder="financeiro@seudominio.com" />
+            </label>
+          </div>
+
+          <label class="masterField">
+            <span>Instrução padrão</span>
+            <textarea id="masterBillingInstructions" class="input masterTextarea" placeholder="Ex.: Envie o comprovante para ativarmos o plano em seguida."></textarea>
+          </label>
+        </section>
+
         <div id="masterPlansStatus" class="masterDrawerStatus">Pronto para editar os planos.</div>
       </section>
     </section>
