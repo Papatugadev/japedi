@@ -337,6 +337,46 @@
   </div>
 
   <section id="profileContaPane" class="profilePane is-active" data-profile-pane="conta">
+    <div class="box profileBox profileAccessCard">
+      <div class="profileAccessTop">
+        <div>
+          <div class="profileSectionTitle">Conta premium</div>
+          <div id="profileAccessStatus" class="profileAccessStatus">Modo visitante ativo</div>
+        </div>
+        <div id="profileAccessBadge" class="profileAccessBadge">Visitante</div>
+      </div>
+
+      <div id="profileAccessGuest" class="profileAccessPanel">
+        <div class="profileAccessLead">Entre com Google para salvar seus dados, recuperar pedidos e deixar sua conta com cara premium.</div>
+        <div class="profileAccessActions">
+          <button id="loginGoogleHeroBtn" class="btn profileGoogleBtn" type="button">
+            <span class="googleMark" aria-hidden="true">G</span>
+            <span>Continuar com Google</span>
+          </button>
+          <button id="openEmailAuthHeroBtn" class="ghost profileAccessGhostBtn" type="button">Entrar com email</button>
+        </div>
+        <div class="profileAccessFeatures">
+          <span>Dados salvos</span>
+          <span>Checkout mais rápido</span>
+          <span>Conta protegida</span>
+        </div>
+      </div>
+
+      <div id="profileAccessUser" class="profileAccessPanel hidden">
+        <div class="profileAccessUserHead">
+          <div class="profileAccessUserAvatar" id="profileAccessUserAvatar">🙂</div>
+          <div>
+            <strong id="profileAccessUserName">Conta conectada</strong>
+            <div id="profileAccessUserEmail" class="muted">Seu login está ativo.</div>
+          </div>
+        </div>
+        <div class="profileAccessActions">
+          <button id="openProfileSettingsHeroBtn" class="ghost profileAccessGhostBtn" type="button">Editar dados</button>
+          <button id="logoutHeroBtn" class="ghost profileAccessGhostBtn danger" type="button">Sair da conta</button>
+        </div>
+      </div>
+    </div>
+
     <div class="box profileBox profileHighlightsBox">
       <div class="profileSectionTitle">Resumo da sua conta</div>
       <div class="profileHighlightsGrid">
@@ -580,7 +620,7 @@
   <span id="cartBadge" class="badge hidden">0</span>
 </button>
 
-<button id="tabProfile" class="tabbtn" aria-label="Perfil">
+<button id="tabProfile" class="tabbtn hidden" aria-label="Perfil" aria-hidden="true" tabindex="-1">
   <i data-lucide="circle-user-round"></i>
 </button>
     <span class="tabIndicator" aria-hidden="true"></span>
@@ -644,6 +684,9 @@
     <div class="modal__content">
       <label class="label">Nome</label>
       <input id="profileNameInput" class="input" type="text" placeholder="Digite seu nome" />
+
+      <label class="label">WhatsApp</label>
+      <input id="profilePhoneInput" class="input" type="tel" placeholder="(11) 99999-9999" />
 
       <label class="label">E-mail</label>
       <input id="profileEmailInput" class="input" type="email" placeholder="voce@email.com" />

@@ -4923,7 +4923,7 @@ function _applySettingsToForm(cfg){
 
   _setVal("setPrimary", theme.primary);
   _setVal("setCurrency", theme.currency || "BRL");
-  _setChecked("setShowImages", theme.showImages !== false); // default true
+  _setChecked("setShowImages", theme.showImages !== true); // default true
   _setChecked("setCompactMenu", !!theme.compactMenu);
 
   _setVal("setCloudName", adv.cloudinaryCloudName);

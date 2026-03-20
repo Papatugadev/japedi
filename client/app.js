@@ -935,7 +935,8 @@ function applyConfigToClient(cfg){
 
   // flags
   state.isOpen = (hours.isOpen !== false);
-  state.showImages = (theme.showImages !== true);
+  // sempre mostrar imagens no cliente
+  state.showImages = true;
 
   // tema (DESATIVADO)
   // Você pediu para NÃO mudar a cor do app pelo painel admin.
@@ -3750,12 +3751,15 @@ document.getElementById("confirmOrderBtn")?.addEventListener("click", async () =
   });
 
   document.getElementById("loginGoogleBtn")?.addEventListener("click", loginWithGoogle);
+  document.getElementById("loginGoogleHeroBtn")?.addEventListener("click", loginWithGoogle);
   document.getElementById("openEmailAuthBtn")?.addEventListener("click", openEmailAuthModal);
+  document.getElementById("openEmailAuthHeroBtn")?.addEventListener("click", openEmailAuthModal);
   document.getElementById("closeEmailAuthBtn")?.addEventListener("click", closeEmailAuthModal);
   document.getElementById("closeEmailAuthBackdrop")?.addEventListener("click", closeEmailAuthModal);
   document.getElementById("emailLoginBtn")?.addEventListener("click", loginWithEmail);
   document.getElementById("emailRegisterBtn")?.addEventListener("click", registerWithEmail);
   document.getElementById("logoutBtn")?.addEventListener("click", logoutProfile);
+  document.getElementById("logoutHeroBtn")?.addEventListener("click", logoutProfile);
 }
 function updateProfileUI(user){
   const guestBox = document.getElementById("profileGuestBox");
@@ -3763,19 +3767,43 @@ function updateProfileUI(user){
   const userName = document.getElementById("profileUserName");
   const userEmail = document.getElementById("profileUserEmail");
 
-  if (user && !user.isAnonymous){
-    guestBox?.classList.add("hidden");
-    userBox?.classList.remove("hidden");
+  const accessGuest = document.getElementById("profileAccessGuest");
+  const accessUser = document.getElementById("profileAccessUser");
+  const accessStatus = document.getElementById("profileAccessStatus");
+  const accessBadge = document.getElementById("profileAccessBadge");
+  const accessUserName = document.getElementById("profileAccessUserName");
+  const accessUserEmail = document.getElementById("profileAccessUserEmail");
+  const accessUserAvatar = document.getElementById("profileAccessUserAvatar");
 
-    if (userName) userName.textContent = user.displayName || "Conta conectada";
-    if (userEmail) userEmail.textContent = user.email || "";
-  } else {
-    guestBox?.classList.remove("hidden");
-    userBox?.classList.add("hidden");
+  const isLogged = !!(user && !user.isAnonymous);
+  const profile = loadProfile();
+  const fallbackAvatar = profile?.avatar || "🙂";
+  const displayName = user?.displayName || profile?.name || "Conta conectada";
+  const displayEmail = user?.email || profile?.email || "";
+  const displayAvatar = (displayName || "").trim().charAt(0).toUpperCase() || fallbackAvatar;
 
-    if (userName) userName.textContent = "Conta conectada";
-    if (userEmail) userEmail.textContent = "";
+  guestBox?.classList.toggle("hidden", isLogged);
+  userBox?.classList.toggle("hidden", !isLogged);
+  accessGuest?.classList.toggle("hidden", isLogged);
+  accessUser?.classList.toggle("hidden", !isLogged);
+
+  if (userName) userName.textContent = isLogged ? displayName : "Conta conectada";
+  if (userEmail) userEmail.textContent = isLogged ? displayEmail : "";
+
+  if (accessStatus) {
+    accessStatus.textContent = isLogged
+      ? "Seu perfil está sincronizado e pronto para checkout rápido."
+      : "Entre para salvar dados, histórico e uma experiência mais premium.";
   }
+
+  if (accessBadge) {
+    accessBadge.textContent = isLogged ? "Google / Email" : "Visitante";
+    accessBadge.classList.toggle("is-live", isLogged);
+  }
+
+  if (accessUserName) accessUserName.textContent = displayName;
+  if (accessUserEmail) accessUserEmail.textContent = isLogged ? (displayEmail || "Conta conectada com sucesso.") : "Seu login está ativo.";
+  if (accessUserAvatar) accessUserAvatar.textContent = isLogged ? displayAvatar : fallbackAvatar;
 }
 
 async function loginWithGoogle(){
@@ -3795,8 +3823,23 @@ async function loginWithGoogle(){
   } catch (e) {
     console.error("Erro no login com Google:", e);
 
-    // fallback: se falhar o link da conta anônima, tenta login normal
     try {
+      if (
+        e?.code === "auth/popup-blocked" ||
+        e?.code === "auth/popup-closed-by-user" ||
+        e?.code === "auth/cancelled-popup-request" ||
+        e?.code === "auth/operation-not-supported-in-this-environment"
+      ) {
+        const provider = new Auth.GoogleAuthProvider();
+        provider.setCustomParameters({ prompt: "select_account" });
+        if (auth.currentUser?.isAnonymous) {
+          await Auth.linkWithRedirect(auth.currentUser, provider);
+        } else {
+          await Auth.signInWithRedirect(auth, provider);
+        }
+        return;
+      }
+
       if (
         e?.code === "auth/credential-already-in-use" ||
         e?.code === "auth/email-already-in-use" ||
@@ -4298,6 +4341,10 @@ function startAppOptimized(){
   bindProfileAvatarPicker();
   fillCheckoutWithProfile(false);
 
+  Auth.getRedirectResult(auth).catch((err) => {
+    console.warn("Redirect auth falhou:", err?.code || err, err?.message || "");
+  });
+
   requestAnimationFrame(() => {
     setTimeout(() => {
       boot().catch((err) => console.error("boot falhou:", err));
@@ -4312,6 +4359,7 @@ if (document.readyState === "loading") {
 }
 
 document.getElementById("openProfileSettingsBtn")?.addEventListener("click", openProfileSettings);
+document.getElementById("openProfileSettingsHeroBtn")?.addEventListener("click", openProfileSettings);
 document.getElementById("closeProfileSettingsBtn")?.addEventListener("click", closeProfileSettings);
 document.getElementById("closeProfileSettingsBackdrop")?.addEventListener("click", closeProfileSettings);
 

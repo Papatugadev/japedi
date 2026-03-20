@@ -698,7 +698,6 @@
           <button class="setQuickNavBtn" type="button" data-target="settingsHoursCard">Atendimento</button>
           <button class="setQuickNavBtn" type="button" data-target="settingsPaymentsCard">Pagamentos</button>
           <button class="setQuickNavBtn" type="button" data-target="settingsDeliveryCard">Entrega</button>
-          <button class="setQuickNavBtn" type="button" data-target="settingsPromo">Promoções</button>
           <button class="setQuickNavBtn" type="button" data-target="settingsNotifCard">Avisos</button>
           <button class="setQuickNavBtn" type="button" data-target="settingsThemeCard">Visual</button>
           <button class="setQuickNavBtn" type="button" data-target="settingsAdvancedCard">Avançado</button>
@@ -911,78 +910,6 @@
                 <span class="setSwitchUi"></span>
                 <span class="setSwitchText">Permitir retirada no balcão</span>
               </label>
-            </div>
-          </article>
-
-          <article class="setCard setCardWide" id="settingsPromo" data-settings-card>
-            <div class="setCardHead">
-              <div>
-                <div class="setCardTitle">Promoções e destaques</div>
-                <div class="setCardHint">Banner, cupom, aviso e expiração.</div>
-              </div>
-              <button class="setCardToggle" type="button" aria-label="Expandir ou recolher" data-card-toggle>Ocultar</button>
-            </div>
-
-            <div class="setForm">
-              <div class="setSwitchGrid">
-                <label class="setSwitch">
-                  <input id="setPromoOn" type="checkbox" />
-                  <span class="setSwitchUi"></span>
-                  <span class="setSwitchText">Ativar promoção</span>
-                </label>
-              </div>
-
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Título da promoção</span>
-                  <input id="setPromoTitle" class="input" placeholder="Ex: Frete grátis hoje" />
-                </label>
-                <label class="setField">
-                  <span>Subtítulo</span>
-                  <input id="setPromoSub" class="input" placeholder="Ex: acima de R$ 35" />
-                </label>
-              </div>
-
-              <div class="setRow3">
-                <label class="setField">
-                  <span>Cupom</span>
-                  <input id="setCouponCode" class="input" placeholder="Ex: JPED10" />
-                </label>
-                <label class="setField">
-                  <span>Desconto (%)</span>
-                  <input id="setCouponPct" class="input" placeholder="10" inputmode="numeric" />
-                </label>
-                <label class="setField">
-                  <span>Aviso no topo</span>
-                  <input id="setNotice" class="input" placeholder="Ex: Válido só hoje" />
-                </label>
-              </div>
-
-              <div class="setRow2">
-                <label class="setField">
-                  <span>Expira em</span>
-                  <input id="setPromoEndsAt" class="input" type="datetime-local" />
-                </label>
-                <div class="setAssistCard">
-                  <div class="setAssistTitle">Dica rápida</div>
-                  <div class="setAssistText">Você pode deixar a promoção sem expiração ou usar o botão automático que já existe no sistema.</div>
-                  <div id="setPromoEndsAtPreview" class="setMiniStatus">Sem expiração</div>
-                </div>
-              </div>
-
-              <div class="promoBanner" id="promoBannerPreview">
-                <div class="promoGlow"></div>
-                <div class="promoTop">
-                  <div class="promoTag" id="promoTag">PROMO</div>
-                  <div class="promoIcon">OF</div>
-                </div>
-                <div class="promoTitle" id="promoPrevTitle">Título da promoção</div>
-                <div class="promoSub" id="promoPrevSub">Subtítulo aqui</div>
-                <div class="promoBottom">
-                  <div class="promoPill" id="promoPrevCoupon">CUPOM: —</div>
-                  <div class="promoPill ghost" id="promoPrevNotice">Aviso: —</div>
-                </div>
-              </div>
             </div>
           </article>
 

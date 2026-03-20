@@ -641,7 +641,7 @@ main{
   position:relative;
   width:min(520px, 92vw);
   display:grid;
-  grid-template-columns:1fr 1fr 1fr 1fr !important;
+  grid-template-columns:1fr 1fr 1fr !important;
   gap:0 !important;
   padding:6px;
   background:rgba(255,255,255,.92);
@@ -671,6 +671,10 @@ main{
 
 .tabbtn.is-active{ color:var(--text); }
 
+.bottomnav .tabbtn.hidden{
+  display:none !important;
+}
+
 .tabicon{ font-size:18px; }
 .tabtext{ font-size:13px; }
 
@@ -690,7 +694,7 @@ main{
   position:absolute;
   top:6px;
   left:6px;
-  width:calc((100% - 12px) / 4) !important;
+  width:calc((100% - 12px) / 3) !important;
   height:calc(100% - 12px);
   border-radius:999px;
   background:rgba(22,163,74,.14);
@@ -705,9 +709,6 @@ main{
 }
 .bottomnav__pill[data-active="cart"] .tabIndicator{
   transform:translateX(200%) !important;
-}
-.bottomnav__pill[data-active="profile"] .tabIndicator{
-  transform:translateX(300%) !important;
 }
 
 /* esconde títulos */
@@ -3445,4 +3446,151 @@ body.compactMenu .productContent{ padding:12px; }
 
 .coPayBtn--sub{
   font-weight:600;
+}
+/* ===== Perfil premium auth card ===== */
+.profileAccessCard{
+  position:relative;
+  overflow:hidden;
+  border:1px solid rgba(15,23,42,.08);
+  background:
+    radial-gradient(circle at top right, rgba(34,197,94,.10), transparent 30%),
+    linear-gradient(135deg, #ffffff 0%, #f8fafc 54%, #eef6ff 100%);
+  box-shadow:0 18px 40px rgba(15,23,42,.08);
+}
+.profileAccessCard::before{
+  content:"";
+  position:absolute;
+  inset:0;
+  pointer-events:none;
+  background:linear-gradient(120deg, rgba(255,255,255,.55), transparent 45%, rgba(34,197,94,.06));
+}
+.profileAccessTop{
+  position:relative;
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:12px;
+}
+.profileAccessStatus{
+  margin-top:6px;
+  color:#475569;
+  font-size:13px;
+  line-height:1.45;
+}
+.profileAccessBadge{
+  flex:0 0 auto;
+  min-width:96px;
+  text-align:center;
+  padding:9px 12px;
+  border-radius:999px;
+  font-size:12px;
+  font-weight:900;
+  color:#0f172a;
+  border:1px solid rgba(15,23,42,.08);
+  background:#fff;
+  box-shadow:0 10px 24px rgba(15,23,42,.08);
+}
+.profileAccessBadge.is-live{
+  color:#fff;
+  border-color:rgba(34,197,94,.28);
+  background:linear-gradient(135deg, #16a34a, #22c55e);
+  box-shadow:0 12px 24px rgba(34,197,94,.22);
+}
+.profileAccessPanel{
+  position:relative;
+  margin-top:16px;
+  border-radius:20px;
+  padding:16px;
+  border:1px solid rgba(15,23,42,.08);
+  background:rgba(255,255,255,.72);
+  backdrop-filter:blur(8px);
+}
+.profileAccessLead{
+  color:#0f172a;
+  font-size:14px;
+  font-weight:700;
+  line-height:1.55;
+}
+.profileAccessActions{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:10px;
+  margin-top:14px;
+}
+.profileAccessGhostBtn{
+  width:100%;
+  min-height:48px;
+  font-weight:800;
+  background:rgba(255,255,255,.9);
+}
+.profileAccessGhostBtn.danger{
+  color:#b91c1c;
+  border-color:rgba(185,28,28,.18);
+  background:rgba(254,242,242,.92);
+}
+.profileGoogleBtn{
+  margin-top:0;
+  min-height:52px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+  background:linear-gradient(135deg, #111827, #0f172a);
+  box-shadow:0 16px 30px rgba(15,23,42,.22);
+}
+.googleMark{
+  width:26px;
+  height:26px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  border-radius:999px;
+  background:#fff;
+  color:#ea4335;
+  font-size:14px;
+  font-weight:900;
+}
+.profileAccessFeatures{
+  display:flex;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-top:14px;
+}
+.profileAccessFeatures span{
+  display:inline-flex;
+  align-items:center;
+  padding:8px 12px;
+  border-radius:999px;
+  background:#fff;
+  border:1px solid rgba(15,23,42,.08);
+  color:#334155;
+  font-size:12px;
+  font-weight:800;
+}
+.profileAccessUserHead{
+  display:flex;
+  align-items:center;
+  gap:12px;
+}
+.profileAccessUserAvatar{
+  width:50px;
+  height:50px;
+  border-radius:16px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:22px;
+  font-weight:900;
+  color:#fff;
+  background:linear-gradient(135deg, #0f172a, #16a34a);
+  box-shadow:0 12px 28px rgba(15,23,42,.18);
+}
+
+@media (max-width: 640px){
+  .profileAccessActions{
+    grid-template-columns:1fr;
+  }
+  .profileAccessTop{
+    flex-direction:column;
+  }
 }
