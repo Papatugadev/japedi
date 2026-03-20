@@ -1647,16 +1647,30 @@ async function _maybeAutoPrintOrder(order) {
   }
 }
 
+function _canAutoMoveOrderToKitchen(order) {
+  if (!order?.id) return false;
+
+  const status = String(order?.status || "").trim().toLowerCase();
+  if (["em_preparo", "saiu_pra_entrega", "entregue", "cancelado"].includes(status)) return false;
+  if (status === "aguardando_pagamento") return false;
+
+  const pay = _normalizeAdminPayment(order);
+
+  // PIX só entra na cozinha quando estiver realmente pago.
+  if (pay.isPix && !pay.pixPaid) return false;
+
+  // Dinheiro/cartão na entrega (ou pedidos sem trava de pagamento) podem ir direto para preparo.
+  return true;
+}
+
 async function _syncPaidOrderToKitchen(order) {
   if (!order?.id) return;
-  const status = String(order?.status || "").trim().toLowerCase();
-  if (!_isOrderPaidForKitchen(order)) return;
-  if (["em_preparo", "saiu_pra_entrega", "entregue", "cancelado"].includes(status)) return;
+  if (!_canAutoMoveOrderToKitchen(order)) return;
 
   try {
     await setOrderStatus(order.id, "em_preparo", { autoTriggered: true });
   } catch (e) {
-    console.warn("Falha ao mover pedido pago para em_preparo:", e?.code || e, e?.message || "");
+    console.warn("Falha ao mover pedido para em_preparo automaticamente:", e?.code || e, e?.message || "");
   }
 }
 
