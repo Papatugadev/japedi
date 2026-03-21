@@ -2779,6 +2779,74 @@ async function createInlinePixPayment(orderId, total){
   startPixAutoPolling();
 }
 
+async function checkInlinePixPaymentStatus(options = {}){
+  const silent = !!options?.silent;
+  const auto = !!options?.auto;
+  const paymentId = String(options?.paymentId || state.mp.currentPaymentId || "").trim();
+  const orderId = String(options?.orderId || state.mp.currentOrderId || "").trim();
+  const restaurantId = String(options?.restaurantId || state.restaurant?.id || "").trim();
+
+  if (!paymentId) {
+    throw new Error("Pagamento PIX não encontrado para consulta.");
+  }
+
+  const response = await fetch(`${MP_FUNCTIONS_BASE_URL}/getMercadoPagoPaymentStatus`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      paymentId,
+      orderId,
+      restaurantId
+    })
+  });
+
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok) {
+    throw new Error(data?.error || "Não foi possível verificar o pagamento PIX.");
+  }
+
+  const normalizedStatus = String(data?.status || "").trim().toLowerCase();
+  const statusLabel = normalizedStatus === "approved"
+    ? "Pagamento aprovado ✅"
+    : normalizedStatus
+      ? `Status do PIX: ${normalizedStatus}`
+      : "Aguardando pagamento...";
+
+  state.mp.currentPaymentStatus = data?.status || state.mp.currentPaymentStatus || "";
+
+  const statusEl = document.getElementById("mpPixStatus");
+  if (statusEl) {
+    statusEl.textContent = normalizedStatus === "approved"
+      ? "Pagamento aprovado ✅"
+      : normalizedStatus === "pending"
+        ? "PIX gerado. Aguardando pagamento..."
+        : statusLabel;
+  }
+
+  if (orderId) {
+    await updateOrderPaymentState(orderId, {
+      paymentStatus: data?.status || state.mp.currentPaymentStatus || "pending",
+      mpPaymentId: data?.id || paymentId,
+      mpPaymentMethod: "pix",
+      ...(normalizedStatus === "approved" ? { status: "recebido" } : {})
+    });
+  }
+
+  if (normalizedStatus === "approved") {
+    stopPixAutoPolling();
+    showPaymentSuccessOverlay("Recebemos seu PIX e já estamos separando o pedido.");
+    resetMercadoPagoState({ keepOrder: true });
+    finishOrderFlow(orderId || state.mp.currentOrderId);
+    return data;
+  }
+
+  if (!silent && !auto && statusEl && normalizedStatus && normalizedStatus !== "pending") {
+    statusEl.textContent = statusLabel;
+  }
+
+  return data;
+}
+
 async function ensureInlineCardBrick(orderId, total){
   if (!shouldUseInlineMercadoPagoCard()) {
     renderInlinePaymentUI();
