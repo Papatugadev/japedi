@@ -517,12 +517,27 @@
                   <input id="custEmail" class="input" placeholder="Ex: voce@email.com" inputmode="email" autocomplete="email" />
                 </div>
 
-                <div class="checkoutField checkoutField--full">
+                <div class="checkoutField">
+                  <label class="label" for="custStreet">Rua</label>
+                  <input id="custStreet" class="input" placeholder="Ex: Rua das Flores, 123" autocomplete="address-line1" />
+                </div>
+
+                <div class="checkoutField">
+                  <label class="label" for="custNeighborhood">Bairro</label>
+                  <input id="custNeighborhood" class="input" placeholder="Ex: Centro" autocomplete="address-level3" />
+                </div>
+
+                <div class="checkoutField">
+                  <label class="label" for="custCity">Cidade</label>
+                  <input id="custCity" class="input" placeholder="Ex: Campinas" autocomplete="address-level2" />
+                </div>
+
+                <div class="checkoutField checkoutField--full hidden" aria-hidden="true">
                   <div class="checkoutField__labelRow">
-                    <label class="label" for="custAddr">Endereço / Observação</label>
-                    <span class="checkoutField__tip" id="coAddressTip">Entrega: rua, número e bairro</span>
+                    <label class="label" for="custAddr">Endereço completo</label>
+                    <span class="checkoutField__tip" id="coAddressTip">Entrega: informe rua, bairro e cidade</span>
                   </div>
-                  <textarea id="custAddr" class="input" rows="3" placeholder="Rua, número, bairro..."></textarea>
+                  <input id="custAddr" class="input" placeholder="Rua, bairro, cidade" />
                 </div>
               </div>
             </section>
@@ -691,14 +706,14 @@
       <label class="label">E-mail</label>
       <input id="profileEmailInput" class="input" type="email" placeholder="voce@email.com" />
 
-      <label class="label">Endereço</label>
-      <input id="profileAddressInput" class="input" type="text" placeholder="Rua, bairro" />
+      <label class="label">Rua</label>
+      <input id="profileStreetInput" class="input" type="text" placeholder="Rua e número" />
 
-      <label class="label">Número</label>
-      <input id="profileNumberInput" class="input" type="text" placeholder="Número da casa/apto" />
+      <label class="label">Bairro</label>
+      <input id="profileNeighborhoodInput" class="input" type="text" placeholder="Seu bairro" />
 
-      <label class="label">Complemento</label>
-      <input id="profileComplementInput" class="input" type="text" placeholder="Bloco, referência" />
+      <label class="label">Cidade</label>
+      <input id="profileCityInput" class="input" type="text" placeholder="Sua cidade" />
 
       <button id="useProfileOnCheckoutBtn" class="ghost" type="button" style="margin-top:10px;width:100%;">
         Usar dados no checkout

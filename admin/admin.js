@@ -686,56 +686,155 @@ function _renderOrderItemsDetailed(items) {
   }).join('');
 }
 
-function _renderComandaItemsHtml(items) {
-  const list = Array.isArray(items) ? items : [];
-  if (!list.length) return '<div class="line">Sem itens</div>';
-
-  return list.map((item) => {
-    const qty = _getItemQty(item);
-    const name = _escapeHtml(item?.name || 'Item');
-    const lineTotal = _getItemTotalPrice(item);
-    const optionLines = _getItemOptionsLines(item);
-
-    const additionalLines = optionLines
-      .filter((line) => /^adicionais:/i.test(String(line || '').trim()))
-      .flatMap((line) => {
-        const raw = String(line || '').replace(/^adicionais:\s*/i, '').trim();
-        if (!raw) return [];
-        return raw
-          .split(/\s*,\s*/)
-          .map(part => _escapeHtml(part.replace(/\s*\([^)]+\)\s*$/, '').trim()))
-          .filter(Boolean);
-      });
-
-    const otherLines = optionLines
-      .filter((line) => !/^adicionais:/i.test(String(line || '').trim()));
-
-    return `
-      <div class="item">
-        <div class="item-name">${qty}x ${name}</div>
-        <div class="item-price">${brl(lineTotal)}</div>
-        ${otherLines.map(line => `<div class="item-extra">${line}</div>`).join('')}
-        ${additionalLines.length ? `
-          <div class="item-extra item-extra-title">Adicionais:</div>
-          ${additionalLines.map(line => `<div class="item-extra item-extra-list">${line}</div>`).join('')}
-        ` : ``}
-      </div>
-    `;
-  }).join('');
+function _formatWhatsappForComanda(raw) {
+  const digits = String(raw || '').replace(/\D/g, '');
+  const local = digits.startsWith('55') ? digits.slice(2) : digits;
+  if (!local) return '-';
+  if (local.length >= 11) {
+    const ddd = local.slice(0, 2);
+    const first = local.slice(2, 7);
+    const last = local.slice(7, 11);
+    return `+55 (${ddd}) ${first}-${last}`;
+  }
+  if (local.length >= 10) {
+    const ddd = local.slice(0, 2);
+    const first = local.slice(2, 6);
+    const last = local.slice(6, 10);
+    return `+55 (${ddd}) ${first}-${last}`;
+  }
+  return `+55 ${local}`;
 }
 
+function _extractAddressParts(order) {
+  const checkout = order?.checkout || {};
+  const customer = order?.customer || {};
+  const addressObj = (
+    checkout?.addressData ||
+    checkout?.deliveryAddressData ||
+    order?.addressData ||
+    order?.deliveryAddressData ||
+    customer?.addressData ||
+    {}
+  );
 
-function _buildComandaHtml(order) {
-  const customerName = _escapeHtml(order?.customer?.name || order?.customerName || 'Cliente');
-  const phone = _escapeHtml(_getOrderWhatsapp(order) || '-');
-  const address = _escapeHtml(_getOrderAddress(order) || '-');
-  const paymentLabel = _escapeHtml(getAdminPaymentPresentation(order)?.text || 'PAGAMENTO');
+  const street = String(
+    checkout?.deliveryStreet ||
+    customer?.street ||
+    addressObj?.street ||
+    addressObj?.address ||
+    addressObj?.line1 ||
+    checkout?.street ||
+    order?.street ||
+    ''
+  ).trim();
+
+  const neighborhood = String(
+    checkout?.deliveryNeighborhood ||
+    customer?.neighborhood ||
+    addressObj?.neighborhood ||
+    addressObj?.district ||
+    checkout?.neighborhood ||
+    order?.neighborhood ||
+    ''
+  ).trim();
+
+  const city = String(
+    checkout?.deliveryCity ||
+    customer?.city ||
+    addressObj?.city ||
+    checkout?.city ||
+    order?.city ||
+    ''
+  ).trim();
+
+  const reference = String(
+    checkout?.reference ||
+    customer?.reference ||
+    addressObj?.reference ||
+    addressObj?.complement ||
+    order?.reference ||
+    ''
+  ).trim();
+
+  const rawAddress = _getOrderAddress(order);
+  return {
+    street: street || rawAddress || '-',
+    neighborhood: neighborhood || '-',
+    city: city || '-',
+    reference: reference || '-'
+  };
+}
+
+function _getCustomerOrderCountText(order) {
+  const raw = (
+    order?.customerOrderCount ??
+    order?.customerOrdersCount ??
+    order?.customerStats?.ordersCount ??
+    order?.stats?.customerOrdersCount ??
+    order?.customer?.ordersCount ??
+    order?.timesOrdered
+  );
+  const explicitCount = Number(raw);
+  if (Number.isFinite(explicitCount) && explicitCount > 0) return String(explicitCount);
+
+  const currentKey = _customerKey(order);
+  const orders = Array.isArray(__JPED_CUSTOMERS_DATA) ? __JPED_CUSTOMERS_DATA : [];
+  if (!currentKey || !orders.length) return '-';
+
+  let count = 0;
+  for (const item of orders) {
+    if (_customerKey(item) === currentKey) count += 1;
+  }
+
+  return count > 0 ? String(count) : '-';
+}
+
+function _getConfiguredDeliveryEtaText(order, settingsData) {
+  const explicitOrderEta = Number(
+    order?.estimatedDeliveryMinutes ??
+    order?.deliveryEtaMin ??
+    order?.checkout?.deliveryEtaMin ??
+    order?.totals?.deliveryEtaMin ??
+    NaN
+  );
+  const cfgEta = Number(
+    settingsData?.delivery?.etaMin ??
+    _val('setDeliveryEta') ??
+    NaN
+  );
+  const prepEta = Number(
+    settingsData?.hours?.prepMin ??
+    _val('setPrepMin') ??
+    NaN
+  );
+
+  const etaMin = Number.isFinite(explicitOrderEta) && explicitOrderEta > 0
+    ? explicitOrderEta
+    : (Number.isFinite(cfgEta) && cfgEta > 0
+      ? cfgEta
+      : (Number.isFinite(prepEta) && prepEta > 0 ? prepEta : NaN));
+
+  if (!Number.isFinite(etaMin) || etaMin <= 0) return '-';
+
+  const createdAtRaw = order?.createdAt?.toDate ? order.createdAt.toDate() : (order?.createdAt ? new Date(order.createdAt) : new Date());
+  const createdAt = Number.isNaN(createdAtRaw?.getTime?.()) ? new Date() : createdAtRaw;
+  const etaDate = new Date(createdAt.getTime() + (etaMin * 60000));
+  const hh = String(etaDate.getHours()).padStart(2, '0');
+  const mm = String(etaDate.getMinutes()).padStart(2, '0');
+  return `${hh}:${mm}`;
+}
+
+function _buildComandaText(order, settingsData) {
+  const customerName = String(order?.customer?.name || order?.customerName || 'Cliente').trim() || 'Cliente';
+  const phone = _formatWhatsappForComanda(_getOrderWhatsapp(order));
+  const addressParts = _extractAddressParts(order);
+  const paymentLabel = getAdminPaymentPresentation(order)?.text || 'PAGAMENTO';
   const totals = _getOrderTotalsSummary(order);
   const pay = _normalizeAdminPayment(order);
 
   const createdAtRaw = order?.createdAt?.toDate ? order.createdAt.toDate() : (order?.createdAt ? new Date(order.createdAt) : new Date());
   const createdAt = Number.isNaN(createdAtRaw?.getTime?.()) ? new Date() : createdAtRaw;
-  const createdLabel = _escapeHtml(createdAt.toLocaleString('pt-BR'));
+  const createdLabel = createdAt.toLocaleString('pt-BR');
 
   const rawMode = String(
     order?.totals?.checkoutMode ||
@@ -748,8 +847,90 @@ function _buildComandaHtml(order) {
 
   const codeValueRaw = String(order?.orderNumber ?? order?.code ?? order?.displayCode ?? order?.shortCode ?? '').replace(/\D/g, '');
   const orderCode = (codeValueRaw ? codeValueRaw.slice(-4).padStart(4, '0') : '----');
+  const etaLabel = _getConfiguredDeliveryEtaText(order, settingsData);
+  const customerOrderCount = _getCustomerOrderCountText(order);
 
-  const trocoText = _escapeHtml(getAdminChangeText(order, totals.total) || '');
+  const amountToPay = (pay.pixPaid || String(paymentLabel).toUpperCase() === 'PAGO') ? 0 : totals.total;
+
+  const itemsLines = [];
+  const list = Array.isArray(order?.items) ? order.items : [];
+  if (!list.length) {
+    itemsLines.push('Sem itens');
+  } else {
+    list.forEach((item, index) => {
+      const qty = _getItemQty(item);
+      const name = String(item?.name || 'Item').trim() || 'Item';
+      const optionLines = _getItemOptionsLines(item);
+      const sizeLine = optionLines.find((line) => /^tamanho:/i.test(String(line || '').trim()));
+      const itemHeader = sizeLine
+        ? `${qty}X ${name} (${String(sizeLine).replace(/^tamanho:\s*/i, '').trim()})`
+        : `${qty}X ${name}`;
+      itemsLines.push(itemHeader);
+
+      const additionalLines = optionLines
+        .filter((line) => /^adicionais:/i.test(String(line || '').trim()))
+        .flatMap((line) => {
+          const raw = String(line || '').replace(/^adicionais:\s*/i, '').trim();
+          if (!raw) return [];
+          return raw.split(/\s*,\s*/).map(part => part.replace(/\s*\([^)]+\)\s*$/, '').trim()).filter(Boolean);
+        });
+
+      const otherLines = optionLines.filter((line) => !/^adicionais:/i.test(String(line || '').trim()) && !/^tamanho:/i.test(String(line || '').trim()));
+
+      otherLines.forEach((line) => {
+        itemsLines.push(String(line).trim());
+      });
+
+      if (additionalLines.length) {
+        itemsLines.push('ADICIONAIS:');
+        additionalLines.forEach((line) => itemsLines.push(`- ${line}`));
+      }
+
+      if (index < list.length - 1) itemsLines.push('');
+    });
+  }
+
+  const lines = [
+    `------${modeLabel}--------`,
+    `----PEDIDO ${orderCode}------`,
+    `HORÁRIO DO PEDIDO: ${createdLabel}`,
+    `PREVISÃO DE ENTREGA: ${etaLabel}`,
+    `CLIENTE: ${customerName}`,
+    `WHATSAPP: ${phone}`,
+    `QUANTAS VEZES PEDIU: ${customerOrderCount}`,
+    '------------ENDEREÇO-----------------',
+    `RUA: ${addressParts.street}`,
+    `BAIRRO: ${addressParts.neighborhood}`,
+    `CIDADE: ${addressParts.city}`,
+    `REFERÊNCIA: ${addressParts.reference}`,
+    '------------------------------',
+    'PEDIDO',
+    ...itemsLines,
+    '-------- PAGAMENTO --------',
+    paymentLabel,
+    `ITENS: ${brl(totals.subtotal)}`,
+    `ENTREGA: ${brl(totals.deliveryFee)}`
+  ];
+
+  if (totals.discount > 0) {
+    lines.push(`DESCONTOS: ${brl(totals.discount)}`);
+  }
+
+  lines.push(
+    `TOTAL: ${brl(totals.total)}`,
+    `A PAGAR: ${brl(amountToPay)}`
+  );
+
+  if (pay.isCash) {
+    const trocoText = getAdminChangeText(order, totals.total) || 'Não precisa';
+    lines.push(`TROCO: ${trocoText}`);
+  }
+
+  return lines.join('\n');
+}
+
+function _buildComandaHtml(order, settingsData) {
+  const comandaText = _escapeHtml(_buildComandaText(order, settingsData));
 
   return `
   <html>
@@ -757,215 +938,34 @@ function _buildComandaHtml(order) {
       <meta charset="utf-8" />
       <title>Comanda</title>
       <style>
-        @page { size: auto; margin: 2.5mm; }
-        * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-        html, body { margin: 0; padding: 0; background: #fff; color: #111; font-family: Arial, Helvetica, sans-serif; }
-        body { font-size: 13px; line-height: 1.35; }
+        @page { size: auto; margin: 3mm; }
+        html, body {
+          margin: 0;
+          padding: 0;
+          background: #fff;
+          color: #000;
+          font-family: "Courier New", Courier, monospace;
+        }
+        body {
+          font-size: 15px;
+          line-height: 1.45;
+          white-space: pre-wrap;
+        }
         .wrap {
           width: 76mm;
           margin: 0 auto;
-          padding: 2.8mm 2.2mm 3.2mm;
+          padding: 3mm;
         }
-        .topbar {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 8px;
-          margin-bottom: 10px;
-        }
-        .modeBlock {
-          flex: 1;
-          min-width: 0;
-        }
-        .modeLabel {
-          margin: 0 0 3px;
-          font-size: 15px;
-          font-weight: 800;
-          letter-spacing: .04em;
-        }
-        .dateLabel {
-          font-size: 12px;
-          color: #333;
-        }
-        .codeBox {
-          min-width: 62px;
-          padding: 5px 6px 4px;
-          border: 1.5px solid #111;
-          border-radius: 8px;
-          text-align: center;
-        }
-        .codeCaption {
-          margin: 0 0 2px;
-          font-size: 9px;
-          font-weight: 800;
-          letter-spacing: .16em;
-          color: #444;
-        }
-        .codeValue {
+        pre {
           margin: 0;
-          font-size: 24px;
-          line-height: 1;
-          font-weight: 900;
-          letter-spacing: .04em;
-        }
-        .divider {
-          border-top: 1px dashed #bdbdbd;
-          margin: 10px 0;
-        }
-        .section {
-          margin-top: 10px;
-        }
-        .sectionTitle {
-          margin: 0 0 8px;
-          font-size: 12px;
-          font-weight: 800;
-          letter-spacing: .16em;
-          text-transform: uppercase;
-        }
-        .line {
-          margin: 0 0 6px;
-          font-size: 13px;
-          line-height: 1.45;
+          font: inherit;
+          white-space: pre-wrap;
           word-break: break-word;
-        }
-        .line strong {
-          font-weight: 800;
-        }
-        .item {
-          padding: 0 0 11px;
-          margin: 0 0 11px;
-          border-bottom: 1px dashed #d2d2d2;
-        }
-        .item:last-child {
-          border-bottom: 0;
-          padding-bottom: 0;
-          margin-bottom: 0;
-        }
-        .item-name {
-          font-size: 15px;
-          font-weight: 800;
-          margin: 0 0 6px;
-          line-height: 1.35;
-          word-break: break-word;
-        }
-        .item-price {
-          font-size: 14px;
-          font-weight: 800;
-          margin: 0 0 7px;
-        }
-        .item-extra {
-          margin: 0 0 5px;
-          font-size: 13px;
-          line-height: 1.4;
-          word-break: break-word;
-        }
-        .item-extra-title {
-          margin-top: 2px;
-          font-weight: 800;
-        }
-        .item-extra-list {
-          padding-left: 10px;
-        }
-        .summary {
-          border-top: 1px solid #111;
-          border-bottom: 1px solid #111;
-          padding: 8px 0 6px;
-          margin-top: 2px;
-        }
-        .summaryLine {
-          display: flex;
-          align-items: flex-start;
-          justify-content: space-between;
-          gap: 12px;
-          margin: 0 0 7px;
-          font-size: 13px;
-          line-height: 1.35;
-        }
-        .summaryLine span:first-child {
-          flex: 1;
-          min-width: 0;
-        }
-        .summaryLine strong {
-          font-weight: 800;
-        }
-        .summaryTotal {
-          margin-top: 3px;
-          padding-top: 6px;
-          border-top: 1px dashed #d2d2d2;
-          font-size: 16px;
-          font-weight: 900;
-        }
-        .paymentBox {
-          padding-top: 2px;
-        }
-        .paymentLine {
-          margin: 0 0 7px;
-          font-size: 13px;
-          line-height: 1.45;
-          word-break: break-word;
-        }
-        .paymentMethod {
-          font-weight: 800;
-          text-transform: uppercase;
-        }
-        .note {
-          margin-top: 9px;
-          font-size: 11.5px;
-          line-height: 1.45;
-          color: #333;
         }
       </style>
     </head>
     <body>
-      <div class="wrap">
-        <div class="topbar">
-          <div class="modeBlock">
-            <div class="modeLabel">${modeLabel}</div>
-            <div class="dateLabel">${createdLabel}</div>
-          </div>
-          <div class="codeBox">
-            <div class="codeCaption">PEDIDO</div>
-            <div class="codeValue">${orderCode}</div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="section">
-          <div class="sectionTitle">CLIENTE</div>
-          <div class="line"><strong>Nome:</strong> ${customerName}</div>
-          <div class="line"><strong>WhatsApp cliente:</strong> ${phone}</div>
-          <div class="line"><strong>Endereço:</strong> ${address}</div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="section">
-          <div class="sectionTitle">ITENS DO PEDIDO</div>
-          ${_renderComandaItemsHtml(order?.items)}
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="section">
-          <div class="sectionTitle">RESUMO</div>
-          <div class="summary">
-            <div class="summaryLine"><span>Subtotal</span><strong>${brl(totals.subtotal)}</strong></div>
-            <div class="summaryLine"><span>Entrega</span><strong>${brl(totals.deliveryFee)}</strong></div>
-            ${totals.discount > 0 ? `<div class="summaryLine"><span>Desconto</span><strong>-${brl(totals.discount)}</strong></div>` : ``}
-            <div class="summaryLine summaryTotal"><span>Total</span><strong>${brl(totals.total)}</strong></div>
-          </div>
-        </div>
-
-        <div class="divider"></div>
-
-        <div class="section paymentBox">
-          <div class="sectionTitle">PAGAMENTO</div>
-          <div class="paymentLine paymentMethod">${paymentLabel}</div>
-          ${pay.isCash ? `<div class="paymentLine"><strong>Troco:</strong> ${trocoText || 'Não precisa'}</div>` : ``}
-          <div class="note">Confira os itens antes de finalizar o preparo</div>
-        </div>
-      </div>
+      <div class="wrap"><pre>${comandaText}</pre></div>
     </body>
   </html>`;
 }
@@ -1586,7 +1586,25 @@ async function printOrderComanda(orderOrId, options = {}) {
   const order = orderId ? await _fetchOrderById(orderId) : null;
   if (!order?.id) throw new Error("Pedido não encontrado para impressão.");
 
-  const html = _buildComandaHtml(order);
+  try {
+    if (!Array.isArray(__JPED_CUSTOMERS_DATA) || !__JPED_CUSTOMERS_DATA.length) {
+      await _loadCustomersData();
+    }
+  } catch (e) {
+    console.warn("Falha ao carregar contagem de pedidos do cliente para a comanda:", e?.code || e, e?.message || "");
+  }
+
+  let settingsData = null;
+  try {
+    if (RESTAURANT_ID) {
+      const settingsSnap = await Firestore.getDoc(_settingsDocRef());
+      settingsData = settingsSnap.exists() ? (settingsSnap.data() || {}) : null;
+    }
+  } catch (e) {
+    console.warn("Falha ao carregar config para impressão:", e?.code || e, e?.message || "");
+  }
+
+  const html = _buildComandaHtml(order, settingsData);
   const iframe = document.createElement("iframe");
   iframe.style.position = "fixed";
   iframe.style.right = "0";

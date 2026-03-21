@@ -3594,3 +3594,6 @@ body.compactMenu .productContent{ padding:12px; }
     flex-direction:column;
   }
 }
+
+
+.checkoutField--full.hidden[aria-hidden="true"]{display:none !important;}
