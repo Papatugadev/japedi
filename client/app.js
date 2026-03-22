@@ -1457,12 +1457,6 @@ function clearCheckoutInputs() {
   document.getElementById("custPhone").value = "";
   const emailEl = document.getElementById("custEmail");
   if (emailEl) emailEl.value = "";
-  const streetEl = document.getElementById("custStreet");
-  if (streetEl) streetEl.value = "";
-  const neighborhoodEl = document.getElementById("custNeighborhood");
-  if (neighborhoodEl) neighborhoodEl.value = "";
-  const cityEl = document.getElementById("custCity");
-  if (cityEl) cityEl.value = "";
   document.getElementById("custAddr").value = "";
   const couponInput = document.getElementById("coCouponInput");
   if (couponInput) couponInput.value = "";
@@ -1538,7 +1532,7 @@ function updateCheckoutAddressTip(){
   if (!tip) return;
   tip.textContent = state.checkoutMode === 'pickup'
     ? 'Retirada: use este campo para observações'
-    : 'Entrega: informe rua, bairro e cidade';
+    : 'Entrega: rua, número e bairro';
 }
 
 function ensureCheckoutUI(){
@@ -2245,45 +2239,14 @@ function _scheduleDeliveryQuoteFromAddress(){
 }
 
 function _bindDeliveryAddressEvents(){
-  const fields = [
-    document.getElementById("custStreet"),
-    document.getElementById("custNeighborhood"),
-    document.getElementById("custCity")
-  ].filter(Boolean);
   const addr = document.getElementById("custAddr");
   if (!addr || addr.dataset.geoBound === "1") return;
   addr.dataset.geoBound = "1";
 
-  const syncAndMaybeReset = () => {
-    const value = syncCombinedCheckoutAddress();
-    const key = _normalizeAddressForQuote(value);
-    if (key !== (state.deliveryQuote?.addressKey || "")){
-      _setDeliveryQuoteState({ status: "idle", fee: null, distanceKm: null, addressKey: "", error: "" });
-    }
-  };
-
-  fields.forEach((field) => {
-    if (field.dataset.geoBoundField === "1") return;
-    field.dataset.geoBoundField = "1";
-    field.addEventListener("blur", () => {
-      syncAndMaybeReset();
-      _scheduleDeliveryQuoteFromAddress();
-    });
-    field.addEventListener("change", () => {
-      syncAndMaybeReset();
-      _scheduleDeliveryQuoteFromAddress();
-    });
-    field.addEventListener("input", () => {
-      syncAndMaybeReset();
-    });
-  });
-
   addr.addEventListener("blur", () => {
-    syncCombinedCheckoutAddress();
     _scheduleDeliveryQuoteFromAddress();
   });
   addr.addEventListener("change", () => {
-    syncCombinedCheckoutAddress();
     _scheduleDeliveryQuoteFromAddress();
   });
   addr.addEventListener("input", () => {
@@ -2292,8 +2255,6 @@ function _bindDeliveryAddressEvents(){
       _setDeliveryQuoteState({ status: "idle", fee: null, distanceKm: null, addressKey: "", error: "" });
     }
   });
-
-  syncCombinedCheckoutAddress();
 }
 
 function computeOrderTotals(){
@@ -2402,14 +2363,12 @@ function updateCheckoutTotals(){
 
   // Ajusta campo endereço (retirada não exige)
   try{
-    const street = document.getElementById("custStreet");
-    const neighborhood = document.getElementById("custNeighborhood");
-    const city = document.getElementById("custCity");
     const addr = document.getElementById("custAddr");
-    if (street) street.placeholder = state.checkoutMode === "pickup" ? "Observação (opcional)" : "Ex: Rua das Flores, 123";
-    if (neighborhood) neighborhood.placeholder = state.checkoutMode === "pickup" ? "Complemento (opcional)" : "Ex: Centro";
-    if (city) city.placeholder = state.checkoutMode === "pickup" ? "Cidade (opcional)" : "Ex: Campinas";
-    if (addr) addr.placeholder = state.checkoutMode === "pickup" ? "Observação (opcional)" : "Rua, bairro, cidade";
+    if (addr){
+      addr.placeholder = (state.checkoutMode === "pickup")
+        ? "Observação (opcional)"
+        : "Rua, número, bairro...";
+    }
   }catch(_){}
 
   updateCheckoutAddressTip();
@@ -2442,10 +2401,9 @@ async function createOrder(options = {}) {
   const name = (document.getElementById("custName").value || "").trim();
   const phone = (document.getElementById("custPhone").value || "").trim();
   const email = (document.getElementById("custEmail")?.value || "").trim();
-  const { street, neighborhood, city, address } = getCheckoutAddressParts();
-  syncCombinedCheckoutAddress();
+  const address = (document.getElementById("custAddr").value || "").trim();
 
-  if (state.checkoutMode === "delivery" && (!street || !neighborhood || !city)) return alert("Digite rua, bairro e cidade.");
+  if (state.checkoutMode === "delivery" && !address) return alert("Digite seu endereço.");
 
   if (!name) return alert("Digite seu nome.");
   if (state.cart.length === 0) return alert("Carrinho vazio.");
@@ -2495,9 +2453,6 @@ async function createOrder(options = {}) {
     total: Number(total || 0),
     // no modo retirada, usamos o campo "address" como observação opcional
     deliveryAddress: (state.checkoutMode === "delivery" ? (address || "") : null),
-    deliveryStreet: (state.checkoutMode === "delivery" ? (street || null) : null),
-    deliveryNeighborhood: (state.checkoutMode === "delivery" ? (neighborhood || null) : null),
-    deliveryCity: (state.checkoutMode === "delivery" ? (city || null) : null),
     pickupNote: (state.checkoutMode === "pickup" ? (address || "") : null)
   };
 
@@ -2519,7 +2474,7 @@ async function createOrder(options = {}) {
     updatedAt: Firestore.serverTimestamp(),
     orderNumber: genOrderNumber4(),
     customerUid: state.customerUid || null,
-    customer: { name, phone, email, address, street: street || null, neighborhood: neighborhood || null, city: city || null },
+    customer: { name, phone, email, address },
     checkout,
     items: state.cart.map(i => ({
       id: i.id,
@@ -4047,47 +4002,12 @@ function normalizePhoneBR(value){
   return String(value || "").replace(/\D+/g, "").trim();
 }
 
-function getProfileStreet(data){
-  return String(data?.street ?? data?.address ?? "").trim();
-}
-
-function getProfileNeighborhood(data){
-  return String(data?.neighborhood ?? data?.number ?? "").trim();
-}
-
-function getProfileCity(data){
-  return String(data?.city ?? data?.complement ?? "").trim();
-}
-
-function buildAddressParts(street, neighborhood, city){
-  return [street, neighborhood, city].map(v => String(v || "").trim()).filter(Boolean);
-}
-
-function buildCheckoutAddressFromParts(street, neighborhood, city){
-  return buildAddressParts(street, neighborhood, city).join(", ");
-}
-
-function getCheckoutAddressParts(){
-  const street = (document.getElementById("custStreet")?.value || "").trim();
-  const neighborhood = (document.getElementById("custNeighborhood")?.value || "").trim();
-  const city = (document.getElementById("custCity")?.value || "").trim();
-  return { street, neighborhood, city, address: buildCheckoutAddressFromParts(street, neighborhood, city) };
-}
-
-function syncCombinedCheckoutAddress(){
-  const combined = document.getElementById("custAddr");
-  if (!combined) return "";
-  const { address } = getCheckoutAddressParts();
-  combined.value = address;
-  return address;
-}
-
 function buildProfileCheckoutAddress(data){
-  return buildCheckoutAddressFromParts(
-    getProfileStreet(data),
-    getProfileNeighborhood(data),
-    getProfileCity(data)
-  );
+  return [
+    data?.address || "",
+    data?.number ? `Nº ${data.number}` : "",
+    data?.complement || ""
+  ].filter(Boolean).join(" - ");
 }
 
 function getDefaultProfile(){
@@ -4099,9 +4019,6 @@ function getDefaultProfile(){
     address: "",
     number: "",
     complement: "",
-    street: "",
-    neighborhood: "",
-    city: "",
     level: "Bronze",
     xp: 22,
     ordersCount: 0,
@@ -4131,9 +4048,6 @@ function saveProfile(data){
     address: (data?.address ?? current.address ?? "").trim(),
     number: (data?.number ?? current.number ?? "").trim(),
     complement: (data?.complement ?? current.complement ?? "").trim(),
-    street: (data?.street ?? current.street ?? data?.address ?? current.address ?? "").trim(),
-    neighborhood: (data?.neighborhood ?? current.neighborhood ?? data?.number ?? current.number ?? "").trim(),
-    city: (data?.city ?? current.city ?? data?.complement ?? current.complement ?? "").trim(),
     level: (data?.level ?? current.level ?? "Bronze").trim() || "Bronze",
     xp: Math.max(0, Math.min(100, Number(data?.xp ?? current.xp ?? 22))),
     ordersCount: Math.max(0, Number(data?.ordersCount ?? current.ordersCount ?? 0)),
@@ -4288,9 +4202,9 @@ function renderProfileForm(){
   const nameInput = document.getElementById("profileNameInput");
   const phoneInput = document.getElementById("profilePhoneInput");
   const emailInput = document.getElementById("profileEmailInput");
-  const streetInput = document.getElementById("profileStreetInput");
-  const neighborhoodInput = document.getElementById("profileNeighborhoodInput");
-  const cityInput = document.getElementById("profileCityInput");
+  const addressInput = document.getElementById("profileAddressInput");
+  const numberInput = document.getElementById("profileNumberInput");
+  const complementInput = document.getElementById("profileComplementInput");
 
   if (avatarPreview) avatarPreview.textContent = data.avatar || "🙂";
   if (heroName) heroName.textContent = data.name || "Seu perfil";
@@ -4337,9 +4251,9 @@ function renderProfileForm(){
   if (nameInput) nameInput.value = data.name || "";
   if (phoneInput) phoneInput.value = data.phone || "";
   if (emailInput) emailInput.value = data.email || "";
-  if (streetInput) streetInput.value = getProfileStreet(data);
-  if (neighborhoodInput) neighborhoodInput.value = getProfileNeighborhood(data);
-  if (cityInput) cityInput.value = getProfileCity(data);
+  if (addressInput) addressInput.value = data.address || "";
+  if (numberInput) numberInput.value = data.number || "";
+  if (complementInput) complementInput.value = data.complement || "";
 
   document.querySelectorAll(".avatarOption").forEach(btn => {
     btn.classList.toggle("is-active", btn.dataset.avatar === data.avatar);
@@ -4372,21 +4286,18 @@ function handleSaveProfileData(){
   const name = document.getElementById("profileNameInput")?.value || "";
   const phone = document.getElementById("profilePhoneInput")?.value || "";
   const email = document.getElementById("profileEmailInput")?.value || "";
-  const street = document.getElementById("profileStreetInput")?.value || "";
-  const neighborhood = document.getElementById("profileNeighborhoodInput")?.value || "";
-  const city = document.getElementById("profileCityInput")?.value || "";
+  const address = document.getElementById("profileAddressInput")?.value || "";
+  const number = document.getElementById("profileNumberInput")?.value || "";
+  const complement = document.getElementById("profileComplementInput")?.value || "";
 
   saveProfile({
     ...current,
     name,
     phone,
     email,
-    street,
-    neighborhood,
-    city,
-    address: street,
-    number: neighborhood,
-    complement: city
+    address,
+    number,
+    complement
   });
 
   renderProfileForm();
@@ -4430,14 +4341,8 @@ function syncCheckoutInputsWithProfile(force = false){
   const checkoutName = document.getElementById("custName");
   const checkoutPhone = document.getElementById("custPhone");
   const checkoutEmail = document.getElementById("custEmail");
-  const checkoutStreet = document.getElementById("custStreet");
-  const checkoutNeighborhood = document.getElementById("custNeighborhood");
-  const checkoutCity = document.getElementById("custCity");
   const checkoutAddress = document.getElementById("custAddr");
-  const street = getProfileStreet(data);
-  const neighborhood = getProfileNeighborhood(data);
-  const city = getProfileCity(data);
-  const fullAddress = buildCheckoutAddressFromParts(street, neighborhood, city);
+  const fullAddress = buildProfileCheckoutAddress(data);
 
   if (checkoutName && (force || !checkoutName.value.trim())) {
     checkoutName.value = data.name || "";
@@ -4451,23 +4356,9 @@ function syncCheckoutInputsWithProfile(force = false){
     checkoutEmail.value = data.email || "";
   }
 
-  if (checkoutStreet && (force || !checkoutStreet.value.trim())) {
-    checkoutStreet.value = street;
-  }
-
-  if (checkoutNeighborhood && (force || !checkoutNeighborhood.value.trim())) {
-    checkoutNeighborhood.value = neighborhood;
-  }
-
-  if (checkoutCity && (force || !checkoutCity.value.trim())) {
-    checkoutCity.value = city;
-  }
-
   if (checkoutAddress && (force || !checkoutAddress.value.trim())) {
     checkoutAddress.value = fullAddress;
   }
-
-  syncCombinedCheckoutAddress();
 }
 
 function saveCheckoutFieldsToProfile(){
@@ -4476,27 +4367,25 @@ function saveCheckoutFieldsToProfile(){
   const name = (document.getElementById("custName")?.value || "").trim();
   const phone = normalizePhoneBR(document.getElementById("custPhone")?.value || "");
   const email = String(document.getElementById("custEmail")?.value || "").trim();
-  const { street, neighborhood, city, address } = getCheckoutAddressParts();
+  const rawAddress = (document.getElementById("custAddr")?.value || "").trim();
+
+  const profileAddress = [current.address || "", current.number ? `Nº ${current.number}` : "", current.complement || ""]
+    .filter(Boolean)
+    .join(" - ");
 
   saveProfile({
     ...current,
     name: name || current.name || "",
     phone: phone || current.phone || "",
     email: email || current.email || "",
-    street: street || getProfileStreet(current),
-    neighborhood: neighborhood || getProfileNeighborhood(current),
-    city: city || getProfileCity(current),
-    address: street || getProfileStreet(current),
-    number: neighborhood || getProfileNeighborhood(current),
-    complement: city || getProfileCity(current)
+    address: rawAddress && rawAddress !== profileAddress ? rawAddress : (current.address || ""),
+    number: rawAddress && rawAddress !== profileAddress ? "" : (current.number || ""),
+    complement: rawAddress && rawAddress !== profileAddress ? "" : (current.complement || "")
   });
-
-  const combined = document.getElementById("custAddr");
-  if (combined) combined.value = address;
 }
 
 function bindCheckoutProfileAutosave(){
-  const ids = ["custName", "custPhone", "custEmail", "custStreet", "custNeighborhood", "custCity", "custAddr"];
+  const ids = ["custName", "custPhone", "custEmail", "custAddr"];
   ids.forEach((id) => {
     const el = document.getElementById(id);
     if (!el || el.dataset.profileBound === "1") return;
@@ -4619,24 +4508,17 @@ function applyProfileToCheckoutFields(force = false){
   const data = loadProfile();
 
   const nameEl = document.getElementById("custName");
-  const streetEl = document.getElementById("custStreet");
-  const neighborhoodEl = document.getElementById("custNeighborhood");
-  const cityEl = document.getElementById("custCity");
   const addrEl = document.getElementById("custAddr");
 
   if (nameEl && (force || !nameEl.value.trim())) {
     nameEl.value = data.name || "";
   }
 
-  if (streetEl && (force || !streetEl.value.trim())) streetEl.value = getProfileStreet(data);
-  if (neighborhoodEl && (force || !neighborhoodEl.value.trim())) neighborhoodEl.value = getProfileNeighborhood(data);
-  if (cityEl && (force || !cityEl.value.trim())) cityEl.value = getProfileCity(data);
-
   if (addrEl && (force || !addrEl.value.trim())) {
-    addrEl.value = buildProfileCheckoutAddress(data);
+    addrEl.value = [data.address || "", data.complement || ""]
+      .filter(Boolean)
+      .join(" - ");
   }
-
-  syncCombinedCheckoutAddress();
 }
 // ✅ Mostra no banner o cupom digitado no input "promo"
 (function bindPromoToBanner() {

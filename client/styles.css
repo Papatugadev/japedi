@@ -3596,4 +3596,66 @@ body.compactMenu .productContent{ padding:12px; }
 }
 
 
-.checkoutField--full.hidden[aria-hidden="true"]{display:none !important;}
+/* ===== Tracking courier GIF upgrade ===== */
+.trackCourier{
+  position:absolute;
+  left:58px;
+  bottom:20px;
+  width:132px;
+  height:88px;
+  background-image:url("./motoboy-track.gif");
+  background-repeat:no-repeat;
+  background-size:contain;
+  background-position:center center;
+  image-rendering:auto;
+  filter:drop-shadow(0 14px 16px rgba(3,7,18,.26));
+  will-change:transform, filter, opacity;
+}
+.trackCourier > *{ display:none !important; }
+.trackCourier::before{
+  content:"";
+  position:absolute;
+  left:14px;
+  right:12px;
+  bottom:6px;
+  height:14px;
+  border-radius:999px;
+  background:radial-gradient(ellipse at center, rgba(2,6,23,.34) 0%, rgba(2,6,23,.18) 52%, rgba(2,6,23,0) 78%);
+  filter:blur(1px);
+  z-index:-1;
+}
+.trackCourier::after{
+  content:"";
+  position:absolute;
+  right:2px;
+  top:36px;
+  width:26px;
+  height:26px;
+  border-radius:999px;
+  background:radial-gradient(circle, rgba(255,251,171,.9) 0%, rgba(255,245,157,.45) 38%, rgba(255,245,157,0) 78%);
+  opacity:.92;
+  pointer-events:none;
+}
+.trackCourier--preparo{
+  transform:translateX(0);
+}
+.trackCourier--saiu{
+  transform:translateX(116px);
+}
+.trackCourier--entregue{
+  transform:translateX(232px);
+}
+.trackCourier--cancelado{
+  transform:translateX(0);
+  filter:grayscale(1) opacity(.72) drop-shadow(0 14px 16px rgba(3,7,18,.18));
+}
+@media (max-width:640px){
+  .trackCourier{
+    left:48px;
+    bottom:17px;
+    width:112px;
+    height:74px;
+  }
+  .trackCourier--saiu{ transform:translateX(82px); }
+  .trackCourier--entregue{ transform:translateX(154px); }
+}
